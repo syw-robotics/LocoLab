@@ -1,0 +1,29 @@
+# Copyright (c) 2022-2026, The Isaac Lab Project Developers.
+# All rights reserved.
+# Original code is licensed under BSD-3-Clause.
+#
+# Copyright (c) 2025-2026, The Loco Lab Project Developers.
+# All rights reserved.
+# Modifications are licensed under BSD-3-Clause.
+
+# Copyright (c) 2022-2025, The Isaac Lab Project Developers.
+# All rights reserved.
+#
+# SPDX-License-Identifier: BSD-3-Clause
+
+"""Package containing task implementations for various robotic environments."""
+
+import os
+import toml
+
+from isaaclab_tasks.utils import import_packages
+
+##
+# Register Gym environments.
+##
+
+
+# The blacklist is used to prevent importing configs from sub-packages
+_BLACKLIST_PKGS = ["utils"]
+# Import all configs in this package
+import_packages(__name__, _BLACKLIST_PKGS)
