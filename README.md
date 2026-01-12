@@ -25,8 +25,9 @@ This codebase serves as a starter **manager based rl** environment for building 
 
 **Key Features:**
 
-- `Flexibility`: Easy to modifiy, reuse existing modules, and adapt to new tasks
-- `Experiment Friendly`: Happy to do experiments
+- `Flexibility`: Easy to read, modifiy, reuse existing modules, and adapt to new tasks
+- `Faster Rollout speed`: Collisions of robot models are simplified, since isaacsim runs collision detection on cpu.
+- `Experiment Friendly`: Functions as adding terrain levels logging per terrain types help to experiment and debug.
 
 **Tested and deployable tasks are:**
 - Velocity-Flat-Go2
@@ -47,7 +48,7 @@ This codebase serves as a starter **manager based rl** environment for building 
 - Using a python interpreter that has Isaac Lab installed, install the library in editable mode using:
 
     ```bash
-    python -m pip install -e source/loco_lab
+    python -m pip install -e source/locolab
     ```
 
 ## Usage
@@ -124,7 +125,7 @@ This helps in indexing all the python modules for intelligent suggestions while 
 
 <!-- ### Setup as Omniverse Extension (Optional)
 
-We provide an example UI extension that will load upon enabling your extension defined in `source/loco_lab/loco_lab/ui_extension_example.py`.
+We provide an example UI extension that will load upon enabling your extension defined in `source/locolab/locolab/ui_extension_example.py`.
 
 To enable your extension, follow these steps:
 
@@ -164,7 +165,7 @@ pre-commit run --all-files
 <!-- ```json -->
 <!-- { -->
 <!--     "python.analysis.extraPaths": [ -->
-<!--         "<path-to-ext-repo>/source/loco_lab" -->
+<!--         "<path-to-ext-repo>/source/locolab" -->
 <!--     ] -->
 <!-- } -->
 <!-- ``` -->

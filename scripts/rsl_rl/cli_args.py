@@ -13,7 +13,7 @@ import random
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from loco_lab.utils.rl.rsl_rl import RslRlBaseRunnerCfg
+    from locolab.utils.rl.rsl_rl import RslRlBaseRunnerCfg
 
 
 def add_rsl_rl_args(parser: argparse.ArgumentParser):

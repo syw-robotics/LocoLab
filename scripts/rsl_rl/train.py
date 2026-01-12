@@ -91,8 +91,8 @@ from isaaclab.utils.io import dump_yaml
 from isaaclab_tasks.utils import get_checkpoint_path
 from isaaclab_tasks.utils.hydra import hydra_task_config
 
-import loco_lab.tasks  # noqa: F401
-from loco_lab.utils.rl.rsl_rl import RslRlBaseRunnerCfg, RslRlVecEnvWrapper
+import locolab.tasks  # noqa: F401
+from locolab.utils.rl.rsl_rl import RslRlBaseRunnerCfg, RslRlVecEnvWrapper
 
 torch.backends.cuda.matmul.allow_tf32 = True
 torch.backends.cudnn.allow_tf32 = True

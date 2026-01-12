@@ -62,7 +62,6 @@ parser.add_argument(
     help="Use the pre-trained checkpoint from Nucleus.",
 )
 parser.add_argument("--real-time", action="store_true", default=False, help="Run in real-time, if possible.")
-parser.add_argument("--keyboard", action="store_true", default=False, help="Whether to use keyboard.")
 # append RSL-RL cli arguments
 cli_args.add_rsl_rl_args(parser)
 # append AppLauncher cli args
@@ -95,15 +94,14 @@ from isaaclab.envs import (
     ManagerBasedRLEnvCfg,
     multi_agent_to_single_agent,
 )
-from isaaclab.managers import ObservationTermCfg as ObsTerm
 from isaaclab.utils.assets import retrieve_file_path
 from isaaclab.utils.dict import print_dict
 from isaaclab.utils.pretrained_checkpoint import get_published_pretrained_checkpoint
 from isaaclab_tasks.utils import get_checkpoint_path
 from isaaclab_tasks.utils.hydra import hydra_task_config
 
-import loco_lab.tasks  # noqa: F401
-from loco_lab.utils.rl.rsl_rl import RslRlBaseRunnerCfg, RslRlVecEnvWrapper, export_policy_as_jit, export_policy_as_onnx
+import locolab.tasks  # noqa: F401
+from locolab.utils.rl.rsl_rl import RslRlBaseRunnerCfg, RslRlVecEnvWrapper, export_policy_as_jit, export_policy_as_onnx
 
 
 @hydra_task_config(args_cli.task, args_cli.agent)
@@ -121,32 +119,11 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
     env_cfg.seed = agent_cfg.seed
     env_cfg.sim.device = args_cli.device if args_cli.device is not None else env_cfg.sim.device
 
-    # spawn the robot randomly in the grid (instead of their terrain levels)
-    env_cfg.scene.terrain.max_init_terrain_level = None
-
-    # disable randomization for play
+    # if disable randomization for play
     env_cfg.observations.policy.enable_corruption = False
-    # remove random pushing
+    # if remove random pushing
     env_cfg.events.randomize_apply_external_force_torque = None
     env_cfg.events.push_robot = None
-
-    if args_cli.keyboard:  # TODO: add game pad support (using Se2GamePad, Se2GamePadCfg)
-        from isaaclab.devices import Se2Keyboard, Se2KeyboardCfg  # isort: skip
-
-        env_cfg.scene.num_envs = 1
-        env_cfg.terminations.time_out = None
-        env_cfg.commands.base_velocity.debug_vis = True
-        keyboard_config = Se2KeyboardCfg(  # keyboard velocity command values are set here
-            v_x_sensitivity=env_cfg.commands.base_velocity.ranges.lin_vel_x[1],
-            v_y_sensitivity=env_cfg.commands.base_velocity.ranges.lin_vel_y[1],
-            omega_z_sensitivity=env_cfg.commands.base_velocity.ranges.ang_vel_z[1],
-        )
-        keyboard_controller = Se2Keyboard(keyboard_config)
-        env_cfg.observations.policy.velocity_commands = ObsTerm(
-            func=lambda env: torch.tensor(keyboard_controller.advance(), dtype=torch.float32)
-            .unsqueeze(0)
-            .to(env.device),
-        )
 
     # specify directory for logging experiments
     log_root_path = os.path.join("logs", "rsl_rl", agent_cfg.experiment_name)
@@ -244,9 +221,6 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
             # Exit the play loop after recording one video
             if timestep == args_cli.video_length:
                 break
-
-        if args_cli.keyboard:
-            camera_follow(env)
 
         # time delay for real-time evaluation
         sleep_time = dt - (time.time() - start_time)

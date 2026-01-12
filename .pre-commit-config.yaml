@@ -69,4 +69,4 @@ repos:
           - .github/LICENSE_HEADER.txt
           - --use-current-year
 
-exclude: ^(source/loco_lab/loco_lab/third_party/|source/loco_lab/data/|.vscode/|.github/)
+exclude: ^(source/locolab/locolab/third_party/|source/locolab/data/|.vscode/|.github/)

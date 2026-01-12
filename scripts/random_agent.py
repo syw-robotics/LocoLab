@@ -35,10 +35,9 @@ simulation_app = app_launcher.app
 import gymnasium as gym
 import torch
 
-import isaaclab_tasks  # noqa: F401
 from isaaclab_tasks.utils import parse_env_cfg
 
-import source.loco_lab.loco_lab.tasks  # noqa: F401
+import locolab.tasks  # noqa: F401
 
 
 def main():
@@ -47,6 +46,10 @@ def main():
     env_cfg = parse_env_cfg(
         args_cli.task, device=args_cli.device, num_envs=args_cli.num_envs, use_fabric=not args_cli.disable_fabric
     )
+    if hasattr(env_cfg.curriculum, "terrain_levels"):
+        env_cfg.curriculum.terrain_levels.params["log_by_terrain_type"] = False
+        env_cfg.scene.terrain.max_init_terrain_level = None
+
     # create environment
     env = gym.make(args_cli.task, cfg=env_cfg)
 

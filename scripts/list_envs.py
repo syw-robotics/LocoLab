@@ -12,7 +12,7 @@ Script to print all the available environments in Loco Lab.
 The script iterates over all registered environments and stores the details in a table.
 It prints the name of the environment, the entry point and the config file.
 
-All the environments are registered in `loco_lab`.
+All the environments are registered in `locolab`.
 """
 
 import importlib
@@ -68,7 +68,7 @@ def _walk_packages(
 
 
 def import_packages():
-    sys.path.insert(0, f"{pathlib.Path(__file__).parent.parent}/source/loco_lab/loco_lab/tasks/")
+    sys.path.insert(0, f"{pathlib.Path(__file__).parent.parent}/source/locolab/locolab/tasks/")
     for package in ["manager_based.locomotion.velocity.config"]:
         package = importlib.import_module(package)
         for _ in _walk_packages(package.__path__, package.__name__ + "."):
