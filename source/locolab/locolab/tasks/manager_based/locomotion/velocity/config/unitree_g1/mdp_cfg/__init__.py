@@ -6,11 +6,10 @@
 # All rights reserved.
 # Modifications are licensed under BSD-3-Clause.
 
-BASE_LINK_NAME = "base"
-FOOT_LINK_NAMES = ".*_foot"
-HIP_JOINT_NAMES = [".*_hip_joint"]
-UNDESIRED_CONTACT_LINK_NAMES = ["Head_.*", ".*_hip", ".*_thigh", ".*_calf"]
-OTHER_BODY_LINK_NAMES = [".*_hip", ".*_thigh", ".*_calf"]
+FOOT_LINK_NAME = ".*ankle_roll.*"
+BODY_LINK_NAMES = ["(?!.*ankle.*).*"]
+ARM_JOINT_NAMES = [".*_shoulder_.*_joint", ".*_elbow_joint", ".*_wrist_.*"]
+WAIST_JOINT_NAMES = ["waist.*"]
 # fmt: off
 JOINT_NAMES = [
     "left_hip_pitch_joint", "left_hip_roll_joint", "left_hip_yaw_joint", "left_knee_joint", "left_ankle_pitch_joint", "left_ankle_roll_joint",
@@ -26,7 +25,7 @@ from .commands_cfg import CommandsCfg
 from .curriculumns_cfg import RoughCurriculumsCfg
 from .events_cfg import EventCfg
 from .observations_cfg import PrivObsCfg, PropObsCfg
-from .rewards_cfg import FlatRewardsCfg, RoughRewardsCfg
+from .rewards_cfg import FlatRewardsCfg
 from .terminations_cfg import FlatTerminationsCfg, RoughTerminationsCfg
 
 __all__ = [
