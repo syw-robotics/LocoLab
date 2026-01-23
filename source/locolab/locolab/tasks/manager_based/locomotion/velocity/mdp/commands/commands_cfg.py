@@ -48,7 +48,7 @@ class UniformVelocityCommandCfg(CommandTermCfg):
     This parameter is only used if :attr:`heading_command` is True.
     """
 
-    rel_only_lin_vel_x_envs: float = 0.1
+    rel_only_lin_vel_x_envs: float = 0.0
     """The sampled probability of environments where only x-direction velocity command is non-zero
     (y velocity and angular velocity are set to zero). Defaults to 0.05.
 

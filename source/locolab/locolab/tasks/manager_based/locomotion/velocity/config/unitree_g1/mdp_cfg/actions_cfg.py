@@ -17,11 +17,6 @@ from . import JOINT_NAMES
 class ActionsCfg:
     """Action specifications for the MDP."""
 
-    joint_pos = mdp.JointPositionActionCfg(
-        asset_name="robot",
-        joint_names=JOINT_NAMES,
-        scale={".*_hip_joint": 0.125, "^(?!.*_hip_joint).*": 0.25},
-        use_default_offset=True,
-        clip={".*": (-10.0, 10.0)},
-        preserve_order=True,
+    JointPositionAction = mdp.JointPositionActionCfg(
+        asset_name="robot", joint_names=JOINT_NAMES, scale=0.25, use_default_offset=True
     )
