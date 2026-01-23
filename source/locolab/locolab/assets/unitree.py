@@ -418,12 +418,12 @@ UNITREE_G1_23DOF_CFG = UnitreeArticulationCfg(
 )
 
 UNITREE_G1_29DOF_CFG = UnitreeArticulationCfg(
-    # spawn=UnitreeUrdfFileCfg(
-    #     asset_path=f"{UNITREE_ROS_DIR}/robots/g1_description/g1_29dof_rev_1_0.urdf",
-    # ),
-    spawn=UnitreeUsdFileCfg(
-        usd_path=f"{UNITREE_MODEL_DIR}/G1/29dof/usd/g1_29dof_rev_1_0/g1_29dof_rev_1_0.usd",
+    spawn=UnitreeUrdfFileCfg(
+        asset_path=f"{UNITREE_MODEL_DIR}/robots/unitree/G1/urdf/g1_description/g1_29dof_rev_1_0.urdf",
     ),
+    # spawn=UnitreeUsdFileCfg(
+    #     usd_path=f"{UNITREE_MODEL_DIR}/G1/29dof/usd/g1_29dof_rev_1_0/g1_29dof_rev_1_0.usd",
+    # ),
     init_state=ArticulationCfg.InitialStateCfg(
         pos=(0.0, 0.0, 0.8),
         joint_pos={

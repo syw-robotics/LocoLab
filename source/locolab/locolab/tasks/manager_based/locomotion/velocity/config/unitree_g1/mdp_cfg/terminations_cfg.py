@@ -22,41 +22,5 @@ class FlatTerminationsCfg:
     # terminate when max episode length is reached
     time_out = DoneTerm(func=mdp.time_out, time_out=True)
 
-    # bad_orientation is a substitute to illegal_contact, in case of not training fall-recovery behavior
-    #  bad_orientation = DoneTerm(func=mdp.bad_orientation, params={"limit_angle": 0.8})
-
-    # terminate when contact happens on specified links
-    illegal_contact = DoneTerm(
-        func=mdp.illegal_contact,
-        params={
-            "sensor_cfg": SceneEntityCfg("contact_forces", body_names=BASE_LINK_NAME),
-            "threshold": 1.0,
-        },
-    )
-
-
-@configclass
-class RoughTerminationsCfg:
-    """Termination terms for the rough terrain."""
-
-    # terminate when max episode length is reached
-    time_out = DoneTerm(func=mdp.time_out, time_out=True)
-
-    # terrain_out_of_bounds is needed for rough terrain
-    #  terrain_out_of_bounds = DoneTerm(
-    #      func=mdp.terrain_out_of_bounds,
-    #      params={"asset_cfg": SceneEntityCfg("robot"), "distance_buffer": 3.0},
-    #      time_out=True,
-    #  )
-
-    # bad_orientation is a substitute to illegal_contact, in case of not training fall-recovery behavior
-    #  bad_orientation = DoneTerm(func=mdp.bad_orientation, params={"limit_angle": 1.5})  # about 80 degrees
-
-    # terminate when contact happens on specified links
-    illegal_contact = DoneTerm(
-        func=mdp.illegal_contact,
-        params={
-            "sensor_cfg": SceneEntityCfg("contact_forces", body_names=BASE_LINK_NAME),
-            "threshold": 1.0,
-        },
-    )
+    base_height = DoneTerm(func=mdp.root_height_below_minimum, params={"minimum_height": 0.2})
+    bad_orientation = DoneTerm(func=mdp.bad_orientation, params={"limit_angle": 0.8})

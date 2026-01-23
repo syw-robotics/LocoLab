@@ -21,7 +21,7 @@ from locolab.utils.terrains import TerrainImporterCfg
 ##
 # Pre-defined configs
 ##
-from locolab.tasks.manager_based.locomotion.velocity.config.unitree_go2.mdp_cfg import (  # isort: skip
+from locolab.tasks.manager_based.locomotion.velocity.config.unitree_g1.mdp_cfg import (  # isort: skip
     ActionsCfg,
     CommandsCfg,
     EventCfg,
@@ -30,7 +30,7 @@ from locolab.tasks.manager_based.locomotion.velocity.config.unitree_go2.mdp_cfg 
     PropObsCfg,
     FlatTerminationsCfg,
 )
-from locolab.assets import UNITREE_GO2_CFG  # isort: skip
+from locolab.assets import UNITREE_G1_29DOF_CFG  # isort: skip
 
 
 ##

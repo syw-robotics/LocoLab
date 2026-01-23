@@ -13,3 +13,4 @@
 
 """Package containing asset and sensor configurations."""
 from .unitree import UNITREE_GO2_CFG
+from .unitree import UNITREE_G1_29DOF_CFG
