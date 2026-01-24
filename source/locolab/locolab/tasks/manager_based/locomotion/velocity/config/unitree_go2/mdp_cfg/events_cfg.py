@@ -6,11 +6,10 @@
 # All rights reserved.
 # Modifications are licensed under BSD-3-Clause.
 
+import locolab.tasks.manager_based.locomotion.velocity.mdp as mdp
 from isaaclab.managers import EventTermCfg as EventTerm
 from isaaclab.managers import SceneEntityCfg
 from isaaclab.utils import configclass
-
-import locolab.tasks.manager_based.locomotion.velocity.mdp as mdp
 
 from . import BASE_LINK_NAME, FOOT_LINK_NAMES, JOINT_NAMES, OTHER_BODY_LINK_NAMES
 

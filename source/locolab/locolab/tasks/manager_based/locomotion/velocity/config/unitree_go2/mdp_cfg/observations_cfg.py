@@ -6,13 +6,12 @@
 # All rights reserved.
 # Modifications are licensed under BSD-3-Clause.
 
+import locolab.tasks.manager_based.locomotion.velocity.mdp as mdp
 from isaaclab.managers import ObservationGroupCfg as ObsGroup
 from isaaclab.managers import ObservationTermCfg as ObsTerm
 from isaaclab.managers import SceneEntityCfg
 from isaaclab.utils import configclass
 from isaaclab.utils.noise import AdditiveUniformNoiseCfg as Unoise
-
-import locolab.tasks.manager_based.locomotion.velocity.mdp as mdp
 
 from . import JOINT_NAMES
 

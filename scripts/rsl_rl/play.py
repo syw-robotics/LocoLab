@@ -15,33 +15,10 @@ import os
 import sys
 
 from isaaclab.app import AppLauncher  # isort: skip
-import isaaclab.utils.math as math_utils  # isort: skip
 
 # local imports
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 import cli_args  # isort: skip
-
-
-def camera_follow(env):
-    if not hasattr(camera_follow, "smooth_camera_positions"):
-        camera_follow.smooth_camera_positions = []
-    robot_pos = env.unwrapped.scene["robot"].data.root_pos_w[0]
-    robot_quat = env.unwrapped.scene["robot"].data.root_quat_w[0]
-    camera_offset = torch.tensor([-3.0, 0.0, 0.5], dtype=torch.float32, device=env.device)
-    camera_pos = math_utils.transform_points(
-        camera_offset.unsqueeze(0), pos=robot_pos.unsqueeze(0), quat=robot_quat.unsqueeze(0)
-    ).squeeze(0)
-    # camera_pos[2] = torch.clamp(camera_pos[2], min=0.1)
-    window_size = 50
-    camera_follow.smooth_camera_positions.append(camera_pos)
-    if len(camera_follow.smooth_camera_positions) > window_size:
-        camera_follow.smooth_camera_positions.pop(0)
-    smooth_camera_pos = torch.mean(torch.stack(camera_follow.smooth_camera_positions), dim=0)
-    env.unwrapped.viewport_camera_controller.set_view_env_index(env_index=0)
-    env.unwrapped.viewport_camera_controller.update_view_location(
-        eye=smooth_camera_pos.cpu().numpy(), lookat=robot_pos.cpu().numpy()
-    )
-
 
 # add argparse arguments
 parser = argparse.ArgumentParser(description="Train an RL agent with RSL-RL.")
@@ -81,12 +58,11 @@ simulation_app = app_launcher.app
 
 """Rest everything follows."""
 
-import gymnasium as gym
 import time
+
+import gymnasium as gym
+import locolab.tasks  # noqa: F401
 import torch
-
-from rsl_rl.runners import DistillationRunner, OnPolicyRunner
-
 from isaaclab.envs import (
     DirectMARLEnv,
     DirectMARLEnvCfg,
@@ -96,12 +72,16 @@ from isaaclab.envs import (
 )
 from isaaclab.utils.assets import retrieve_file_path
 from isaaclab.utils.dict import print_dict
-from isaaclab.utils.pretrained_checkpoint import get_published_pretrained_checkpoint
+from isaaclab_rl.utils.pretrained_checkpoint import get_published_pretrained_checkpoint
 from isaaclab_tasks.utils import get_checkpoint_path
 from isaaclab_tasks.utils.hydra import hydra_task_config
-
-import locolab.tasks  # noqa: F401
-from locolab.utils.rl.rsl_rl import RslRlBaseRunnerCfg, RslRlVecEnvWrapper, export_policy_as_jit, export_policy_as_onnx
+from locolab.utils.rl.rsl_rl import (
+    RslRlBaseRunnerCfg,
+    RslRlVecEnvWrapper,
+    export_policy_as_jit,
+    export_policy_as_onnx,
+)
+from rsl_rl.runners import DistillationRunner, OnPolicyRunner
 
 
 @hydra_task_config(args_cli.task, args_cli.agent)

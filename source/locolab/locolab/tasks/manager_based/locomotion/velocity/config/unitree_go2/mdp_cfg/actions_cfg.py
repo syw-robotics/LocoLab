@@ -6,9 +6,8 @@
 # All rights reserved.
 # Modifications are licensed under BSD-3-Clause.
 
-from isaaclab.utils import configclass
-
 import locolab.tasks.manager_based.locomotion.velocity.mdp as mdp
+from isaaclab.utils import configclass
 
 from . import JOINT_NAMES
 

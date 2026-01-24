@@ -12,7 +12,6 @@ from dataclasses import MISSING
 from isaaclab.managers import CommandTermCfg
 from isaaclab.markers import VisualizationMarkersCfg
 from isaaclab.utils import configclass
-
 from locolab.utils.markers import GREEN_ARROW_X_MARKER_CFG, RED_ARROW_X_MARKER_CFG
 
 from .velocity_command import UniformVelocityCommand

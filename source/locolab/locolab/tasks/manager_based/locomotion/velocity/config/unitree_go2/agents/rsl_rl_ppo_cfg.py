@@ -7,8 +7,11 @@
 # Modifications are licensed under BSD-3-Clause.
 
 from isaaclab.utils import configclass
-
-from locolab.utils.rl.rsl_rl import RslRlOnPolicyRunnerCfg, RslRlPpoActorCriticCfg, RslRlPpoAlgorithmCfg
+from locolab.utils.rl.rsl_rl import (
+    RslRlOnPolicyRunnerCfg,
+    RslRlPpoActorCriticCfg,
+    RslRlPpoAlgorithmCfg,
+)
 
 
 @configclass

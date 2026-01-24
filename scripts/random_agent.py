@@ -33,11 +33,9 @@ simulation_app = app_launcher.app
 """Rest everything follows."""
 
 import gymnasium as gym
-import torch
-
-from isaaclab_tasks.utils import parse_env_cfg
-
 import locolab.tasks  # noqa: F401
+import torch
+from isaaclab_tasks.utils import parse_env_cfg
 
 
 def main():
