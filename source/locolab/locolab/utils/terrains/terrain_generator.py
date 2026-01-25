@@ -10,12 +10,12 @@
 from __future__ import annotations
 
 import logging
-import numpy as np
 import os
-import torch
-import trimesh
 from typing import TYPE_CHECKING
 
+import numpy as np
+import torch
+import trimesh
 from isaaclab.terrains.trimesh.utils import make_border
 from isaaclab.terrains.utils import color_meshes_by_height, find_flat_patches
 from isaaclab.utils.dict import dict_to_md5_hash
@@ -24,7 +24,10 @@ from isaaclab.utils.timer import Timer
 from isaaclab.utils.warp import convert_to_warp_mesh
 
 if TYPE_CHECKING:
-    from isaaclab.terrains.sub_terrain_cfg import FlatPatchSamplingCfg, SubTerrainBaseCfg
+    from isaaclab.terrains.sub_terrain_cfg import (
+        FlatPatchSamplingCfg,
+        SubTerrainBaseCfg,
+    )
 
     from .terrain_generator_cfg import TerrainGeneratorCfg
 
@@ -121,7 +124,9 @@ class TerrainGenerator:
         self.device = device
 
         # set common values to all sub-terrains config
-        from isaaclab.terrains.height_field import HfTerrainBaseCfg  # prevent circular import
+        from isaaclab.terrains.height_field import (
+            HfTerrainBaseCfg,  # prevent circular import
+        )
 
         for sub_cfg in self.cfg.sub_terrains.values():
             # size of all terrains

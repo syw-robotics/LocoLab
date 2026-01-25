@@ -8,9 +8,9 @@
 
 from __future__ import annotations
 
-import torch
 from collections.abc import Sequence
 
+import torch
 from isaaclab.actuators import ImplicitActuator, ImplicitActuatorCfg
 from isaaclab.utils import DelayBuffer, configclass
 from isaaclab.utils.types import ArticulationActions
@@ -85,5 +85,5 @@ class DelayedImplicitActuatorCfg(ImplicitActuatorCfg):
     min_delay: int = 0
     """Minimum number of physics time-steps with which the actuator command may be delayed. Defaults to 0."""
 
-    max_delay: int = 3
+    max_delay: int = 5
     """Maximum number of physics time-steps with which the actuator command may be delayed. Defaults to 0."""

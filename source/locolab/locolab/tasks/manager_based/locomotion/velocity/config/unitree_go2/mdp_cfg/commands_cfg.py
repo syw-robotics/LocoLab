@@ -8,9 +8,8 @@
 
 import math
 
-from isaaclab.utils import configclass
-
 import locolab.tasks.manager_based.locomotion.velocity.mdp as mdp
+from isaaclab.utils import configclass
 
 
 @configclass

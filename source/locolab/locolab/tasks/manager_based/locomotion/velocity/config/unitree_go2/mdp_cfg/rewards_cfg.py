@@ -8,13 +8,17 @@
 
 import math
 
+import locolab.tasks.manager_based.locomotion.velocity.mdp as mdp
 from isaaclab.managers import RewardTermCfg as RewTerm
 from isaaclab.managers import SceneEntityCfg
 from isaaclab.utils import configclass
 
-import locolab.tasks.manager_based.locomotion.velocity.mdp as mdp
-
-from . import FOOT_LINK_NAMES, HIP_JOINT_NAMES, JOINT_NAMES, UNDESIRED_CONTACT_LINK_NAMES
+from . import (
+    FOOT_LINK_NAMES,
+    HIP_JOINT_NAMES,
+    JOINT_NAMES,
+    UNDESIRED_CONTACT_LINK_NAMES,
+)
 
 
 @configclass
@@ -35,7 +39,7 @@ class FlatRewardsCfg:
     ang_vel_xy_l2 = RewTerm(func=mdp.ang_vel_xy_l2, weight=-0.05)
     flat_orientation_l2 = RewTerm(func=mdp.flat_orientation_l2, weight=-1.0)
     # -- joint --
-    joint_deviation_l2 = RewTerm(
+    joint_deviation_l1 = RewTerm(
         func=mdp.joint_deviation_l1,
         weight=-0.05,
         params={"asset_cfg": SceneEntityCfg("robot", joint_names=JOINT_NAMES)},
@@ -112,9 +116,9 @@ class RoughRewardsCfg:
         },
     )
     # -- joint --
-    joint_hip_deviation_l2 = RewTerm(
+    joint_hip_deviation_l1 = RewTerm(
         func=mdp.joint_deviation_l1,
-        weight=-0.04,
+        weight=-0.05,
         params={"asset_cfg": SceneEntityCfg("robot", joint_names=HIP_JOINT_NAMES)},
     )
     joint_acc_l2 = RewTerm(

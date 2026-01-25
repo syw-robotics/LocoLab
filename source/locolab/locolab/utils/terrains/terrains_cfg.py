@@ -9,7 +9,6 @@
 """Configuration for custom terrains."""
 
 import isaaclab.terrains as terrain_gen
-
 from locolab.utils.terrains import TerrainGeneratorCfg
 
 """Rough terrains configuration - for blind locomotion"""

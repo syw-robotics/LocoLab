@@ -14,12 +14,12 @@
 from __future__ import annotations
 
 import logging
-import numpy as np
-import torch
-import trimesh
 from typing import TYPE_CHECKING
 
 import isaaclab.sim as sim_utils
+import numpy as np
+import torch
+import trimesh
 from isaaclab.markers import VisualizationMarkers
 from isaaclab.markers.config import FRAME_MARKER_CFG
 from isaaclab.terrains.utils import create_prim_from_mesh

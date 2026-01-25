@@ -17,7 +17,9 @@ from dataclasses import MISSING
 from typing import TYPE_CHECKING, Literal
 
 import isaaclab.sim as sim_utils
-from isaaclab.terrains.terrain_importer_cfg import TerrainImporterCfg as _TerrainImporterCfg
+from isaaclab.terrains.terrain_importer_cfg import (
+    TerrainImporterCfg as _TerrainImporterCfg,
+)
 from isaaclab.utils import configclass
 
 from .terrain_importer import TerrainImporter

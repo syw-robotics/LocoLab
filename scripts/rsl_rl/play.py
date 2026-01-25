@@ -58,12 +58,11 @@ simulation_app = app_launcher.app
 
 """Rest everything follows."""
 
-import gymnasium as gym
 import time
+
+import gymnasium as gym
+import locolab.tasks  # noqa: F401
 import torch
-
-from rsl_rl.runners import DistillationRunner, OnPolicyRunner
-
 from isaaclab.envs import (
     DirectMARLEnv,
     DirectMARLEnvCfg,
@@ -76,9 +75,13 @@ from isaaclab.utils.dict import print_dict
 from isaaclab_rl.utils.pretrained_checkpoint import get_published_pretrained_checkpoint
 from isaaclab_tasks.utils import get_checkpoint_path
 from isaaclab_tasks.utils.hydra import hydra_task_config
-
-import locolab.tasks  # noqa: F401
-from locolab.utils.rl.rsl_rl import RslRlBaseRunnerCfg, RslRlVecEnvWrapper, export_policy_as_jit, export_policy_as_onnx
+from locolab.utils.rl.rsl_rl import (
+    RslRlBaseRunnerCfg,
+    RslRlVecEnvWrapper,
+    export_policy_as_jit,
+    export_policy_as_onnx,
+)
+from rsl_rl.runners import DistillationRunner, OnPolicyRunner
 
 
 @hydra_task_config(args_cli.task, args_cli.agent)

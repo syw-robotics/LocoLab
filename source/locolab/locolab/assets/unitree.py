@@ -18,7 +18,9 @@ from isaaclab.actuators import IdealPDActuatorCfg, ImplicitActuatorCfg
 from isaaclab.assets.articulation import ArticulationCfg
 from isaaclab.utils import configclass
 
-from .actuators import DelayedImplicitActuatorCfg  # Implicit Atuator shows higher fidelity but no latency compensation
+from .actuators import (
+    DelayedImplicitActuatorCfg,  # Implicit Atuator shows higher fidelity but no latency compensation
+)
 
 # Get the absolute path to the robots directory relative to this file
 _ASSETS_DIR = os.path.dirname(os.path.abspath(__file__))
