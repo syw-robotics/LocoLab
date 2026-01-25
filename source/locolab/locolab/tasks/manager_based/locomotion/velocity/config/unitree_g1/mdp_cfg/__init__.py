@@ -26,7 +26,7 @@ from .curriculumns_cfg import RoughCurriculumsCfg
 from .events_cfg import EventCfg
 from .observations_cfg import PrivObsCfg, PropObsCfg
 from .rewards_cfg import FlatRewardsCfg
-from .terminations_cfg import FlatTerminationsCfg, RoughTerminationsCfg
+from .terminations_cfg import FlatTerminationsCfg
 
 __all__ = [
     "ActionsCfg",
@@ -38,5 +38,4 @@ __all__ = [
     "FlatRewardsCfg",
     "RoughRewardsCfg",
     "FlatTerminationsCfg",
-    "RoughTerminationsCfg",
 ]

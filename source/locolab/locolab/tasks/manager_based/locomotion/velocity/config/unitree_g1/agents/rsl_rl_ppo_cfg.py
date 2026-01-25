@@ -12,11 +12,11 @@ from locolab.utils.rl.rsl_rl import RslRlOnPolicyRunnerCfg, RslRlPpoActorCriticC
 
 
 @configclass
-class Go2RoughPPORunnerCfg(RslRlOnPolicyRunnerCfg):
+class G1RoughPPORunnerCfg(RslRlOnPolicyRunnerCfg):
     num_steps_per_env = 24
     max_iterations = 10000
     save_interval = 100
-    experiment_name = "go2_rough"
+    experiment_name = "g1_rough"
     policy = RslRlPpoActorCriticCfg(
         init_noise_std=1.0,
         actor_obs_normalization=False,
@@ -43,9 +43,9 @@ class Go2RoughPPORunnerCfg(RslRlOnPolicyRunnerCfg):
 
 
 @configclass
-class Go2FlatPPORunnerCfg(Go2RoughPPORunnerCfg):
+class G1FlatPPORunnerCfg(G1RoughPPORunnerCfg):
     def __post_init__(self):
         super().__post_init__()
 
-        self.max_iterations = 2000
-        self.experiment_name = "go2_flat"
+        self.max_iterations = 25000
+        self.experiment_name = "g1_flat"

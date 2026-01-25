@@ -41,6 +41,9 @@ class UniformVelocityCommandCfg(CommandTermCfg):
     heading_control_stiffness: float = 1.0
     """Scale factor to convert the heading error to angular velocity command. Defaults to 1.0."""
 
+    rel_standing_envs: float = 0.0
+    """The sampled probability of environments that should be standing still. Defaults to 0.0."""
+    
     rel_heading_envs: float = 1.0
     """The sampled probability of environments where the robots follow the heading-based angular velocity command
     (the others follow the sampled angular velocity command). Defaults to 1.0.
@@ -77,6 +80,9 @@ class UniformVelocityCommandCfg(CommandTermCfg):
 
     ranges: Ranges = MISSING
     """Distribution ranges for the velocity commands."""
+
+    limit_ranges: Ranges = MISSING
+    """Highest limits for the velocity commands."""
 
     goal_vel_visualizer_cfg: VisualizationMarkersCfg = GREEN_ARROW_X_MARKER_CFG.replace(
         prim_path="/Visuals/Command/velocity_goal"

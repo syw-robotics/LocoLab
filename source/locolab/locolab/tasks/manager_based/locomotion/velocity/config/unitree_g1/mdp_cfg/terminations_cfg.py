@@ -12,8 +12,6 @@ from isaaclab.utils import configclass
 
 import locolab.tasks.manager_based.locomotion.velocity.mdp as mdp
 
-from . import BASE_LINK_NAME
-
 
 @configclass
 class FlatTerminationsCfg:

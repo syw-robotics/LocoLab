@@ -10,7 +10,7 @@ import isaaclab.sim as sim_utils
 from isaaclab.assets import ArticulationCfg, AssetBaseCfg
 from isaaclab.envs import ManagerBasedRLEnvCfg
 from isaaclab.scene import InteractiveSceneCfg
-from isaaclab.sensors import ContactSensorCfg
+from isaaclab.sensors import ContactSensorCfg, RayCasterCfg, patterns
 from isaaclab.utils import configclass
 
 from locolab.utils.terrains import TerrainImporterCfg
@@ -37,11 +37,11 @@ from locolab.assets import UNITREE_G1_29DOF_CFG  # isort: skip
 # MDP definition
 ##
 @configclass
-class Go2FlatObservationsCfg:
-    """Configuration for Go2 on flat terrain observations"""
+class G1FlatObservationsCfg:
+    """Configuration for G1 on flat terrain observations"""
 
     policy: PropObsCfg = PropObsCfg()
-    critic: PrivObsCfg = PrivObsCfg().replace(height_scan=None)
+    critic: PrivObsCfg = PrivObsCfg()
 
     policy.history_length = 5
 
@@ -50,8 +50,8 @@ class Go2FlatObservationsCfg:
 # Scene definition
 ##
 @configclass
-class Go2FlatSceneCfg(InteractiveSceneCfg):
-    """Configuration for Go2 on flat terrain scene"""
+class G1FlatSceneCfg(InteractiveSceneCfg):
+    """Configuration for G1 on flat terrain scene"""
 
     # =====  terrain  =====
     terrain: TerrainImporterCfg = TerrainImporterCfg(
@@ -72,11 +72,19 @@ class Go2FlatSceneCfg(InteractiveSceneCfg):
     )
 
     # =====  robots  =====
-    robot: ArticulationCfg = UNITREE_GO2_CFG.replace(prim_path="{ENV_REGEX_NS}/Robot")
+    robot: ArticulationCfg = UNITREE_G1_29DOF_CFG.replace(prim_path="{ENV_REGEX_NS}/Robot")
 
     # =====  sensors  =====
     contact_forces: ContactSensorCfg = ContactSensorCfg(
         prim_path="{ENV_REGEX_NS}/Robot/.*", history_length=3, track_air_time=True
+    )
+    height_scanner = RayCasterCfg(
+        prim_path="{ENV_REGEX_NS}/Robot/torso_link",
+        offset=RayCasterCfg.OffsetCfg(pos=(0.0, 0.0, 20.0)),
+        ray_alignment="yaw",
+        pattern_cfg=patterns.GridPatternCfg(resolution=0.1, size=[1.6, 1.0]),
+        debug_vis=False,
+        mesh_prim_paths=["/World/ground"],
     )
 
     # =====  lights  =====
@@ -95,13 +103,13 @@ class Go2FlatSceneCfg(InteractiveSceneCfg):
 # Environment configuration
 ##
 @configclass
-class Go2FlatEnvCfg(ManagerBasedRLEnvCfg):
-    """Configuration for the Go2 flat environment."""
+class G1FlatEnvCfg(ManagerBasedRLEnvCfg):
+    """Configuration for the G1 flat environment."""
 
     # Scene settings
-    scene: Go2FlatSceneCfg = Go2FlatSceneCfg(num_envs=4096, env_spacing=2.5)
+    scene: G1FlatSceneCfg = G1FlatSceneCfg(num_envs=4096, env_spacing=2.5)
     # Basic settings
-    observations: Go2FlatObservationsCfg = Go2FlatObservationsCfg()
+    observations: G1FlatObservationsCfg = G1FlatObservationsCfg()
     actions: ActionsCfg = ActionsCfg()
     commands: CommandsCfg = CommandsCfg()
     # MDP settings
@@ -123,10 +131,12 @@ class Go2FlatEnvCfg(ManagerBasedRLEnvCfg):
         # we tick all the sensors based on the smallest update period (physics update period)
         if self.scene.contact_forces is not None:
             self.scene.contact_forces.update_period = self.sim.dt
+        if self.scene.height_scanner is not None:
+            self.scene.height_scanner.update_period = self.sim.dt * self.decimation
 
 
 @configclass
-class Go2FlatEnvCfg_PLAY(Go2FlatEnvCfg):
+class G1FlatEnvCfg_PLAY(G1FlatEnvCfg):
     def __post_init__(self) -> None:
         # post init of parent
         super().__post_init__()
