@@ -22,17 +22,17 @@ JOINT_NAMES = [
 
 from .actions_cfg import ActionsCfg
 from .commands_cfg import CommandsCfg
-from .curriculumns_cfg import RoughCurriculumsCfg
 from .events_cfg import EventCfg
 from .observations_cfg import PrivObsCfg, PropObsCfg
 from .rewards_cfg import FlatRewardsCfg
 from .terminations_cfg import FlatTerminationsCfg
+from .curriculumns_cfg import CurriculumsCfg
 
 __all__ = [
     "ActionsCfg",
     "CommandsCfg",
     "EventCfg",
-    "RoughCurriculumsCfg",
+    "CurriculumsCfg",
     "PropObsCfg",
     "PrivObsCfg",
     "FlatRewardsCfg",

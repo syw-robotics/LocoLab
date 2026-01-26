@@ -22,7 +22,7 @@ class FlatRewardsCfg:
     """Reward terms for flat terrain."""
 
     # ===== task-specific rewards =====
-    track_lin_vel_xy = RewTerm(
+    track_lin_vel_xy_exp = RewTerm(
         func=mdp.track_lin_vel_xy_yaw_frame_exp,
         weight=1.0,
         params={"command_name": "base_velocity", "std": math.sqrt(0.25)},

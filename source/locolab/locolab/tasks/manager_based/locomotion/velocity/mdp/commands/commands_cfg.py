@@ -12,7 +12,7 @@ from dataclasses import MISSING
 from isaaclab.managers import CommandTermCfg
 from isaaclab.markers import VisualizationMarkersCfg
 from isaaclab.utils import configclass
-from locolab.utils.markers import GREEN_ARROW_X_MARKER_CFG, RED_ARROW_X_MARKER_CFG
+from locolab.utils.markers import GREEN_ARROW_X_MARKER_CFG, BLUE_ARROW_X_MARKER_CFG
 
 from .velocity_command import UniformVelocityCommand
 
@@ -26,8 +26,8 @@ class UniformVelocityCommandCfg(CommandTermCfg):
     asset_name: str = MISSING
     """Name of the asset in the environment for which the commands are generated."""
 
-    velocity_threshold: float = 0.2
-    """Velocity threshold for the command generator. Defaults to 0.2."""
+    velocity_threshold: float = 0.0
+    """Velocity threshold for the command generator. Defaults to 0.0."""
 
     heading_command: bool = False
     """Whether to use heading command or angular velocity command. Defaults to False.
@@ -80,15 +80,12 @@ class UniformVelocityCommandCfg(CommandTermCfg):
     ranges: Ranges = MISSING
     """Distribution ranges for the velocity commands."""
 
-    limit_ranges: Ranges = MISSING
-    """Highest limits for the velocity commands."""
-
     goal_vel_visualizer_cfg: VisualizationMarkersCfg = GREEN_ARROW_X_MARKER_CFG.replace(
         prim_path="/Visuals/Command/velocity_goal"
     )
     """The configuration for the goal velocity visualization marker. Defaults to GREEN_ARROW_X_MARKER_CFG."""
 
-    current_vel_visualizer_cfg: VisualizationMarkersCfg = RED_ARROW_X_MARKER_CFG.replace(
+    current_vel_visualizer_cfg: VisualizationMarkersCfg = BLUE_ARROW_X_MARKER_CFG.replace(
         prim_path="/Visuals/Command/velocity_current"
     )
     """The configuration for the current velocity visualization marker. Defaults to BLUE_ARROW_X_MARKER_CFG."""

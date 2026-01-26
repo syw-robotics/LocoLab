@@ -105,7 +105,7 @@ class TerrainImporter:
             self.import_mesh("terrain", terrain_generator.terrain_mesh)
             if self.cfg.use_terrain_origins:
                 # configure the terrain origins based on the terrain generator
-                self.configure_env_origins(terrain_generator.terrain_origins, terrain_generator.terrain_indices)
+                self.configure_env_origins(terrain_generator.terrain_origins)
             else:
                 self.configure_env_origins()
             # refer to the flat patches

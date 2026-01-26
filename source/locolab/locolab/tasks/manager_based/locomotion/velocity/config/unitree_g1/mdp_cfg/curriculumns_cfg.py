@@ -13,8 +13,14 @@ import locolab.tasks.manager_based.locomotion.velocity.mdp as mdp
 
 
 @configclass
-class RoughCurriculumsCfg:
+class CurriculumsCfg:
     """Curriculum terms for rough terrain."""
 
     terrain_levels = CurrTerm(func=mdp.terrain_levels)
-    lin_vel_cmd_levels = CurrTerm(mdp.lin_vel_cmd_levels)
+    lin_vel_cmd_levels = CurrTerm(mdp.lin_vel_cmd_levels,params={
+        "max_lin_vel_x_ranges": (-0.5, 1.0),
+        "max_lin_vel_y_ranges": (-0.3, 0.3),
+    })
+    # ang_vel_cmd_levels = CurrTerm(mdp.ang_vel_cmd_levels,params={
+    #     "max_ang_vel_z_ranges": (-0.2, 0.2),
+    # })

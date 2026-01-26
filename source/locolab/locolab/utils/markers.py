@@ -27,7 +27,7 @@ BLUE_ARROW_X_MARKER_CFG = VisualizationMarkersCfg(
         "arrow": sim_utils.UsdFileCfg(
             usd_path=f"{ISAAC_NUCLEUS_DIR}/Props/UIElements/arrow_x.usd",
             scale=(1.0, 0.1, 0.1),
-            visual_material=sim_utils.PreviewSurfaceCfg(diffuse_color=(0.2, 0.2, 0.9)),
+            visual_material=sim_utils.PreviewSurfaceCfg(diffuse_color=(0.0, 0.0, 1.0)),
         )
     }
 )
@@ -38,14 +38,14 @@ GREEN_ARROW_X_MARKER_CFG = VisualizationMarkersCfg(
         "arrow": sim_utils.UsdFileCfg(
             usd_path=f"{ISAAC_NUCLEUS_DIR}/Props/UIElements/arrow_x.usd",
             scale=(1.0, 0.1, 0.1),
-            visual_material=sim_utils.PreviewSurfaceCfg(diffuse_color=(0.2, 0.9, 0.2)),
+            visual_material=sim_utils.PreviewSurfaceCfg(diffuse_color=(0.0, 1.0, 0.0)),
         )
     }
 )
 """Configuration for the green arrow marker (along x-direction)."""
 
 
-RED_ARROW_X_MARKER_CFG = VisualizationMarkersCfg(
+PINK_ARROW_X_MARKER_CFG = VisualizationMarkersCfg(
     markers={
         "arrow": sim_utils.UsdFileCfg(
             usd_path=f"{ISAAC_NUCLEUS_DIR}/Props/UIElements/arrow_x.usd",
@@ -54,7 +54,7 @@ RED_ARROW_X_MARKER_CFG = VisualizationMarkersCfg(
         )
     }
 )
-"""Configuration for the red arrow marker (along x-direction)."""
+"""Configuration for the pink arrow marker (along x-direction)."""
 
 
 RAY_CASTER_MARKER_CFG = VisualizationMarkersCfg(

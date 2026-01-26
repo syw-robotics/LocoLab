@@ -12,9 +12,12 @@ from isaaclab.envs import ManagerBasedRLEnvCfg
 from isaaclab.scene import InteractiveSceneCfg
 from isaaclab.sensors import ContactSensorCfg, RayCasterCfg, patterns
 from isaaclab.utils import configclass
+from isaaclab.utils.assets import ISAACLAB_NUCLEUS_DIR, ISAAC_NUCLEUS_DIR
 
 from locolab.utils.terrains import TerrainImporterCfg
+from locolab.utils.terrains.terrains_cfg import COBBLESTONE_ROAD_CFG
 
+import locolab.tasks.manager_based.locomotion.velocity.mdp as mdp
 #  from isaaclab.utils.assets import ISAAC_NUCLEUS_DIR
 
 
@@ -29,6 +32,7 @@ from locolab.tasks.manager_based.locomotion.velocity.config.unitree_g1.mdp_cfg i
     PrivObsCfg,
     PropObsCfg,
     FlatTerminationsCfg,
+    CurriculumsCfg,
 )
 from locolab.assets import UNITREE_G1_29DOF_CFG  # isort: skip
 
@@ -56,17 +60,20 @@ class G1FlatSceneCfg(InteractiveSceneCfg):
     # =====  terrain  =====
     terrain: TerrainImporterCfg = TerrainImporterCfg(
         prim_path="/World/ground",
-        terrain_type="plane",
+        terrain_type="generator",
+        terrain_generator=COBBLESTONE_ROAD_CFG,
+        max_init_terrain_level=COBBLESTONE_ROAD_CFG.num_rows - 1,
+        collision_group=-1,
         physics_material=sim_utils.RigidBodyMaterialCfg(
             friction_combine_mode="multiply",
             restitution_combine_mode="multiply",
             static_friction=1.0,
             dynamic_friction=1.0,
         ),
-        visual_material=sim_utils.PreviewSurfaceCfg(
-            diffuse_color=(1.0, 1.0, 1.0),
-            metallic=0.0,
-            roughness=0.8,
+        visual_material=sim_utils.MdlFileCfg(
+            mdl_path=f"{ISAACLAB_NUCLEUS_DIR}/Materials/TilesMarbleSpiderWhiteBrickBondHoned/TilesMarbleSpiderWhiteBrickBondHoned.mdl",
+            project_uvw=True,
+            texture_scale=(0.25, 0.25),
         ),
         debug_vis=False,
     )
@@ -90,12 +97,10 @@ class G1FlatSceneCfg(InteractiveSceneCfg):
     # =====  lights  =====
     sky_light: AssetBaseCfg = AssetBaseCfg(
         prim_path="/World/skyLight",
-        #  spawn=sim_utils.DomeLightCfg(
-        #      intensity=750.0,
-        #      texture_file=f"{ISAAC_NUCLEUS_DIR}/Materials/Textures/Skies/PolyHaven/kloofendal_43d_clear_puresky_4k.hdr",
-        #  ),
-        #  spawn=sim_utils.DistantLightCfg(color=(0.75, 0.75, 0.75), intensity=3000.0),
-        spawn=sim_utils.DomeLightCfg(color=(0.75, 0.75, 0.75), intensity=3000.0),
+        spawn=sim_utils.DomeLightCfg(
+            intensity=750.0,
+            texture_file=f"{ISAAC_NUCLEUS_DIR}/Materials/Textures/Skies/PolyHaven/kloofendal_43d_clear_puresky_4k.hdr",
+        ),
     )
 
 
@@ -116,6 +121,7 @@ class G1FlatEnvCfg(ManagerBasedRLEnvCfg):
     rewards: FlatRewardsCfg = FlatRewardsCfg()
     terminations: FlatTerminationsCfg = FlatTerminationsCfg()
     events: EventCfg = EventCfg()
+    curriculum: CurriculumsCfg = CurriculumsCfg()
 
     def __post_init__(self):
         """Post initialization."""
@@ -142,5 +148,9 @@ class G1FlatEnvCfg_PLAY(G1FlatEnvCfg):
         super().__post_init__()
 
         # make a smaller scene for play
-        self.scene.num_envs = 10
-        self.scene.env_spacing = 2.5
+        self.scene.terrain.terrain_generator.num_rows = 2
+        self.scene.terrain.terrain_generator.num_cols = 2
+
+        self.commands.base_velocity.ranges = mdp.UniformVelocityCommandCfg.Ranges(
+            lin_vel_x=(-0.5, 1.0), lin_vel_y=(-0.3, 0.3), ang_vel_z=(-0.2, 0.2)
+        )
