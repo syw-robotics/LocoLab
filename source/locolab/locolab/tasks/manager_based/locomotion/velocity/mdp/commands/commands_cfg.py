@@ -47,7 +47,7 @@ class UniformVelocityCommandCfg(CommandTermCfg):
     This parameter is only used if :attr:`heading_command` is True.
     """
 
-    rel_only_lin_vel_x_envs: float = 0.1
+    rel_only_lin_vel_x_envs: float = 0.0
     """The sampled probability of environments where only x-direction velocity command is non-zero
     (y velocity and angular velocity are set to zero). Defaults to 0.05.
 
@@ -90,3 +90,6 @@ class UniformVelocityCommandCfg(CommandTermCfg):
     # Set the scale of the visualization markers to (0.5, 0.5, 0.5)
     goal_vel_visualizer_cfg.markers["arrow"].scale = (0.5, 0.5, 0.5)
     current_vel_visualizer_cfg.markers["arrow"].scale = (0.5, 0.5, 0.5)
+
+    # Marker z offset
+    vel_visualizer_offset_z: float = 0.5

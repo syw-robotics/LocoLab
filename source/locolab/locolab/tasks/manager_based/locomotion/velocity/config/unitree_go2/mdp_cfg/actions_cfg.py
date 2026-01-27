@@ -9,7 +9,7 @@
 import locolab.tasks.manager_based.locomotion.velocity.mdp as mdp
 from isaaclab.utils import configclass
 
-from . import JOINT_NAMES
+from . import JOINT_NAMES, PRESERVE_ORDER
 
 
 @configclass
@@ -22,5 +22,5 @@ class ActionsCfg:
         scale={".*_hip_joint": 0.125, "^(?!.*_hip_joint).*": 0.25},
         use_default_offset=True,
         clip={".*": (-10.0, 10.0)},
-        preserve_order=True,
+        preserve_order=PRESERVE_ORDER,
     )

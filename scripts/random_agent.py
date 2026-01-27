@@ -38,6 +38,58 @@ import torch
 from isaaclab_tasks.utils import parse_env_cfg
 
 
+def print_joint_order(env):
+    """Print the joint order in observation and action spaces."""
+    # Get the scene and robot asset
+    scene = env.unwrapped.scene
+    robot = scene["robot"]
+
+    # Get joint names from the robot
+    joint_names = robot.joint_names
+
+    # Try to extract joint names from observation and action configs
+    env_cfg = env.unwrapped.cfg
+
+    print("\n" + "=" * 80)
+    print("JOINT ORDER INFORMATION")
+    print("=" * 80)
+
+    # Print all joint names
+    print(f"\n[Joint Names] Total: {len(joint_names)} joints")
+    for idx, name in enumerate(joint_names):
+        print(f"  {idx:2d}: {name}")
+
+    # Print observation joint_pos order
+    if hasattr(env_cfg, "observations") and hasattr(env_cfg.observations, "policy"):
+        policy_obs = env_cfg.observations.policy
+        if hasattr(policy_obs, "joint_pos"):
+            print("\n[Observation - joint_pos] Indices and names:")
+            joint_pos_cfg = policy_obs.joint_pos
+            if hasattr(joint_pos_cfg, "params"):
+                scene_cfg = joint_pos_cfg.params.get("asset_cfg")
+                if scene_cfg and hasattr(scene_cfg, "joint_names"):
+                    for idx, name in enumerate(scene_cfg.joint_names):
+                        print(f"  {idx:2d}: {name}")
+            else:
+                print("  [All movable joints in order]")
+                for idx, name in enumerate(joint_names):
+                    print(f"  {idx:2d}: {name}")
+
+    # Print action order
+    if hasattr(env_cfg, "actions") and hasattr(env_cfg.actions, "joint_pos"):
+        print("\n[Action - joint_pos] Indices and names:")
+        action_cfg = env_cfg.actions.joint_pos
+        if hasattr(action_cfg, "joint_names"):
+            for idx, name in enumerate(action_cfg.joint_names):
+                print(f"  {idx:2d}: {name}")
+        else:
+            print("  [All movable joints in order]")
+            for idx, name in enumerate(joint_names):
+                print(f"  {idx:2d}: {name}")
+
+    print("\n" + "=" * 80)
+
+
 def main():
     """Random actions agent with Isaac Lab environment."""
     # create environment configuration
@@ -52,6 +104,7 @@ def main():
     env = gym.make(args_cli.task, cfg=env_cfg)
 
     # print info (this is vectorized environment)
+    print_joint_order(env)
     print(f"[INFO]: Gym observation space: {env.observation_space}")
     print(f"[INFO]: Gym action space: {env.action_space}")
     # reset environment

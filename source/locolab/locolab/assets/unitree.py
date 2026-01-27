@@ -21,11 +21,11 @@ from isaaclab.utils import configclass
 from .actuators import (
     DelayedImplicitActuatorCfg,  # Implicit Atuator shows higher fidelity but no latency compensation
 )
+from .actuators import beyondmimic_g1_29dof_actuators
 
 # Get the absolute path to the robots directory relative to this file
 _ASSETS_DIR = os.path.dirname(os.path.abspath(__file__))
 UNITREE_MODEL_DIR = os.path.join(_ASSETS_DIR, "robots", "unitree")
-#  UNITREE_ROS_DIR = "path/to/unitree_ros"  # Replace with the actual path to your unitree_ros package
 
 
 @configclass
@@ -38,27 +38,11 @@ class UnitreeArticulationCfg(ArticulationCfg):
 
 
 @configclass
-class UnitreeUsdFileCfg(sim_utils.UsdFileCfg):
-    activate_contact_sensors: bool = True
-    rigid_props = sim_utils.RigidBodyPropertiesCfg(
-        disable_gravity=False,
-        retain_accelerations=False,
-        linear_damping=0.0,
-        angular_damping=0.0,
-        max_linear_velocity=1000.0,
-        max_angular_velocity=1000.0,
-        max_depenetration_velocity=1.0,
-    )
-    articulation_props = sim_utils.ArticulationRootPropertiesCfg(
-        enabled_self_collisions=True, solver_position_iteration_count=4, solver_velocity_iteration_count=0
-    )
-
-
-@configclass
 class UnitreeUrdfFileCfg(sim_utils.UrdfFileCfg):
     fix_base: bool = False
     activate_contact_sensors: bool = True
-    replace_cylinders_with_capsules = True
+    replace_cylinders_with_capsules = False
+    merge_fixed_joints = True
     joint_drive = sim_utils.UrdfConverterCfg.JointDriveCfg(
         gains=sim_utils.UrdfConverterCfg.JointDriveCfg.PDGainsCfg(stiffness=0, damping=0)
     )
@@ -105,9 +89,6 @@ UNITREE_GO2_CFG = UnitreeArticulationCfg(
     spawn=UnitreeUrdfFileCfg(
         asset_path=f"{UNITREE_MODEL_DIR}/Go2/urdf/go2_description/urdf/go2_description.urdf",
     ),
-    #  spawn=UnitreeUsdFileCfg(
-    #      usd_path=f"{UNITREE_MODEL_DIR}/Go2/usd/go2.usd",
-    #  ),
     init_state=ArticulationCfg.InitialStateCfg(
         pos=(0.0, 0.0, 0.4),
         joint_pos={
@@ -154,11 +135,8 @@ UNITREE_GO2_CFG = UnitreeArticulationCfg(
 )
 
 UNITREE_GO2W_CFG = UnitreeArticulationCfg(
-    # spawn=UnitreeUrdfFileCfg(
-    #     asset_path=f"{UNITREE_ROS_DIR}/robots/go2w_description/urdf/go2w_description.urdf",
-    # ),
-    spawn=UnitreeUsdFileCfg(
-        usd_path=f"{UNITREE_MODEL_DIR}/Go2W/usd/go2w.usd",
+    spawn=UnitreeUrdfFileCfg(
+        asset_path=f"{UNITREE_MODEL_DIR}/robots/go2w_description/urdf/go2w_description.urdf",
     ),
     init_state=ArticulationCfg.InitialStateCfg(
         pos=(0.0, 0.0, 0.45),
@@ -197,11 +175,8 @@ UNITREE_GO2W_CFG = UnitreeArticulationCfg(
 )
 
 UNITREE_B2_CFG = UnitreeArticulationCfg(
-    # spawn=UnitreeUrdfFileCfg(
-    #     asset_path=f"{UNITREE_ROS_DIR}/robots/b2_description/urdf/b2_description.urdf",
-    # ),
-    spawn=UnitreeUsdFileCfg(
-        usd_path=f"{UNITREE_MODEL_DIR}/B2/usd/b2.usd",
+    spawn=UnitreeUrdfFileCfg(
+        asset_path=f"{UNITREE_MODEL_DIR}/robots/b2_description/urdf/b2_description.urdf",
     ),
     init_state=ArticulationCfg.InitialStateCfg(
         pos=(0.0, 0.0, 0.58),
@@ -236,11 +211,8 @@ UNITREE_B2_CFG = UnitreeArticulationCfg(
 )
 
 UNITREE_H1_CFG = UnitreeArticulationCfg(
-    # spawn=UnitreeUrdfFileCfg(
-    #     asset_path=f"{UNITREE_ROS_DIR}/robots/h1_description/urdf/h1.urdf",
-    # ),
-    spawn=UnitreeUsdFileCfg(
-        usd_path=f"{UNITREE_MODEL_DIR}/H1/h1/usd/h1.usd",
+    spawn=UnitreeUrdfFileCfg(
+        asset_path=f"{UNITREE_MODEL_DIR}/robots/h1_description/urdf/h1.urdf",
     ),
     init_state=ArticulationCfg.InitialStateCfg(
         pos=(0.0, 0.0, 1.1),
@@ -321,11 +293,8 @@ UNITREE_H1_CFG = UnitreeArticulationCfg(
 )
 
 UNITREE_G1_23DOF_CFG = UnitreeArticulationCfg(
-    # spawn=UnitreeUrdfFileCfg(
-    #     asset_path=f"{UNITREE_ROS_DIR}/robots/g1_description/g1_23dof_rev_1_0.urdf",
-    # ),
-    spawn=UnitreeUsdFileCfg(
-        usd_path=f"{UNITREE_MODEL_DIR}/G1/23dof/usd/g1_23dof_rev_1_0/g1_23dof_rev_1_0.usd",
+    spawn=UnitreeUrdfFileCfg(
+        asset_path=f"{UNITREE_MODEL_DIR}/robots/g1_description/g1_23dof_rev_1_0.urdf",
     ),
     init_state=ArticulationCfg.InitialStateCfg(
         pos=(0.0, 0.0, 0.8),
@@ -420,11 +389,8 @@ UNITREE_G1_23DOF_CFG = UnitreeArticulationCfg(
 )
 
 UNITREE_G1_29DOF_CFG = UnitreeArticulationCfg(
-    # spawn=UnitreeUrdfFileCfg(
-    #     asset_path=f"{UNITREE_ROS_DIR}/robots/g1_description/g1_29dof_rev_1_0.urdf",
-    # ),
-    spawn=UnitreeUsdFileCfg(
-        usd_path=f"{UNITREE_MODEL_DIR}/G1/29dof/usd/g1_29dof_rev_1_0/g1_29dof_rev_1_0.usd",
+    spawn=UnitreeUrdfFileCfg(
+        asset_path=f"{UNITREE_MODEL_DIR}/robots/g1_description/g1_29dof_rev_1_0.urdf",
     ),
     init_state=ArticulationCfg.InitialStateCfg(
         pos=(0.0, 0.0, 0.8),
@@ -535,4 +501,76 @@ UNITREE_G1_29DOF_CFG = UnitreeArticulationCfg(
 )
 
 
+UNITREE_G1_29DOF_BEYONDMIMIC_CFG = UnitreeArticulationCfg(
+    spawn=sim_utils.UrdfFileCfg(
+        fix_base=False,
+        replace_cylinders_with_capsules=True,
+        asset_path=f"{UNITREE_MODEL_DIR}/G1/urdf/g1_description/g1_29dof_beyondmimic.urdf",
+        activate_contact_sensors=True,
+        rigid_props=sim_utils.RigidBodyPropertiesCfg(
+            disable_gravity=False,
+            retain_accelerations=False,
+            linear_damping=0.0,
+            angular_damping=0.0,
+            max_linear_velocity=1000.0,
+            max_angular_velocity=1000.0,
+            max_depenetration_velocity=1.0,
+        ),
+        articulation_props=sim_utils.ArticulationRootPropertiesCfg(
+            enabled_self_collisions=True,
+            solver_position_iteration_count=8,
+            solver_velocity_iteration_count=4,
+        ),
+        joint_drive=sim_utils.UrdfConverterCfg.JointDriveCfg(
+            gains=sim_utils.UrdfConverterCfg.JointDriveCfg.PDGainsCfg(stiffness=0, damping=0)
+        ),
+    ),
+    init_state=ArticulationCfg.InitialStateCfg(
+        #  pos=(0.0, 0.0, 0.8),
+        pos=(0.0, 0.0, 0.8),
+        joint_pos={
+            ".*_hip_pitch_joint": -0.312,
+            ".*_knee_joint": 0.669,
+            ".*_ankle_pitch_joint": -0.363,
+            ".*_elbow_joint": 0.6,
+            "left_shoulder_roll_joint": 0.2,
+            "left_shoulder_pitch_joint": 0.2,
+            "right_shoulder_roll_joint": -0.2,
+            "right_shoulder_pitch_joint": 0.2,
+        },
+        joint_vel={".*": 0.0},
+    ),
+    actuators=beyondmimic_g1_29dof_actuators,
+    joint_sdk_names=[
+        "left_hip_pitch_joint",
+        "left_hip_roll_joint",
+        "left_hip_yaw_joint",
+        "left_knee_joint",
+        "left_ankle_pitch_joint",
+        "left_ankle_roll_joint",
+        "right_hip_pitch_joint",
+        "right_hip_roll_joint",
+        "right_hip_yaw_joint",
+        "right_knee_joint",
+        "right_ankle_pitch_joint",
+        "right_ankle_roll_joint",
+        "waist_yaw_joint",
+        "waist_roll_joint",
+        "waist_pitch_joint",
+        "left_shoulder_pitch_joint",
+        "left_shoulder_roll_joint",
+        "left_shoulder_yaw_joint",
+        "left_elbow_joint",
+        "left_wrist_roll_joint",
+        "left_wrist_pitch_joint",
+        "left_wrist_yaw_joint",
+        "right_shoulder_pitch_joint",
+        "right_shoulder_roll_joint",
+        "right_shoulder_yaw_joint",
+        "right_elbow_joint",
+        "right_wrist_roll_joint",
+        "right_wrist_pitch_joint",
+        "right_wrist_yaw_joint",
+    ],
+)
 """Configuration for the Unitree G1 23DOF Humanoid robot."""

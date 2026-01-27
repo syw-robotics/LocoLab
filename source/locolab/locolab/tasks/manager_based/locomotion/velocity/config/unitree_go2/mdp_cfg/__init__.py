@@ -11,6 +11,9 @@ FOOT_LINK_NAMES = ".*_foot"
 HIP_JOINT_NAMES = [".*_hip_joint"]
 UNDESIRED_CONTACT_LINK_NAMES = ["Head_.*", ".*_hip", ".*_thigh", ".*_calf"]
 OTHER_BODY_LINK_NAMES = [".*_hip", ".*_thigh", ".*_calf"]
+
+PRESERVE_ORDER = True
+
 # fmt: off
 JOINT_NAMES = [
     "FR_hip_joint", "FR_thigh_joint", "FR_calf_joint",
