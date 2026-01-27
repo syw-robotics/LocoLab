@@ -6,11 +6,9 @@
 # All rights reserved.
 # Modifications are licensed under BSD-3-Clause.
 
-from isaaclab.managers import SceneEntityCfg
+import locolab.tasks.manager_based.locomotion.velocity.mdp as mdp
 from isaaclab.managers import TerminationTermCfg as DoneTerm
 from isaaclab.utils import configclass
-
-import locolab.tasks.manager_based.locomotion.velocity.mdp as mdp
 
 
 @configclass

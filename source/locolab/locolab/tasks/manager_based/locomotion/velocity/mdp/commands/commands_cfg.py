@@ -12,7 +12,7 @@ from dataclasses import MISSING
 from isaaclab.managers import CommandTermCfg
 from isaaclab.markers import VisualizationMarkersCfg
 from isaaclab.utils import configclass
-from locolab.utils.markers import GREEN_ARROW_X_MARKER_CFG, BLUE_ARROW_X_MARKER_CFG
+from locolab.utils.markers import BLUE_ARROW_X_MARKER_CFG, GREEN_ARROW_X_MARKER_CFG
 
 from .velocity_command import UniformVelocityCommand
 
@@ -42,7 +42,7 @@ class UniformVelocityCommandCfg(CommandTermCfg):
 
     rel_standing_envs: float = 0.0
     """The sampled probability of environments that should be standing still. Defaults to 0.0."""
-    
+
     rel_heading_envs: float = 1.0
     """The sampled probability of environments where the robots follow the heading-based angular velocity command
     (the others follow the sampled angular velocity command). Defaults to 1.0.

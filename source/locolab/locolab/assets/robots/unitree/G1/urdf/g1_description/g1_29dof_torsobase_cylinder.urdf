@@ -1,14 +1,7 @@
-<robot name="g1_29dof_lock_waist">
-  <material name="dark">
-    <color rgba="0.2 0.2 0.2 1"/>
-  </material>
-  <material name="white">
-    <color rgba="0.7 0.7 0.7 1"/>
-  </material>
-
-  <mujoco>
+<robot name="g1_29dof">
+  <!-- <mujoco>
     <compiler meshdir="meshes" discardvisual="false"/>
-  </mujoco>
+  </mujoco> -->
 
   <!-- [CAUTION] uncomment when convert to mujoco -->
   <!-- <link name="world"></link>
@@ -26,10 +19,18 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="meshes/pelvis.STL"/>
+        <mesh filename="../meshes/pelvis.STL"/>
       </geometry>
-      <material name="dark"/>
+      <material name="dark">
+        <color rgba="0.2 0.2 0.2 1"/>
+      </material>
     </visual>
+    <collision>
+      <origin xyz="0 0 -0.09" rpy="1.5714 0 0"/>
+      <geometry>
+        <cylinder radius="0.06" length="0.12"/>
+      </geometry>
+    </collision>
   </link>
   <link name="pelvis_contour_link">
     <inertial>
@@ -40,16 +41,12 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="meshes/pelvis_contour_link.STL"/>
+        <mesh filename="../meshes/pelvis_contour_link.STL"/>
       </geometry>
-      <material name="white"/>
+      <material name="white">
+        <color rgba="0.7 0.7 0.7 1"/>
+      </material>
     </visual>
-    <collision>
-      <origin xyz="0 0 0" rpy="0 0 0"/>
-      <geometry>
-        <mesh filename="meshes/pelvis_contour_link.STL"/>
-      </geometry>
-    </collision>
   </link>
   <joint name="pelvis_contour_joint" type="fixed">
     <parent link="pelvis"/>
@@ -66,14 +63,16 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="meshes/left_hip_pitch_link.STL"/>
+        <mesh filename="../meshes/left_hip_pitch_link.STL"/>
       </geometry>
-      <material name="dark"/>
+      <material name="dark">
+        <color rgba="0.2 0.2 0.2 1"/>
+      </material>
     </visual>
     <collision>
-      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <origin xyz="0.014 0.05 -0.03" rpy="0 1.4 0"/>
       <geometry>
-        <mesh filename="meshes/left_hip_pitch_link.STL"/>
+        <cylinder radius="0.048" length="0.1"/>
       </geometry>
     </collision>
   </link>
@@ -93,16 +92,12 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="meshes/left_hip_roll_link.STL"/>
+        <mesh filename="../meshes/left_hip_roll_link.STL"/>
       </geometry>
-      <material name="white"/>
+      <material name="white">
+        <color rgba="0.7 0.7 0.7 1"/>
+      </material>
     </visual>
-    <collision>
-      <origin xyz="0 0 0" rpy="0 0 0"/>
-      <geometry>
-        <mesh filename="meshes/left_hip_roll_link.STL"/>
-      </geometry>
-    </collision>
   </link>
   <joint name="left_hip_roll_joint" type="revolute">
     <origin xyz="0 0.052 -0.030465" rpy="0 -0.1749 0"/>
@@ -120,14 +115,16 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="meshes/left_hip_yaw_link.STL"/>
+        <mesh filename="../meshes/left_hip_yaw_link.STL"/>
       </geometry>
-      <material name="white"/>
+      <material name="white">
+        <color rgba="0.7 0.7 0.7 1"/>
+      </material>
     </visual>
     <collision>
-      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <origin xyz="-0.005 0.002 -0.03" rpy="0 0.15 0"/>
       <geometry>
-        <mesh filename="meshes/left_hip_yaw_link.STL"/>
+        <cylinder radius="0.055" length="0.16"/>
       </geometry>
     </collision>
   </link>
@@ -147,14 +144,28 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="meshes/left_knee_link.STL"/>
+        <mesh filename="../meshes/left_knee_link.STL"/>
       </geometry>
-      <material name="white"/>
+      <material name="white">
+        <color rgba="0.7 0.7 0.7 1"/>
+      </material>
     </visual>
     <collision>
-      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <origin xyz="0 -0.005 0" rpy="1.5714 0 0"/>
       <geometry>
-        <mesh filename="meshes/left_knee_link.STL"/>
+        <cylinder radius="0.046" length="0.08"/>
+      </geometry>
+    </collision>
+    <collision>
+      <origin xyz="0.01 0 -0.08" rpy="0 0 0"/>
+      <geometry>
+        <box size="0.1 0.075 0.2"/>
+      </geometry>
+    </collision>
+    <collision>
+      <origin xyz="0.01 0 -0.2" rpy="0 0 0"/>
+      <geometry>
+        <box size="0.06 0.04 0.12"/>
       </geometry>
     </collision>
   </link>
@@ -174,23 +185,19 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="meshes/left_ankle_pitch_link.STL"/>
+        <mesh filename="../meshes/left_ankle_pitch_link.STL"/>
       </geometry>
-      <material name="white"/>
+      <material name="white">
+        <color rgba="0.7 0.7 0.7 1"/>
+      </material>
     </visual>
-    <collision>
-      <origin xyz="0 0 0" rpy="0 0 0"/>
-      <geometry>
-        <mesh filename="meshes/left_ankle_pitch_link.STL"/>
-      </geometry>
-    </collision>
   </link>
   <joint name="left_ankle_pitch_joint" type="revolute">
     <origin xyz="0 -9.4445E-05 -0.30001" rpy="0 0 0"/>
     <parent link="left_knee_link"/>
     <child link="left_ankle_pitch_link"/>
     <axis xyz="0 1 0"/>
-    <limit lower="-0.87267" upper="0.5236" effort="35" velocity="30"/>
+    <limit lower="-0.87267" upper="0.5236" effort="50" velocity="37"/>
   </joint>
   <link name="left_ankle_roll_link">
     <inertial>
@@ -201,41 +208,40 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="meshes/left_ankle_roll_link.STL"/>
+        <mesh filename="../meshes/left_ankle_roll_link.STL"/>
       </geometry>
-      <material name="dark"/>
+      <material name="dark">
+        <color rgba="0.2 0.2 0.2 1"/>
+      </material>
     </visual>
+    <!-- foot body -->
     <collision>
-      <origin xyz="-0.05 0.025 -0.03" rpy="0 0 0"/>
+      <origin xyz="0.024 0 -0.005" rpy="0 0 0"/>
       <geometry>
-        <sphere radius="0.005"/>
+        <box size="0.18 0.046 0.03" />
+      </geometry>
+    </collision>
+    <!-- foot contact points -->
+    <collision>
+      <origin xyz="-0.045 0 -0.036" rpy="1.5714 0 0"/>
+      <geometry>
+        <cylinder radius="0.015" length="0.048"/>
       </geometry>
     </collision>
     <collision>
-      <origin xyz="-0.05 -0.025 -0.03" rpy="0 0 0"/>
+      <origin xyz="0.12 0 -0.036" rpy="-1.5714 0 0"/>
       <geometry>
-        <sphere radius="0.005"/>
+        <cylinder radius="0.015" length="0.046"/>
       </geometry>
     </collision>
-    <collision>
-      <origin xyz="0.12 0.03 -0.03" rpy="0 0 0"/>
-      <geometry>
-        <sphere radius="0.005"/>
-      </geometry>
-    </collision>
-    <collision>
-      <origin xyz="0.12 -0.03 -0.03" rpy="0 0 0"/>
-      <geometry>
-        <sphere radius="0.005"/>
-      </geometry>
-    </collision>
+
   </link>
   <joint name="left_ankle_roll_joint" type="revolute">
     <origin xyz="0 0 -0.017558" rpy="0 0 0"/>
     <parent link="left_ankle_pitch_link"/>
     <child link="left_ankle_roll_link"/>
     <axis xyz="1 0 0"/>
-    <limit lower="-0.2618" upper="0.2618" effort="35" velocity="30"/>
+    <limit lower="-0.2618" upper="0.2618" effort="50" velocity="37"/>
   </joint>
   <link name="right_hip_pitch_link">
     <inertial>
@@ -246,14 +252,16 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="meshes/right_hip_pitch_link.STL"/>
+        <mesh filename="../meshes/right_hip_pitch_link.STL"/>
       </geometry>
-      <material name="dark"/>
+      <material name="dark">
+        <color rgba="0.2 0.2 0.2 1"/>
+      </material>
     </visual>
     <collision>
-      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <origin xyz="0.014 -0.05 -0.03" rpy="0 1.4 0"/>
       <geometry>
-        <mesh filename="meshes/right_hip_pitch_link.STL"/>
+        <cylinder radius="0.048" length="0.1"/>
       </geometry>
     </collision>
   </link>
@@ -273,16 +281,12 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="meshes/right_hip_roll_link.STL"/>
+        <mesh filename="../meshes/right_hip_roll_link.STL"/>
       </geometry>
-      <material name="white"/>
+      <material name="white">
+        <color rgba="0.7 0.7 0.7 1"/>
+      </material>
     </visual>
-    <collision>
-      <origin xyz="0 0 0" rpy="0 0 0"/>
-      <geometry>
-        <mesh filename="meshes/right_hip_roll_link.STL"/>
-      </geometry>
-    </collision>
   </link>
   <joint name="right_hip_roll_joint" type="revolute">
     <origin xyz="0 -0.052 -0.030465" rpy="0 -0.1749 0"/>
@@ -300,14 +304,16 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="meshes/right_hip_yaw_link.STL"/>
+        <mesh filename="../meshes/right_hip_yaw_link.STL"/>
       </geometry>
-      <material name="white"/>
+      <material name="white">
+        <color rgba="0.7 0.7 0.7 1"/>
+      </material>
     </visual>
     <collision>
-      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <origin xyz="-0.005 -0.002 -0.03" rpy="0 0.15 0"/>
       <geometry>
-        <mesh filename="meshes/right_hip_yaw_link.STL"/>
+        <cylinder radius="0.055" length="0.16"/>
       </geometry>
     </collision>
   </link>
@@ -327,14 +333,28 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="meshes/right_knee_link.STL"/>
+        <mesh filename="../meshes/right_knee_link.STL"/>
       </geometry>
-      <material name="white"/>
+      <material name="white">
+        <color rgba="0.7 0.7 0.7 1"/>
+      </material>
     </visual>
     <collision>
-      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <origin xyz="0 0.005 0" rpy="-1.5714 0 0"/>
       <geometry>
-        <mesh filename="meshes/right_knee_link.STL"/>
+        <cylinder radius="0.046" length="0.08"/>
+      </geometry>
+    </collision>
+    <collision>
+      <origin xyz="0.01 0 -0.08" rpy="0 0 0"/>
+      <geometry>
+        <box size="0.09 0.075 0.2"/>
+      </geometry>
+    </collision>
+    <collision>
+      <origin xyz="0.01 0 -0.2" rpy="0 0 0"/>
+      <geometry>
+        <box size="0.06 0.03 0.12"/>
       </geometry>
     </collision>
   </link>
@@ -354,23 +374,19 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="meshes/right_ankle_pitch_link.STL"/>
+        <mesh filename="../meshes/right_ankle_pitch_link.STL"/>
       </geometry>
-      <material name="white"/>
+      <material name="white">
+        <color rgba="0.7 0.7 0.7 1"/>
+      </material>
     </visual>
-    <collision>
-      <origin xyz="0 0 0" rpy="0 0 0"/>
-      <geometry>
-        <mesh filename="meshes/right_ankle_pitch_link.STL"/>
-      </geometry>
-    </collision>
   </link>
   <joint name="right_ankle_pitch_joint" type="revolute">
     <origin xyz="0 9.4445E-05 -0.30001" rpy="0 0 0"/>
     <parent link="right_knee_link"/>
     <child link="right_ankle_pitch_link"/>
     <axis xyz="0 1 0"/>
-    <limit lower="-0.87267" upper="0.5236" effort="35" velocity="30"/>
+    <limit lower="-0.87267" upper="0.5236" effort="50" velocity="37"/>
   </joint>
   <link name="right_ankle_roll_link">
     <inertial>
@@ -381,41 +397,40 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="meshes/right_ankle_roll_link.STL"/>
+        <mesh filename="../meshes/right_ankle_roll_link.STL"/>
       </geometry>
-      <material name="dark"/>
+      <material name="dark">
+        <color rgba="0.2 0.2 0.2 1"/>
+      </material>
     </visual>
+    <!-- foot body -->
     <collision>
-      <origin xyz="-0.05 0.025 -0.03" rpy="0 0 0"/>
+      <origin xyz="0.024 0 -0.005" rpy="0 0 0"/>
       <geometry>
-        <sphere radius="0.005"/>
+        <box size="0.18 0.046 0.03" />
+      </geometry>
+    </collision>
+    <!-- foot contack points -->
+    <collision>
+      <origin xyz="-0.045 0 -0.036" rpy="1.5714 0 0"/>
+      <geometry>
+        <cylinder radius="0.015" length="0.048"/>
       </geometry>
     </collision>
     <collision>
-      <origin xyz="-0.05 -0.025 -0.03" rpy="0 0 0"/>
+      <origin xyz="0.12 0 -0.036" rpy="-1.5714 0 0"/>
       <geometry>
-        <sphere radius="0.005"/>
+        <cylinder radius="0.015" length="0.046"/>
       </geometry>
     </collision>
-    <collision>
-      <origin xyz="0.12 0.03 -0.03" rpy="0 0 0"/>
-      <geometry>
-        <sphere radius="0.005"/>
-      </geometry>
-    </collision>
-    <collision>
-      <origin xyz="0.12 -0.03 -0.03" rpy="0 0 0"/>
-      <geometry>
-        <sphere radius="0.005"/>
-      </geometry>
-    </collision>
+
   </link>
   <joint name="right_ankle_roll_joint" type="revolute">
     <origin xyz="0 0 -0.017558" rpy="0 0 0"/>
     <parent link="right_ankle_pitch_link"/>
     <child link="right_ankle_roll_link"/>
     <axis xyz="1 0 0"/>
-    <limit lower="-0.2618" upper="0.2618" effort="35" velocity="30"/>
+    <limit lower="-0.2618" upper="0.2618" effort="50" velocity="37"/>
   </joint>
 
   <!-- Torso -->
@@ -428,15 +443,17 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="meshes/waist_yaw_link.STL"/>
+        <mesh filename="../meshes/waist_yaw_link.STL"/>
       </geometry>
-      <material name="white"/>
+      <material name="white">
+        <color rgba="0.7 0.7 0.7 1"/>
+      </material>
     </visual>
   </link>
   <joint name="waist_yaw_joint" type="revolute">
     <origin xyz="0 0 0" rpy="0 0 0"/>
-    <parent link="pelvis"/>
-    <child link="waist_yaw_link"/>
+    <parent link="waist_yaw_link"/>
+    <child link="pelvis"/>
     <axis xyz="0 0 1"/>
     <limit lower="-2.618" upper="2.618" effort="88" velocity="32"/>
   </joint>
@@ -449,17 +466,19 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="meshes/waist_roll_link.STL"/>
+        <mesh filename="../meshes/waist_roll_link.STL"/>
       </geometry>
-      <material name="white"/>
+      <material name="white">
+        <color rgba="0.7 0.7 0.7 1"/>
+      </material>
     </visual>
   </link>
-  <joint name="waist_roll_joint" type="fixed">
-    <origin xyz="-0.0039635 0 0.035" rpy="0 0 0"/>
-    <parent link="waist_yaw_link"/>
-    <child link="waist_roll_link"/>
+  <joint name="waist_roll_joint" type="revolute">
+    <origin xyz="0.0039635 0 -0.035" rpy="0 0 0"/>
+    <parent link="waist_roll_link"/>
+    <child link="waist_yaw_link"/>
     <axis xyz="1 0 0"/>
-    <limit lower="-0.52" upper="0.52" effort="35" velocity="30"/>
+    <limit lower="-0.52" upper="0.52" effort="50" velocity="37"/>
   </joint>
   <link name="torso_link">
     <inertial>
@@ -470,23 +489,31 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="meshes/torso_link.STL"/>
+        <mesh filename="../meshes/torso_link.STL"/>
       </geometry>
-      <material name="white"/>
+      <material name="white">
+        <color rgba="0.7 0.7 0.7 1"/>
+      </material>
     </visual>
     <collision>
-      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <origin xyz="0.005 0 0.12" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="meshes/torso_link.STL"/>
+        <box size="0.12 0.12 0.34"/>
+      </geometry>
+    </collision>
+    <collision>
+      <origin xyz="0.005 0 0.16" rpy="0 0 0"/>
+      <geometry>
+        <box size="0.1 0.196 0.24"/>
       </geometry>
     </collision>
   </link>
-  <joint name="waist_pitch_joint" type="fixed">
-    <origin xyz="0 0 0.019" rpy="0 0 0"/>
-    <parent link="waist_roll_link"/>
-    <child link="torso_link"/>
+  <joint name="waist_pitch_joint" type="revolute">
+    <origin xyz="0 0 -0.019" rpy="0 0 0"/>
+    <parent link="torso_link"/>
+    <child link="waist_roll_link"/>
     <axis xyz="0 1 0"/>
-    <limit lower="-0.52" upper="0.52" effort="35" velocity="30"/>
+    <limit lower="-0.52" upper="0.52" effort="50" velocity="37"/>
   </joint>
 
   <!-- LOGO -->
@@ -504,16 +531,12 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="meshes/logo_link.STL"/>
+        <mesh filename="../meshes/logo_link.STL"/>
       </geometry>
-      <material name="dark"/>
+      <material name="dark">
+        <color rgba="0.2 0.2 0.2 1"/>
+      </material>
     </visual>
-    <collision>
-      <origin xyz="0 0 0" rpy="0 0 0"/>
-      <geometry>
-        <mesh filename="meshes/logo_link.STL"/>
-      </geometry>
-    </collision>
   </link>
 
   <!-- Head -->
@@ -526,14 +549,16 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="meshes/head_link.STL"/>
+        <mesh filename="../meshes/head_link.STL"/>
       </geometry>
-      <material name="dark"/>
+      <material name="dark">
+        <color rgba="0.2 0.2 0.2 1"/>
+      </material>
     </visual>
     <collision>
-      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <origin xyz="0.002 0 0.47" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="meshes/head_link.STL"/>
+        <sphere radius="0.07"/>
       </geometry>
     </collision>
   </link>
@@ -553,16 +578,12 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="meshes/waist_support_link.STL"/>
+        <mesh filename="../meshes/waist_support_link.STL"/>
       </geometry>
-      <material name="white"/>
+      <material name="white">
+        <color rgba="0.7 0.7 0.7 1"/>
+      </material>
     </visual>
-    <collision>
-      <origin xyz="0 0 0" rpy="0 0 0"/>
-      <geometry>
-        <mesh filename="meshes/waist_support_link.STL"/>
-      </geometry>
-    </collision>
   </link>
   <joint name="waist_support_joint" type="fixed">
     <origin xyz="0.0039635 0 -0.054" rpy="0 0 0"/>
@@ -571,34 +592,11 @@
   </joint>
 
   <!-- IMU -->
-  <link name="imu_in_torso"></link>
-  <joint name="imu_in_torso_joint" type="fixed">
+  <link name="imu_link"></link>
+  <joint name="imu_joint" type="fixed">
     <origin xyz="-0.03959 -0.00224 0.13792" rpy="0 0 0"/>
     <parent link="torso_link"/>
-    <child link="imu_in_torso"/>
-  </joint>
-
-  <link name="imu_in_pelvis"></link>
-  <joint name="imu_in_pelvis_joint" type="fixed">
-    <origin xyz="0.04525 0 -0.08339" rpy="0 0 0"/>
-    <parent link="pelvis"/>
-    <child link="imu_in_pelvis"/>
-  </joint>
-
-  <!-- d435 -->
-  <link name="d435_link"></link>
-  <joint name="d435_joint" type="fixed">
-    <origin xyz="0.0576235 0.01753 0.41987" rpy="0 0.8307767239493009 0"/>
-    <parent link="torso_link"/>
-    <child link="d435_link"/>
-  </joint>
-
-  <!-- mid360 -->
-  <link name="mid360_link"></link>
-  <joint name="mid360_joint" type="fixed">
-    <origin xyz="0.0002835 0.00003 0.40618" rpy="0 0.04014257279586953 0"/>
-    <parent link="torso_link"/>
-    <child link="mid360_link"/>
+    <child link="imu_link"/>
   </joint>
 
   <!-- Arm -->
@@ -611,14 +609,16 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="meshes/left_shoulder_pitch_link.STL"/>
+        <mesh filename="../meshes/left_shoulder_pitch_link.STL"/>
       </geometry>
-      <material name="white"/>
+      <material name="white">
+        <color rgba="0.7 0.7 0.7 1"/>
+      </material>
     </visual>
     <collision>
-      <origin xyz="0 0.04 -0.01" rpy="0 1.5707963267948966 0"/>
+      <origin xyz="0 0.04 -0.015" rpy="0 1.5714 0"/>
       <geometry>
-        <cylinder radius="0.03" length="0.05"/>
+        <cylinder radius="0.036" length="0.07"/>
       </geometry>
     </collision>
   </link>
@@ -638,16 +638,12 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="meshes/left_shoulder_roll_link.STL"/>
+        <mesh filename="../meshes/left_shoulder_roll_link.STL"/>
       </geometry>
-      <material name="white"/>
+      <material name="white">
+        <color rgba="0.7 0.7 0.7 1"/>
+      </material>
     </visual>
-    <collision>
-      <origin xyz="-0.004 0.006 -0.053" rpy="0 0 0"/>
-      <geometry>
-        <cylinder radius="0.03" length="0.03"/>
-      </geometry>
-    </collision>
   </link>
   <joint name="left_shoulder_roll_joint" type="revolute">
     <origin xyz="0 0.038 -0.013831" rpy="-0.27925 0 0"/>
@@ -665,14 +661,22 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="meshes/left_shoulder_yaw_link.STL"/>
+        <mesh filename="../meshes/left_shoulder_yaw_link.STL"/>
       </geometry>
-      <material name="white"/>
+      <material name="white">
+        <color rgba="0.7 0.7 0.7 1"/>
+      </material>
     </visual>
     <collision>
-      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <origin xyz="0 0 0.025" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="meshes/left_shoulder_yaw_link.STL"/>
+        <cylinder radius="0.036" length="0.07"/>
+      </geometry>
+    </collision>
+    <collision>
+      <origin xyz="0.012 -0.004 -0.08" rpy="1.5714 0 0"/>
+      <geometry>
+        <cylinder radius="0.036" length="0.076"/>
       </geometry>
     </collision>
   </link>
@@ -692,14 +696,16 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="meshes/left_elbow_link.STL"/>
+        <mesh filename="../meshes/left_elbow_link.STL"/>
       </geometry>
-      <material name="white"/>
+      <material name="white">
+        <color rgba="0.7 0.7 0.7 1"/>
+      </material>
     </visual>
     <collision>
-      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <origin xyz="0.105 0 -0.01" rpy="0 1.6 0"/>
       <geometry>
-        <mesh filename="meshes/left_elbow_link.STL"/>
+        <cylinder radius="0.036" length="0.12"/>
       </geometry>
     </collision>
   </link>
@@ -726,16 +732,12 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="meshes/left_wrist_roll_link.STL"/>
+        <mesh filename="../meshes/left_wrist_roll_link.STL"/>
       </geometry>
-      <material name="white"/>
+      <material name="white">
+        <color rgba="0.7 0.7 0.7 1"/>
+      </material>
     </visual>
-    <collision>
-      <origin xyz="0 0 0" rpy="0 0 0"/>
-      <geometry>
-        <mesh filename="meshes/left_wrist_roll_link.STL"/>
-      </geometry>
-    </collision>
   </link>
   <joint name="left_wrist_pitch_joint" type="revolute">
     <origin xyz="0.038 0 0" rpy="0 0 0"/>
@@ -753,16 +755,12 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="meshes/left_wrist_pitch_link.STL"/>
+        <mesh filename="../meshes/left_wrist_pitch_link.STL"/>
       </geometry>
-      <material name="white"/>
+      <material name="white">
+        <color rgba="0.7 0.7 0.7 1"/>
+      </material>
     </visual>
-    <collision>
-      <origin xyz="0 0 0" rpy="0 0 0"/>
-      <geometry>
-        <mesh filename="meshes/left_wrist_pitch_link.STL"/>
-      </geometry>
-    </collision>
   </link>
   <joint name="left_wrist_yaw_joint" type="revolute">
     <origin xyz="0.046 0 0" rpy="0 0 0"/>
@@ -780,16 +778,12 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="meshes/left_wrist_yaw_link.STL"/>
+        <mesh filename="../meshes/left_wrist_yaw_link.STL"/>
       </geometry>
-      <material name="white"/>
+      <material name="white">
+        <color rgba="0.7 0.7 0.7 1"/>
+      </material>
     </visual>
-    <collision>
-      <origin xyz="0 0 0" rpy="0 0 0"/>
-      <geometry>
-        <mesh filename="meshes/left_wrist_yaw_link.STL"/>
-      </geometry>
-    </collision>
   </link>
   <joint name="left_hand_palm_joint" type="fixed">
     <origin xyz="0.0415 0.003 0" rpy="0 0 0"/>
@@ -805,10 +799,18 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="meshes/left_rubber_hand.STL"/>
+        <mesh filename="../meshes/left_rubber_hand.STL"/>
       </geometry>
-      <material name="white"/>
+      <material name="white">
+        <color rgba="0.7 0.7 0.7 1"/>
+      </material>
     </visual>
+    <collision>
+      <origin xyz="0.02 -0.008 0" rpy="0 0 0"/>
+      <geometry>
+        <box size="0.12 0.03 0.08"/>
+      </geometry>
+    </collision>
   </link>
   <link name="right_shoulder_pitch_link">
     <inertial>
@@ -819,14 +821,16 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="meshes/right_shoulder_pitch_link.STL"/>
+        <mesh filename="../meshes/right_shoulder_pitch_link.STL"/>
       </geometry>
-      <material name="white"/>
+      <material name="white">
+        <color rgba="0.7 0.7 0.7 1"/>
+      </material>
     </visual>
     <collision>
-      <origin xyz="0 -0.04 -0.01" rpy="0 1.5707963267948966 0"/>
+      <origin xyz="0 -0.04 -0.015" rpy="0 1.5714 0"/>
       <geometry>
-        <cylinder radius="0.03" length="0.05"/>
+        <cylinder radius="0.036" length="0.07"/>
       </geometry>
     </collision>
   </link>
@@ -846,16 +850,12 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="meshes/right_shoulder_roll_link.STL"/>
+        <mesh filename="../meshes/right_shoulder_roll_link.STL"/>
       </geometry>
-      <material name="white"/>
+      <material name="white">
+        <color rgba="0.7 0.7 0.7 1"/>
+      </material>
     </visual>
-    <collision>
-      <origin xyz="-0.004 -0.006 -0.053" rpy="0 0 0"/>
-      <geometry>
-        <cylinder radius="0.03" length="0.03"/>
-      </geometry>
-    </collision>
   </link>
   <joint name="right_shoulder_roll_joint" type="revolute">
     <origin xyz="0 -0.038 -0.013831" rpy="0.27925 0 0"/>
@@ -873,14 +873,22 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="meshes/right_shoulder_yaw_link.STL"/>
+        <mesh filename="../meshes/right_shoulder_yaw_link.STL"/>
       </geometry>
-      <material name="white"/>
+      <material name="white">
+        <color rgba="0.7 0.7 0.7 1"/>
+      </material>
     </visual>
     <collision>
-      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <origin xyz="0 0 0.025" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="meshes/right_shoulder_yaw_link.STL"/>
+        <cylinder radius="0.036" length="0.07"/>
+      </geometry>
+    </collision>
+    <collision>
+      <origin xyz="0.012 0.004 -0.08" rpy="1.5714 0 0"/>
+      <geometry>
+        <cylinder radius="0.036" length="0.076"/>
       </geometry>
     </collision>
   </link>
@@ -900,14 +908,16 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="meshes/right_elbow_link.STL"/>
+        <mesh filename="../meshes/right_elbow_link.STL"/>
       </geometry>
-      <material name="white"/>
+      <material name="white">
+        <color rgba="0.7 0.7 0.7 1"/>
+      </material>
     </visual>
     <collision>
-      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <origin xyz="0.105 0 -0.01" rpy="0 1.6 0"/>
       <geometry>
-        <mesh filename="meshes/right_elbow_link.STL"/>
+        <cylinder radius="0.036" length="0.12"/>
       </geometry>
     </collision>
   </link>
@@ -934,16 +944,12 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="meshes/right_wrist_roll_link.STL"/>
+        <mesh filename="../meshes/right_wrist_roll_link.STL"/>
       </geometry>
-      <material name="white"/>
+      <material name="white">
+        <color rgba="0.7 0.7 0.7 1"/>
+      </material>
     </visual>
-    <collision>
-      <origin xyz="0 0 0" rpy="0 0 0"/>
-      <geometry>
-        <mesh filename="meshes/right_wrist_roll_link.STL"/>
-      </geometry>
-    </collision>
   </link>
   <joint name="right_wrist_pitch_joint" type="revolute">
     <origin xyz="0.038 0 0" rpy="0 0 0"/>
@@ -961,16 +967,12 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="meshes/right_wrist_pitch_link.STL"/>
+        <mesh filename="../meshes/right_wrist_pitch_link.STL"/>
       </geometry>
-      <material name="white"/>
+      <material name="white">
+        <color rgba="0.7 0.7 0.7 1"/>
+      </material>
     </visual>
-    <collision>
-      <origin xyz="0 0 0" rpy="0 0 0"/>
-      <geometry>
-        <mesh filename="meshes/right_wrist_pitch_link.STL"/>
-      </geometry>
-    </collision>
   </link>
   <joint name="right_wrist_yaw_joint" type="revolute">
     <origin xyz="0.046 0 0" rpy="0 0 0"/>
@@ -988,16 +990,12 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="meshes/right_wrist_yaw_link.STL"/>
+        <mesh filename="../meshes/right_wrist_yaw_link.STL"/>
       </geometry>
-      <material name="white"/>
+      <material name="white">
+        <color rgba="0.7 0.7 0.7 1"/>
+      </material>
     </visual>
-    <collision>
-      <origin xyz="0 0 0" rpy="0 0 0"/>
-      <geometry>
-        <mesh filename="meshes/right_wrist_yaw_link.STL"/>
-      </geometry>
-    </collision>
   </link>
   <joint name="right_hand_palm_joint" type="fixed">
     <origin xyz="0.0415 -0.003 0" rpy="0 0 0"/>
@@ -1013,9 +1011,17 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="meshes/right_rubber_hand.STL"/>
+        <mesh filename="../meshes/right_rubber_hand.STL"/>
       </geometry>
-      <material name="white"/>
+      <material name="white">
+        <color rgba="0.7 0.7 0.7 1"/>
+      </material>
     </visual>
+    <collision>
+      <origin xyz="0.02 0.008 0" rpy="0 0 0"/>
+      <geometry>
+        <box size="0.12 0.03 0.08"/>
+      </geometry>
+    </collision>
   </link>
 </robot>
