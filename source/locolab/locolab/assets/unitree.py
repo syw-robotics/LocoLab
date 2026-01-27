@@ -421,7 +421,7 @@ UNITREE_G1_23DOF_CFG = UnitreeArticulationCfg(
 
 UNITREE_G1_29DOF_CFG = UnitreeArticulationCfg(
     spawn=UnitreeUrdfFileCfg(
-        asset_path=f"{UNITREE_MODEL_DIR}/G1/urdf/g1_description/g1_29dof_rev_1_0.urdf",
+        asset_path=f"{UNITREE_MODEL_DIR}/G1/urdf/g1_description/g1_29dof_pelvisbase_simplified.urdf",
     ),
     # spawn=UnitreeUsdFileCfg(
     #     usd_path=f"{UNITREE_MODEL_DIR}/G1/29dof/usd/g1_29dof_rev_1_0/g1_29dof_rev_1_0.usd",
