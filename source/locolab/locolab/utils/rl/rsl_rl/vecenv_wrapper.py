@@ -9,9 +9,11 @@
 
 import gymnasium as gym
 import torch
-from isaaclab.envs import DirectRLEnv, ManagerBasedRLEnv
-from rsl_rl.env import VecEnv
 from tensordict import TensorDict
+
+from isaaclab.envs import DirectRLEnv, ManagerBasedRLEnv
+
+from rsl_rl.env import VecEnv
 
 
 class RslRlVecEnvWrapper(VecEnv):

@@ -8,10 +8,11 @@
 
 import math
 
-import locolab.tasks.manager_based.locomotion.velocity.mdp as mdp
 from isaaclab.managers import RewardTermCfg as RewTerm
 from isaaclab.managers import SceneEntityCfg
 from isaaclab.utils import configclass
+
+import locolab.tasks.manager_based.locomotion.velocity.mdp as mdp
 
 from . import (
     FOOT_LINK_NAMES,

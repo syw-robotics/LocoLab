@@ -11,6 +11,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 import torch
+
 from isaaclab.managers import ManagerTermBase, RewardTermCfg, SceneEntityCfg
 from isaaclab.utils.math import quat_apply_inverse, yaw_quat
 
@@ -286,7 +287,7 @@ def feet_slide(
     return reward
 
 
-def feet_flat_contact(
+def feet_flat_contact_humanoid(
     env: ManagerBasedRLEnv, sensor_cfg: SceneEntityCfg, asset_cfg: SceneEntityCfg = SceneEntityCfg("robot")
 ) -> torch.Tensor:
     """Reward feet being oriented vertically when in contact with the ground."""
@@ -329,6 +330,9 @@ def feet_gait(
         is_stance = leg_phase[:, i] < threshold
         mismatch = is_stance != is_contact[:, i]
         reward -= mismatch.float()  # -1 if mismatch, 0 if match
+
+    reward *= torch.norm(env.command_manager.get_command("base_velocity")[:, :2], dim=1) > velocity_threshold
+
     return reward
 
 

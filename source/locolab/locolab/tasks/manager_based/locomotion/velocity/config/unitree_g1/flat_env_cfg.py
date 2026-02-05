@@ -7,12 +7,13 @@
 # Modifications are licensed under BSD-3-Clause.
 
 import isaaclab.sim as sim_utils
-import locolab.tasks.manager_based.locomotion.velocity.mdp as mdp
 from isaaclab.assets import ArticulationCfg, AssetBaseCfg
 from isaaclab.envs import ManagerBasedRLEnvCfg
 from isaaclab.scene import InteractiveSceneCfg
 from isaaclab.sensors import ContactSensorCfg
 from isaaclab.utils import configclass
+
+import locolab.tasks.manager_based.locomotion.velocity.mdp as mdp
 from locolab.utils.terrains import TerrainImporterCfg
 
 #  from isaaclab.utils.assets import ISAAC_NUCLEUS_DIR
@@ -150,8 +151,8 @@ class G1FlatEnvCfg_PLAY(G1FlatEnvCfg):
         import math
 
         self.commands.base_velocity.ranges = mdp.UniformVelocityCommandCfg.Ranges(
-            lin_vel_x=(-0.5, 1.0),
-            lin_vel_y=(-0.3, 0.3),
-            ang_vel_z=(-0.2, 0.2),
+            lin_vel_x=(-1.0, 1.5),
+            lin_vel_y=(-1.0, 1.0),
+            ang_vel_z=(-2.0, 2.0),
             heading=(-math.pi, math.pi),
         )

@@ -18,8 +18,10 @@ from collections.abc import Sequence
 from typing import TYPE_CHECKING
 
 import torch
+
 from isaaclab.assets import Articulation
 from isaaclab.managers import SceneEntityCfg
+
 from locolab.utils.terrains import TerrainImporter
 
 if TYPE_CHECKING:

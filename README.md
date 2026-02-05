@@ -66,7 +66,7 @@ This codebase serves as a starter **manager based rl** environment for building 
         python scripts/random_agent.py --task=<TASK_NAME>
         ```
 
-    - Fetch a trainning logging from remote server:
+    - Fetch a training logging from remote server:
         ```bash
         ./scripts/sync_logs.sh --help  # check this script for usage
         ```

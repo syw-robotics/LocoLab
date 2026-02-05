@@ -8,10 +8,11 @@
 
 import math
 
-import locolab.tasks.manager_based.locomotion.velocity.mdp as mdp
 from isaaclab.managers import RewardTermCfg as RewTerm
 from isaaclab.managers import SceneEntityCfg
 from isaaclab.utils import configclass
+
+import locolab.tasks.manager_based.locomotion.velocity.mdp as mdp
 
 from . import (
     ARM_JOINT_NAMES,
@@ -43,7 +44,7 @@ class FlatRewardsCfg:
     base_linear_velocity = RewTerm(func=mdp.lin_vel_z_l2, weight=-2.0)
     base_angular_velocity = RewTerm(func=mdp.ang_vel_xy_l2, weight=-0.05)
     flat_orientation_l2 = RewTerm(func=mdp.flat_orientation_l2, weight=-5.0)
-    base_height = RewTerm(func=mdp.base_height_l2, weight=-10, params={"target_height": 0.78})
+    base_height = RewTerm(func=mdp.base_height_l2, weight=-10, params={"target_height": 0.83})
     # -- joint --
     joint_acc = RewTerm(func=mdp.joint_acc_l2, weight=-2.5e-7)
     joint_pos_limits = RewTerm(func=mdp.joint_pos_limits, weight=-5.0)
@@ -77,6 +78,7 @@ class FlatRewardsCfg:
             "zero_ang_vel_command_weight_scale": 5.0,
         },
     )
+    stand_still = RewTerm(func=mdp.stand_still, weight=-0.8)
     # -- action --
     action_rate = RewTerm(func=mdp.action_rate_l2, weight=-0.01)
     # -- collision --
@@ -101,7 +103,7 @@ class FlatRewardsCfg:
         },
     )
     feet_flat_contact = RewTerm(
-        func=mdp.feet_flat_contact,
+        func=mdp.feet_flat_contact_humanoid,
         weight=-0.5,
         params={
             "asset_cfg": SceneEntityCfg("robot", body_names=FOOT_LINK_NAMES),

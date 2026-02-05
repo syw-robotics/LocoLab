@@ -11,6 +11,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 import torch
+
 from isaaclab.managers import SceneEntityCfg
 
 if TYPE_CHECKING:

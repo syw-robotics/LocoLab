@@ -11,6 +11,7 @@ from __future__ import annotations
 from dataclasses import MISSING
 
 import torch
+
 from isaaclab.actuators import DelayedPDActuator, DelayedPDActuatorCfg
 from isaaclab.utils import configclass
 from isaaclab.utils.types import ArticulationActions
