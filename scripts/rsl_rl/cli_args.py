@@ -6,14 +6,21 @@
 # All rights reserved.
 # Modifications are licensed under BSD-3-Clause.
 
+# Copyright (c) 2022-2026, The Isaac Lab Project Developers (https://github.com/isaac-sim/IsaacLab/blob/main/CONTRIBUTORS.md).
+# All rights reserved.
+#
+# SPDX-License-Identifier: BSD-3-Clause
+
 from __future__ import annotations
 
 import argparse
 import random
+from importlib import metadata
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from locolab.utils.rl.rsl_rl import RslRlBaseRunnerCfg
+    from isaaclab_rl.rsl_rl import RslRlBaseRunnerCfg
 
 
 def add_rsl_rl_args(parser: argparse.ArgumentParser):
@@ -55,9 +62,9 @@ def parse_rsl_rl_cfg(task_name: str, args_cli: argparse.Namespace) -> RslRlBaseR
     from isaaclab_tasks.utils.parse_cfg import load_cfg_from_registry
 
     # load the default configuration
-    rslrl_cfg: RslRlBaseRunnerCfg = load_cfg_from_registry(task_name, "rsl_rl_cfg_entry_point")
-    rslrl_cfg = update_rsl_rl_cfg(rslrl_cfg, args_cli)
-    return rslrl_cfg
+    rsl_rl_cfg: ZRlBaseRunnerCfg = load_cfg_from_registry(task_name, "rsl_rl_cfg_entry_point")
+    rsl_rl_cfg = update_rsl_rl_cfg(rsl_rl_cfg, args_cli)
+    return rsl_rl_cfg
 
 
 def update_rsl_rl_cfg(agent_cfg: RslRlBaseRunnerCfg, args_cli: argparse.Namespace):
@@ -82,6 +89,8 @@ def update_rsl_rl_cfg(agent_cfg: RslRlBaseRunnerCfg, args_cli: argparse.Namespac
         agent_cfg.load_run = args_cli.load_run
     if args_cli.checkpoint is not None:
         agent_cfg.load_checkpoint = args_cli.checkpoint
+    if args_cli.experiment_name is not None:
+        agent_cfg.experiment_name = args_cli.experiment_name
     if args_cli.run_name is not None:
         agent_cfg.run_name = args_cli.run_name
     if args_cli.logger is not None:
@@ -92,3 +101,30 @@ def update_rsl_rl_cfg(agent_cfg: RslRlBaseRunnerCfg, args_cli: argparse.Namespac
         agent_cfg.neptune_project = args_cli.log_project_name
 
     return agent_cfg
+
+
+def sanitize_rsl_rl_cfg(agent_cfg: RslRlBaseRunnerCfg) -> RslRlBaseRunnerCfg:
+    """Normalize deprecated RSL-RL config fields against the installed library version."""
+    from isaaclab_rl.rsl_rl import handle_deprecated_rsl_rl_cfg
+
+    return handle_deprecated_rsl_rl_cfg(agent_cfg, _resolve_rsl_rl_version())
+
+
+def _resolve_rsl_rl_version() -> str:
+    """Resolve the installed rsl-rl version, including editable local checkouts."""
+    for package_name in ("rsl-rl-lib", "rsl-rl"):
+        try:
+            return metadata.version(package_name)
+        except metadata.PackageNotFoundError:
+            continue
+
+    import rsl_rl
+
+    pyproject_path = Path(rsl_rl.__file__).resolve().parents[1] / "pyproject.toml"
+    if pyproject_path.is_file():
+        import tomllib
+
+        with pyproject_path.open("rb") as f:
+            return tomllib.load(f)["project"]["version"]
+
+    raise RuntimeError("Unable to determine the installed rsl-rl version for config compatibility handling.")

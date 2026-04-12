@@ -95,6 +95,7 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
 
     # override configurations with non-hydra CLI arguments
     agent_cfg: RslRlBaseRunnerCfg = cli_args.update_rsl_rl_cfg(agent_cfg, args_cli)
+    agent_cfg = cli_args.sanitize_rsl_rl_cfg(agent_cfg)
     env_cfg.scene.num_envs = args_cli.num_envs if args_cli.num_envs is not None else 10
 
     # set the environment seed

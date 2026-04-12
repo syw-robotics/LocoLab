@@ -7,8 +7,7 @@
 
 
 <!-- [![IsaacSim](https://img.shields.io/badge/IsaacSim-5.1.0-silver.svg)](https://docs.omniverse.nvidia.com/isaacsim/latest/overview.html) -->
-[![Isaac Lab](https://img.shields.io/badge/IsaacLab-2.3.1-brightgreen?logo=nvidia&logoColor=white)](https://isaac-sim.github.io/IsaacLab)
-[![RSL RL](https://img.shields.io/badge/RSL_RL-3.0.1-silver?logo=pytorch&logoColor=white)](https://isaac-sim.github.io/IsaacLab)
+[![Isaac Lab](https://img.shields.io/badge/IsaacLab-2.3.2-brightgreen?logo=nvidia&logoColor=white)](https://isaac-sim.github.io/IsaacLab)
 [![Python](https://img.shields.io/badge/python-3.11-blue?logo=python&logoColor=white)](https://docs.python.org/3/whatsnew/3.11.html)
 [![pre-commit](https://img.shields.io/badge/pre--commit-enabled-orange?logo=pre-commit&logoColor=white)](https://pre-commit.com/)
 
@@ -25,7 +24,7 @@ This codebase serves as a starter **manager based rl** environment for building 
 
 **Key Features:**
 
-- `Flexibility`: Easy to read, modifiy, reuse existing modules, and adapt to new tasks
+- `Flexibility`: Easy to read, modify, reuse existing modules, and adapt to new tasks
 - `Faster Rollout speed`: Collisions of robot models are simplified, since isaacsim runs collision detection on cpu.
 - `Experiment Friendly`: Functions as adding terrain levels logging per terrain types help to experiment and debug.
 
@@ -74,12 +73,12 @@ This codebase serves as a starter **manager based rl** environment for building 
 - **Training:**
 
     ```bash
-    python scripts/rsl_rl/train.py --task=<TASK_NAME>
+    python scripts/z_rl/train.py --task=<TASK_NAME>
     ```
 
 - **Playing:**
     ```bash
-    python scripts/rsl_rl/train.py --task=<TASK_NAME>
+    python scripts/z_rl/train.py --task=<TASK_NAME>
     ```
 
 - **Deployment:**
@@ -98,7 +97,7 @@ tasks
 │   │   │   ├── config
 │   │   │   │   ├── unitree_go2
 │   │   │   │   │   ├── agents
-│   │   │   │   │   │   ├── rsl_rl_ppo_cfg.py
+│   │   │   │   │   │   ├── z_rl_ppo_cfg.py
 │   │   │   │   │   │   └── ...
 │   │   │   │   │   ├── mdp_cfg (mdp configurations)
 │   │   │   │   │   ├── flat_env_cfg.py

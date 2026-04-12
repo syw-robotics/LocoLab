@@ -23,6 +23,7 @@ gym.register(
     kwargs={
         "env_cfg_entry_point": f"{__name__}.flat_env_cfg:G1FlatEnvCfg",
         "rsl_rl_cfg_entry_point": f"{agents.__name__}.rsl_rl_ppo_cfg:G1FlatPPORunnerCfg",
+        "z_rl_cfg_entry_point": f"{agents.__name__}.z_rl_ppo_cfg:G1FlatPPORunnerCfg",
     },
 )
 # -- play --
@@ -33,5 +34,6 @@ gym.register(
     kwargs={
         "env_cfg_entry_point": f"{__name__}.flat_env_cfg:G1FlatEnvCfg_PLAY",
         "rsl_rl_cfg_entry_point": f"{agents.__name__}.rsl_rl_ppo_cfg:G1FlatPPORunnerCfg",
+        "z_rl_cfg_entry_point": f"{agents.__name__}.z_rl_ppo_cfg:G1FlatPPORunnerCfg",
     },
 )
