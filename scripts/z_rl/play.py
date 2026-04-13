@@ -65,7 +65,7 @@ from isaaclab.envs import ManagerBasedRLEnvCfg
 from isaaclab.utils.assets import retrieve_file_path
 from isaaclab.utils.dict import print_dict
 
-from z_rl.adaptor.isaaclab.rl_cfg import ZRlBaseRunnerCfg, ZRlVecEnvWrapper
+from z_rl.adaptor.isaaclab import ZRlBaseRunnerCfg, ZRlVecEnvWrapper
 from isaaclab_rl.utils.pretrained_checkpoint import get_published_pretrained_checkpoint
 
 import locolab.tasks  # noqa: F401
