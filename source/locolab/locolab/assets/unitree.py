@@ -46,9 +46,9 @@ class UnitreeUrdfFileCfg(sim_utils.UrdfFileCfg):
         gains=sim_utils.UrdfConverterCfg.JointDriveCfg.PDGainsCfg(stiffness=0, damping=0)
     )
     articulation_props = sim_utils.ArticulationRootPropertiesCfg(
-        enabled_self_collisions=True,
+        enabled_self_collisions=False,
         solver_position_iteration_count=4,
-        solver_velocity_iteration_count=0,
+        solver_velocity_iteration_count=2,
     )
     rigid_props = sim_utils.RigidBodyPropertiesCfg(
         disable_gravity=False,
@@ -120,7 +120,7 @@ UNITREE_GO2_CFG = UnitreeArticulationCfg(
             velocity_limit_sim=30.0,
             stiffness=25.0,
             damping=0.5,
-            friction=0.01,
+            #  friction=0.01,
         ),
     },
     # fmt: off

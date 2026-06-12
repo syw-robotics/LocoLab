@@ -28,6 +28,8 @@ parser.add_argument(
     "--agent", type=str, default="z_rl_cfg_entry_point", help="Name of the RL agent configuration entry point."
 )
 parser.add_argument("--seed", type=int, default=None, help="Seed used for the environment")
+parser.add_argument("--export_jit", action="store_true", default=False, help="Export policy as a JIT model.")
+parser.add_argument("--export_onnx", action="store_true", default=False, help="Export policy as an ONNX model.")
 parser.add_argument(
     "--use_pretrained_checkpoint",
     action="store_true",
@@ -40,6 +42,9 @@ cli_args.add_z_rl_args(parser)
 AppLauncher.add_app_launcher_args(parser)
 # parse the arguments
 args_cli, hydra_args = parser.parse_known_args()
+if args_cli.task is not None and not args_cli.task.endswith("-Play"):
+    args_cli.task = f"{args_cli.task}-Play"
+    print(f"[INFO] Using play task: {args_cli.task}")
 # always enable cameras to record video
 if args_cli.video:
     args_cli.enable_cameras = True
@@ -82,26 +87,51 @@ def main(env_cfg: ManagerBasedRLEnvCfg, agent_cfg: ZRlBaseRunnerCfg):
 
     # override configurations with non-hydra CLI arguments
     agent_cfg: ZRlBaseRunnerCfg = cli_args.update_z_rl_cfg(agent_cfg, args_cli)
-    env_cfg.scene.num_envs = args_cli.num_envs if args_cli.num_envs is not None else env_cfg.scene.num_envs
+    env_cfg.scene.num_envs = args_cli.num_envs if args_cli.num_envs is not None else 10
 
     # set the environment seed
     # note: certain randomizations occur in the environment initialization so we set the seed here
     env_cfg.seed = agent_cfg.seed
     env_cfg.sim.device = args_cli.device if args_cli.device is not None else env_cfg.sim.device
 
+    if hasattr(env_cfg.curriculum, "terrain_levels"):
+        env_cfg.curriculum.terrain_levels.params["log_by_terrain_type"] = False
+        #  env_cfg.scene.terrain.terrain_generator.num_cols = 20
+        num_terrains = len(env_cfg.scene.terrain.terrain_generator.sub_terrains)
+        env_cfg.scene.terrain.terrain_generator.num_cols = num_terrains
+        equal_proportion = 1.0 / num_terrains
+        for terrain_cfg in env_cfg.scene.terrain.terrain_generator.sub_terrains.values():
+            terrain_cfg.proportion = equal_proportion
+
     # specify directory for logging experiments
     log_root_path = os.path.join("logs", "z_rl", agent_cfg.experiment_name)
     log_root_path = os.path.abspath(log_root_path)
     print(f"[INFO] Loading experiment from directory: {log_root_path}")
+    load_cfg = None
     if args_cli.use_pretrained_checkpoint:
         resume_path = get_published_pretrained_checkpoint("z_rl", train_task_name)
         if not resume_path:
             print("[INFO] Unfortunately a pre-trained checkpoint is currently unavailable for this task.")
             return
+    elif args_cli.load_run:
+        checkpoint = args_cli.checkpoint if args_cli.checkpoint is not None else "model_.*.pt"
+        if os.path.isabs(args_cli.load_run) or os.sep in args_cli.load_run:
+            resume_path = get_checkpoint_path(os.path.dirname(args_cli.load_run), os.path.basename(args_cli.load_run), checkpoint)
+        else:
+            resume_path = get_checkpoint_path(log_root_path, args_cli.load_run, checkpoint)
     elif args_cli.checkpoint:
         resume_path = retrieve_file_path(args_cli.checkpoint)
     else:
-        resume_path = get_checkpoint_path(log_root_path, agent_cfg.load_run, agent_cfg.load_checkpoint)
+        try:
+            resume_path = get_checkpoint_path(log_root_path, ".*", "model_.*.pt")
+        except ValueError:
+            load_cfg = getattr(agent_cfg, "load_cfg", None)
+            if os.path.isabs(agent_cfg.load_run) or os.sep in agent_cfg.load_run:
+                resume_path = get_checkpoint_path(
+                    os.path.dirname(agent_cfg.load_run), os.path.basename(agent_cfg.load_run), agent_cfg.load_checkpoint
+                )
+            else:
+                resume_path = get_checkpoint_path(log_root_path, agent_cfg.load_run, agent_cfg.load_checkpoint)
 
     log_dir = os.path.dirname(resume_path)
 
@@ -134,16 +164,18 @@ def main(env_cfg: ManagerBasedRLEnvCfg, agent_cfg: ZRlBaseRunnerCfg):
         runner = DistillationRunner(env, agent_cfg.to_dict(), log_dir=None, device=agent_cfg.device)
     else:
         raise ValueError(f"Unsupported runner class: {agent_cfg.class_name}")
-    runner.load(resume_path)
+    runner.load(resume_path, load_cfg=load_cfg)
 
     # obtain the trained policy for inference
     policy = runner.get_inference_policy(device=env.unwrapped.device)
 
-    # export the trained policy to JIT and ONNX formats
-    export_model_dir = os.path.join(os.path.dirname(resume_path), "exported")
-
-    runner.export_policy_to_jit(path=export_model_dir, filename="policy.pt")
-    runner.export_policy_to_onnx(path=export_model_dir, filename="policy.onnx")
+    # export the trained policy only when requested
+    if args_cli.export_jit:
+        export_model_dir = os.path.join(os.path.dirname(resume_path), "exported")
+        runner.export_policy_to_jit(path=export_model_dir, filename="policy.pt")
+    if args_cli.export_onnx:
+        export_model_dir = os.path.join(os.path.dirname(resume_path), "exported")
+        runner.export_policy_to_onnx(path=export_model_dir, filename="policy.onnx")
 
     dt = env.unwrapped.step_dt
 

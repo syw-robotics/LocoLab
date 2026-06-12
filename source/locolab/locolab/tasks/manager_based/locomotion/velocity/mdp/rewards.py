@@ -137,7 +137,7 @@ def base_height_l2(
         adjusted_target_height = target_height
     # Compute the L2 squared penalty
     reward = torch.square(asset.data.root_pos_w[:, 2] - adjusted_target_height)
-    reward *= torch.clamp(-env.scene["robot"].data.projected_gravity_b[:, 2], 0, 1.0)  # don't penalize when upside down
+    #  reward *= torch.clamp(-env.scene["robot"].data.projected_gravity_b[:, 2], 0, 1.0)  # don't penalize when upside down
     return reward
 
 
@@ -257,7 +257,7 @@ def feet_stumble(env: ManagerBasedRLEnv, sensor_cfg: SceneEntityCfg) -> torch.Te
     forces_xy = torch.linalg.norm(contact_sensor.data.net_forces_w[:, sensor_cfg.body_ids, :2], dim=2)
     # Penalize feet hitting vertical surfaces
     reward = torch.any(forces_xy > 4 * forces_z, dim=1).float()
-    reward *= torch.clamp(-env.scene["robot"].data.projected_gravity_b[:, 2], 0, 1.0)  # don't penalize when upside down
+    #  reward *= torch.clamp(-env.scene["robot"].data.projected_gravity_b[:, 2], 0, 1.0)  # don't penalize when upside down
     return reward
 
 
@@ -269,8 +269,8 @@ def feet_air_time(
     first_contact = contact_sensor.compute_first_contact(env.step_dt)[:, sensor_cfg.body_ids]
     last_air_time = contact_sensor.data.last_air_time[:, sensor_cfg.body_ids]
     reward = torch.sum((last_air_time - threshold) * first_contact, dim=1)
-    reward *= torch.norm(env.command_manager.get_command(command_name)[:, :2], dim=1) > 0.1
-    reward *= torch.clamp(-env.scene["robot"].data.projected_gravity_b[:, 2], 0, 1.0)  # don't penalize when upside down
+    reward *= (torch.norm(env.command_manager.get_command(command_name)[:, :2], dim=1) > 0.1) | (torch.abs(env.command_manager.get_command(command_name)[:, 2]) > 0.1)
+    #  reward *= torch.clamp(-env.scene["robot"].data.projected_gravity_b[:, 2], 0, 1.0)  # don't penalize when upside down
     return reward
 
 
@@ -283,7 +283,7 @@ def feet_slide(
     asset: Articulation = env.scene[asset_cfg.name]
     body_vel = asset.data.body_lin_vel_w[:, asset_cfg.body_ids, :2]
     reward = torch.sum(body_vel.norm(dim=-1) * contacts, dim=1)
-    reward *= torch.clamp(-env.scene["robot"].data.projected_gravity_b[:, 2], 0, 1.0)  # don't penalize when upside down
+    #  reward *= torch.clamp(-env.scene["robot"].data.projected_gravity_b[:, 2], 0, 1.0)  # don't penalize when upside down
     return reward
 
 
@@ -341,9 +341,9 @@ def feet_clearance(
 ) -> torch.Tensor:
     """Reward the swinging feet for clearing a specified height off the ground"""
     asset: RigidObject = env.scene[asset_cfg.name]
-    foot_z_target_error = torch.square(asset.data.body_pos_w[:, asset_cfg.body_ids, 2] - target_height)
-    foot_velocity_tanh = torch.tanh(tanh_mult * torch.norm(asset.data.body_lin_vel_w[:, asset_cfg.body_ids, :2], dim=2))
-    reward = foot_z_target_error * foot_velocity_tanh
+    feet_z_target_error = torch.square(asset.data.body_pos_w[:, asset_cfg.body_ids, 2] - target_height)
+    feet_velocity_tanh = torch.tanh(tanh_mult * torch.norm(asset.data.body_lin_vel_w[:, asset_cfg.body_ids, :2], dim=2))
+    reward = feet_z_target_error * feet_velocity_tanh
     return torch.exp(-torch.sum(reward, dim=1) / std)
 
 

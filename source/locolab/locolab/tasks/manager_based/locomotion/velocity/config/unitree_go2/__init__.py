@@ -6,88 +6,78 @@
 # All rights reserved.
 # Modifications are licensed under BSD-3-Clause.
 
-import gymnasium as gym
-
 from . import agents
+from locolab.utils.gym_registration import register_manager_based_rl_env
 
 ##
 # Register Gym environments.
 ##
 
 # ===== Flat terrain =====
-# -- train --
-gym.register(
-    id="Velocity-Flat-Go2",
-    entry_point="isaaclab.envs:ManagerBasedRLEnv",
-    disable_env_checker=True,
-    kwargs={
-        "env_cfg_entry_point": f"{__name__}.flat_env_cfg:Go2FlatEnvCfg",
+register_manager_based_rl_env(
+    task_id="Velocity-Flat-Go2",
+    env_cfg_module=f"{__name__}.flat_env_cfg",
+    env_cfg_name="Go2FlatEnvCfg",
+    agent_cfg_entry_points={
         "rsl_rl_cfg_entry_point": f"{agents.__name__}.rsl_rl_ppo_cfg:Go2FlatPPORunnerCfg",
         "z_rl_cfg_entry_point": f"{agents.__name__}.z_rl_ppo_cfg:Go2FlatPPORunnerCfg",
     },
 )
-# -- play --
-gym.register(
-    id="Velocity-Flat-Go2-Play",
-    entry_point="isaaclab.envs:ManagerBasedRLEnv",
-    disable_env_checker=True,
-    kwargs={
-        "env_cfg_entry_point": f"{__name__}.flat_env_cfg:Go2FlatEnvCfg_PLAY",
-        "rsl_rl_cfg_entry_point": f"{agents.__name__}.rsl_rl_ppo_cfg:Go2FlatPPORunnerCfg",
-        "z_rl_cfg_entry_point": f"{agents.__name__}.z_rl_ppo_cfg:Go2FlatPPORunnerCfg",
-    },
-)
+
 # -- test additional z_rl tasks --
-gym.register(
-    id="Velocity-Flat-Go2-ZRL-MoE",
-    entry_point="isaaclab.envs:ManagerBasedRLEnv",
-    disable_env_checker=True,
-    kwargs={
-        "env_cfg_entry_point": f"{__name__}.flat_env_cfg:Go2FlatEnvCfg",
+register_manager_based_rl_env(
+    task_id="Velocity-Flat-Go2-ZRL-MoE",
+    env_cfg_module=f"{__name__}.flat_env_cfg",
+    env_cfg_name="Go2FlatEnvCfg",
+    agent_cfg_entry_points={
         "z_rl_cfg_entry_point": f"{agents.__name__}.z_rl_ppo_cfg:Go2FlatMoEPPORunnerCfg",
     },
 )
 
-gym.register(
-    id="Velocity-Flat-Go2-ZRL-RNN",
-    entry_point="isaaclab.envs:ManagerBasedRLEnv",
-    disable_env_checker=True,
-    kwargs={
-        "env_cfg_entry_point": f"{__name__}.flat_env_cfg:Go2FlatEnvCfg",
+register_manager_based_rl_env(
+    task_id="Velocity-Flat-Go2-ZRL-RNN",
+    env_cfg_module=f"{__name__}.flat_env_cfg",
+    env_cfg_name="Go2FlatEnvCfg",
+    agent_cfg_entry_points={
         "z_rl_cfg_entry_point": f"{agents.__name__}.z_rl_ppo_cfg:Go2FlatRNNPPORunnerCfg",
     },
 )
 
-gym.register(
-    id="Velocity-Flat-Go2-ZRL-EncoderEstimation",
-    entry_point="isaaclab.envs:ManagerBasedRLEnv",
-    disable_env_checker=True,
-    kwargs={
-        "env_cfg_entry_point": f"{__name__}.flat_env_cfg:Go2FlatEnvCfg",
+register_manager_based_rl_env(
+    task_id="Velocity-Flat-Go2-ZRL-EncoderEstimation",
+    env_cfg_module=f"{__name__}.flat_env_cfg",
+    env_cfg_name="Go2FlatEnvCfg",
+    agent_cfg_entry_points={
         "z_rl_cfg_entry_point": f"{agents.__name__}.z_rl_ppo_cfg:Go2FlatEncoderEstimationPPORunnerCfg",
     },
 )
 
+
 # ===== Rough terrain =====
-# -- train --
-gym.register(
-    id="Velocity-Rough-Go2",
-    entry_point="isaaclab.envs:ManagerBasedRLEnv",
-    disable_env_checker=True,
-    kwargs={
-        "env_cfg_entry_point": f"{__name__}.rough_env_cfg:Go2RoughEnvCfg",
+register_manager_based_rl_env(
+    task_id="Velocity-Rough-Go2",
+    env_cfg_module=f"{__name__}.rough_env_cfg",
+    env_cfg_name="Go2RoughEnvCfg",
+    agent_cfg_entry_points={
         "rsl_rl_cfg_entry_point": f"{agents.__name__}.rsl_rl_ppo_cfg:Go2RoughPPORunnerCfg",
         "z_rl_cfg_entry_point": f"{agents.__name__}.z_rl_ppo_cfg:Go2RoughPPORunnerCfg",
     },
 )
-# -- play --
-gym.register(
-    id="Velocity-Rough-Go2-Play",
-    entry_point="isaaclab.envs:ManagerBasedRLEnv",
-    disable_env_checker=True,
-    kwargs={
-        "env_cfg_entry_point": f"{__name__}.rough_env_cfg:Go2RoughEnvCfg_PLAY",
-        "rsl_rl_cfg_entry_point": f"{agents.__name__}.rsl_rl_ppo_cfg:Go2RoughPPORunnerCfg",
-        "z_rl_cfg_entry_point": f"{agents.__name__}.z_rl_ppo_cfg:Go2RoughPPORunnerCfg",
+
+register_manager_based_rl_env(
+    task_id="Velocity-Rough-Go2-ZRL-DreamWaQ",
+    env_cfg_module=f"{__name__}.rough_env_cfg",
+    env_cfg_name="Go2RoughEnvCfg",
+    agent_cfg_entry_points={
+        "z_rl_cfg_entry_point": f"{agents.__name__}.z_rl_dreamwaq_ppo_cfg:Go2RoughDreamWaQPPORunnerCfg",
+    },
+)
+
+register_manager_based_rl_env(
+    task_id="Velocity-Rough-Go2-ZRL-BarlowTwins",
+    env_cfg_module=f"{__name__}.rough_env_cfg",
+    env_cfg_name="Go2RoughEnvCfg",
+    agent_cfg_entry_points={
+        "z_rl_cfg_entry_point": f"{agents.__name__}.z_rl_barlowtwins_ppo_cfg:Go2RoughBarlowTwinsPPORunnerCfg",
     },
 )

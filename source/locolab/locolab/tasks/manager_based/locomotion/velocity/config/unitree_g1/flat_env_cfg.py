@@ -14,6 +14,7 @@ from isaaclab.sensors import ContactSensorCfg
 from isaaclab.utils import configclass
 
 import locolab.tasks.manager_based.locomotion.velocity.mdp as mdp
+from locolab.utils.scene import flat_terrain_visual_material_cfg, blue_sky_light_cfg
 from locolab.utils.terrains import TerrainImporterCfg
 
 #  from isaaclab.utils.assets import ISAAC_NUCLEUS_DIR
@@ -65,11 +66,7 @@ class G1FlatSceneCfg(InteractiveSceneCfg):
             static_friction=1.0,
             dynamic_friction=1.0,
         ),
-        visual_material=sim_utils.PreviewSurfaceCfg(
-            diffuse_color=(1.0, 1.0, 1.0),
-            metallic=0.0,
-            roughness=0.8,
-        ),
+        visual_material=flat_terrain_visual_material_cfg(),
         debug_vis=False,
     )
 
@@ -80,25 +77,9 @@ class G1FlatSceneCfg(InteractiveSceneCfg):
     contact_forces: ContactSensorCfg = ContactSensorCfg(
         prim_path="{ENV_REGEX_NS}/Robot/.*", history_length=3, track_air_time=True
     )
-    #  height_scanner = RayCasterCfg(
-    #      prim_path="{ENV_REGEX_NS}/Robot/torso_link",
-    #      offset=RayCasterCfg.OffsetCfg(pos=(0.0, 0.0, 20.0)),
-    #      ray_alignment="yaw",
-    #      pattern_cfg=patterns.GridPatternCfg(resolution=0.1, size=[1.6, 1.0]),
-    #      debug_vis=False,
-    #      mesh_prim_paths=["/World/ground"],
-    #  )
 
     # =====  lights  =====
-    sky_light: AssetBaseCfg = AssetBaseCfg(
-        prim_path="/World/skyLight",
-        #  spawn=sim_utils.DomeLightCfg(
-        #      intensity=750.0,
-        #      texture_file=f"{ISAAC_NUCLEUS_DIR}/Materials/Textures/Skies/PolyHaven/kloofendal_43d_clear_puresky_4k.hdr",
-        #  ),
-        #  spawn=sim_utils.DistantLightCfg(color=(0.75, 0.75, 0.75), intensity=3000.0),
-        spawn=sim_utils.DomeLightCfg(color=(0.75, 0.75, 0.75), intensity=3000.0),
-    )
+    sky_light: AssetBaseCfg = blue_sky_light_cfg()
 
 
 ##
@@ -133,8 +114,6 @@ class G1FlatEnvCfg(ManagerBasedRLEnvCfg):
         # we tick all the sensors based on the smallest update period (physics update period)
         if self.scene.contact_forces is not None:
             self.scene.contact_forces.update_period = self.sim.dt
-        #  if self.scene.height_scanner is not None:
-        #      self.scene.height_scanner.update_period = self.sim.dt * self.decimation
 
 
 @configclass

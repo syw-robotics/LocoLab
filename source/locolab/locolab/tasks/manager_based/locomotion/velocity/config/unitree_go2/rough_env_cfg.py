@@ -12,9 +12,9 @@ from isaaclab.envs import ManagerBasedRLEnvCfg
 from isaaclab.scene import InteractiveSceneCfg
 from isaaclab.sensors import ContactSensorCfg, RayCasterCfg, patterns
 from isaaclab.utils import configclass
-from isaaclab.utils.assets import ISAACLAB_NUCLEUS_DIR
 
 #  from isaaclab.utils.assets import ISAAC_NUCLEUS_DIR
+from locolab.utils.scene import rough_terrain_visual_material_cfg, blue_sky_light_cfg
 from locolab.utils.terrains import TerrainImporterCfg
 
 ##
@@ -45,7 +45,7 @@ class Go2RoughObservationsCfg:
     policy: PropObsCfg = PropObsCfg()
     critic: PrivObsCfg = PrivObsCfg()
 
-    policy.history_length = 5
+    policy.history_length = 6
 
 
 ##
@@ -66,11 +66,7 @@ class Go2RoughSceneCfg(InteractiveSceneCfg):
             static_friction=1.0,
             dynamic_friction=1.0,
         ),
-        visual_material=sim_utils.MdlFileCfg(
-            mdl_path=f"{ISAACLAB_NUCLEUS_DIR}/Materials/TilesMarbleSpiderWhiteBrickBondHoned/TilesMarbleSpiderWhiteBrickBondHoned.mdl",
-            project_uvw=True,
-            texture_scale=(0.25, 0.25),
-        ),
+        visual_material=rough_terrain_visual_material_cfg(),
         debug_vis=False,
     )
 
@@ -87,28 +83,20 @@ class Go2RoughSceneCfg(InteractiveSceneCfg):
         mesh_prim_paths=["/World/ground"],
         visualizer_cfg=RAY_CASTER_MARKER_CFG,
     )
-    height_scanner_base = RayCasterCfg(
-        prim_path="{ENV_REGEX_NS}/Robot/base",
-        ray_alignment="yaw",
-        offset=RayCasterCfg.OffsetCfg(pos=(0.0, 0.0, 20.0)),
-        pattern_cfg=patterns.GridPatternCfg(resolution=0.05, size=(0.1, 0.1)),
-        debug_vis=False,
-        mesh_prim_paths=["/World/ground"],
-    )
+    #  height_scanner_base = RayCasterCfg(
+    #      prim_path="{ENV_REGEX_NS}/Robot/base",
+    #      ray_alignment="yaw",
+    #      offset=RayCasterCfg.OffsetCfg(pos=(0.0, 0.0, 20.0)),
+    #      pattern_cfg=patterns.GridPatternCfg(resolution=0.1, size=(0.05, 0.05)),
+    #      debug_vis=False,
+    #      mesh_prim_paths=["/World/ground"],
+    #  )
     contact_forces: ContactSensorCfg = ContactSensorCfg(
         prim_path="{ENV_REGEX_NS}/Robot/.*", history_length=3, track_air_time=True
     )
 
     # =====  lights  =====
-    sky_light: AssetBaseCfg = AssetBaseCfg(
-        prim_path="/World/skyLight",
-        #  spawn=sim_utils.DomeLightCfg(
-        #      intensity=750.0,
-        #      texture_file=f"{ISAAC_NUCLEUS_DIR}/Materials/Textures/Skies/PolyHaven/kloofendal_43d_clear_puresky_4k.hdr",
-        #  ),
-        #  spawn=sim_utils.DistantLightCfg(color=(0.75, 0.75, 0.75), intensity=3000.0),
-        spawn=sim_utils.DomeLightCfg(color=(0.75, 0.75, 0.75), intensity=3000.0),
-    )
+    sky_light: AssetBaseCfg = blue_sky_light_cfg()
 
 
 ##

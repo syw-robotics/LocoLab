@@ -19,7 +19,7 @@ from z_rl.adaptor.isaaclab import (
 class G1RoughPPOBaseRunnerCfg(ZRlOnPolicyRunnerCfg):
     num_steps_per_env = 24
     max_iterations = 20000
-    save_interval = 100
+    save_interval = 500
     experiment_name = "g1_rough"
     obs_groups = {"actor": ["policy"], "critic": ["critic"]}
     algorithm = ZRlPpoAlgorithmCfg(

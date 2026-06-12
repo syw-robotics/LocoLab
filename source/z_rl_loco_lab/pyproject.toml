@@ -1,0 +1,15 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "z-rl-loco-lab"
+version = "0.1.0"
+description = "External plugin package for z_rl"
+readme = "README.md"
+requires-python = ">=3.9"
+dependencies = ["z_rl==0.0.3"]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["z_rl_loco_lab*"]

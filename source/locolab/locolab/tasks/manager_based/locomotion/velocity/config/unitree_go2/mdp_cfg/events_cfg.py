@@ -79,6 +79,17 @@ class EventCfg:
         },
     )
     # 6.
+    randomize_joint_offsets = EventTerm(
+        func=mdp.randomize_joint_offsets,
+        mode="startup",
+        params={
+            "asset_cfg": SceneEntityCfg("robot", joint_names=JOINT_NAMES),
+            "offsets_distribution_params": (-0.02, 0.02),
+            "operation": "add",
+            "distribution": "gaussian",
+        },
+    )
+    # 7.
     #  randomize_joint_parameters = EventTerm(
     #      func=mdp.randomize_joint_parameters,
     #      mode="startup",
@@ -88,16 +99,6 @@ class EventCfg:
     #          "armature_distribution_params": (0.0, 0.01),
     #          "operation": "add",
     #          "distribution": "uniform",
-    #      },
-    #  )
-    # 7. TODO: This term is to be implemented to simulate the joint offset deviation. (maybe not necessary)
-    #  randomize_joint_default_pos = EventTerm(
-    #      func=mdp.randomize_joint_default_pos,
-    #      mode="startup",
-    #      params={
-    #          "asset_cfg": SceneEntityCfg("robot", joint_names=JOINT_NAMES),
-    #          "pos_distribution_params": (-0.02, 0.02),
-    #          "operation": "add",
     #      },
     #  )
 

@@ -28,7 +28,7 @@ class CommandsCfg:
         debug_vis=True,
         ranges=mdp.UniformVelocityCommandCfg.Ranges(
             lin_vel_x=(-1.0, 1.0),
-            lin_vel_y=(-1.0, 1.0),
+            lin_vel_y=(-0.5, 0.5),
             ang_vel_z=(-2.0, 2.0),
             heading=(-math.pi, math.pi),
         ),

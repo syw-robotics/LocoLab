@@ -19,7 +19,7 @@ from isaaclab_rl.rsl_rl import (
 class Go2RoughPPORunnerCfg(RslRlOnPolicyRunnerCfg):
     num_steps_per_env = 24
     max_iterations = 10000
-    save_interval = 100
+    save_interval = 500
     experiment_name = "go2_rough"
     obs_groups = {"actor": ["policy"], "critic": ["critic"]}
     actor = RslRlMLPModelCfg(
@@ -40,7 +40,7 @@ class Go2RoughPPORunnerCfg(RslRlOnPolicyRunnerCfg):
         gamma=0.99,
         lam=0.95,
         value_loss_coef=1.0,
-        entropy_coef=0.005,
+        entropy_coef=0.01,
         learning_rate=1.0e-3,
         max_grad_norm=1.0,
         optimizer="adamw",

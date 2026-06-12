@@ -19,7 +19,7 @@ parser = argparse.ArgumentParser(description="Random agent for Isaac Lab environ
 parser.add_argument(
     "--disable_fabric", action="store_true", default=False, help="Disable fabric and use USD I/O operations."
 )
-parser.add_argument("--num_envs", type=int, default=None, help="Number of environments to simulate.")
+parser.add_argument("--num_envs", type=int, default=1, help="Number of environments to simulate.")
 parser.add_argument("--task", type=str, default=None, help="Name of the task.")
 # append AppLauncher cli args
 AppLauncher.add_app_launcher_args(parser)
@@ -100,6 +100,12 @@ def main():
     if hasattr(env_cfg.curriculum, "terrain_levels"):
         env_cfg.curriculum.terrain_levels.params["log_by_terrain_type"] = False
         env_cfg.scene.terrain.max_init_terrain_level = None
+        env_cfg.scene.terrain.debug_vis = True
+        num_terrains = len(env_cfg.scene.terrain.terrain_generator.sub_terrains)
+        env_cfg.scene.terrain.terrain_generator.num_cols = num_terrains
+        equal_proportion = 1.0 / num_terrains
+        for terrain_cfg in env_cfg.scene.terrain.terrain_generator.sub_terrains.values():
+            terrain_cfg.proportion = equal_proportion
 
     # create environment
     env = gym.make(args_cli.task, cfg=env_cfg)
