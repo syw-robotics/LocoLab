@@ -19,15 +19,25 @@ class FlatCurriculumsCfg:
     lin_vel_cmd_levels = CurrTerm(
         mdp.lin_vel_cmd_levels,
         params={
-            "max_lin_vel_x_ranges": (-1.0, 1.5),
-            "max_lin_vel_y_ranges": (-1.0, 1.0),
-            "percentage_threshold": 0.8,
+            "max_lin_vel_x_ranges": (-0.5, 1.0),
+            "max_lin_vel_y_ranges": (-0.5, 0.5),
+            "percentage_threshold": 0.7,
+            "velocity_step": 0.1,
         },
     )
     ang_vel_cmd_levels = CurrTerm(
         mdp.ang_vel_cmd_levels,
         params={
-            "max_ang_vel_z_ranges": (-2.0, 2.0),
+            "max_ang_vel_z_ranges": (-1.5, 1.5),
             "percentage_threshold": 0.5,
+            "velocity_step": 0.1,
+        },
+    )
+    push_robot_levels = CurrTerm(
+        mdp.push_robot_velocity_levels,
+        params={
+            "max_push_velocity_ranges": {"x": (-1.5, 1.5), "y": (-1.0, 1.0)},
+            "percentage_threshold": 0.7,
+            "velocity_step": 0.1,
         },
     )

@@ -19,6 +19,7 @@ from . import (
     FOOT_LINK_NAMES,
     HIP_ROLL_JOINT_NAME,
     HIP_YAW_JOINT_NAME,
+    TORSO_LINK_NAME,
     UNDESIRED_CONTACT_LINK_NAMES,
     WAIST_JOINT_NAMES,
 )
@@ -31,7 +32,7 @@ class FlatRewardsCfg:
     # ===== task-specific rewards =====
     track_lin_vel_xy_exp = RewTerm(
         func=mdp.track_lin_vel_xy_yaw_frame_exp,
-        weight=1.0,
+        weight=1.5,
         params={"command_name": "base_velocity", "std": math.sqrt(0.25)},
     )
     track_ang_vel_z_exp = RewTerm(
@@ -41,10 +42,18 @@ class FlatRewardsCfg:
 
     # ===== penalty rewards =====
     # -- base --
-    base_linear_velocity = RewTerm(func=mdp.lin_vel_z_l2, weight=-2.0)
-    base_angular_velocity = RewTerm(func=mdp.ang_vel_xy_l2, weight=-0.05)
+    lin_vel_z_l2 = RewTerm(
+        func=mdp.lin_vel_z_body_l2,
+        weight=-2.0, 
+        params={"asset_cfg": SceneEntityCfg("robot", body_names=TORSO_LINK_NAME)},
+    )
+    ang_vel_xy_l2 = RewTerm(
+        func=mdp.ang_vel_xy_body_l2,
+        weight=-0.05,
+        params={"asset_cfg": SceneEntityCfg("robot", body_names=TORSO_LINK_NAME)},
+    )
     flat_orientation_l2 = RewTerm(func=mdp.flat_orientation_l2, weight=-5.0)
-    base_height = RewTerm(func=mdp.base_height_l2, weight=-10, params={"target_height": 0.83})
+    base_height = RewTerm(func=mdp.base_height_l2, weight=-10, params={"target_height": 0.76})
     # -- joint --
     joint_acc = RewTerm(func=mdp.joint_acc_l2, weight=-2.5e-7)
     joint_pos_limits = RewTerm(func=mdp.joint_pos_limits, weight=-5.0)
@@ -56,31 +65,21 @@ class FlatRewardsCfg:
     )
     joint_deviation_arms_l1 = RewTerm(
         func=mdp.joint_deviation_l1,
-        weight=-0.1,
+        weight=-0.5,
         params={"asset_cfg": SceneEntityCfg("robot", joint_names=ARM_JOINT_NAMES)},
     )
     joint_deviation_waists_l1 = RewTerm(
         func=mdp.joint_deviation_l1,
-        weight=-1.0,
+        weight=-2.0,
         params={"asset_cfg": SceneEntityCfg("robot", joint_names=WAIST_JOINT_NAMES)},
     )
-    joint_deviation_hip_roll_l1 = RewTerm(
+    joint_deviation_hips_l1 = RewTerm(
         func=mdp.joint_deviation_l1,
-        weight=-0.1,
-        params={"asset_cfg": SceneEntityCfg("robot", joint_names=HIP_ROLL_JOINT_NAME)},
+        weight=-0.5,
+        params={"asset_cfg": SceneEntityCfg("robot", joint_names=[HIP_ROLL_JOINT_NAME, HIP_YAW_JOINT_NAME])},
     )
-    joint_deviation_hip_yaw_l1 = RewTerm(
-        func=mdp.joint_deviation_humanoid_hip_yaw_l1,
-        weight=-0.01,
-        params={
-            "asset_cfg": SceneEntityCfg("robot", joint_names=HIP_YAW_JOINT_NAME),
-            "ang_vel_threshold": 0.1,
-            "zero_ang_vel_command_weight_scale": 5.0,
-        },
-    )
-    stand_still = RewTerm(func=mdp.stand_still, weight=-0.8)
     # -- action --
-    action_rate = RewTerm(func=mdp.action_rate_l2, weight=-0.01)
+    action_rate = RewTerm(func=mdp.action_rate_l2, weight=-0.1)
     # -- collision --
     undesired_contacts = RewTerm(
         func=mdp.undesired_contacts,
@@ -102,29 +101,21 @@ class FlatRewardsCfg:
             "velocity_threshold": 0.2,
         },
     )
-    feet_flat_contact = RewTerm(
-        func=mdp.feet_flat_contact_humanoid,
-        weight=-0.5,
-        params={
-            "asset_cfg": SceneEntityCfg("robot", body_names=FOOT_LINK_NAMES),
-            "sensor_cfg": SceneEntityCfg("contact_forces", body_names=FOOT_LINK_NAMES),
-        },
-    )
     feet_slide = RewTerm(
         func=mdp.feet_slide,
-        weight=-0.1,
+        weight=-0.2,
         params={
             "asset_cfg": SceneEntityCfg("robot", body_names=FOOT_LINK_NAMES),
             "sensor_cfg": SceneEntityCfg("contact_forces", body_names=FOOT_LINK_NAMES),
         },
     )
-    feet_clearance = RewTerm(
-        func=mdp.feet_clearance,
+    feet_clearance_flat = RewTerm(
+        func=mdp.feet_clearance_flat,
         weight=1.0,
         params={
             "std": 0.05,
             "tanh_mult": 2.0,
-            "target_height": 0.1,
+            "target_height": 0.15,
             "asset_cfg": SceneEntityCfg("robot", body_names=FOOT_LINK_NAMES),
         },
     )

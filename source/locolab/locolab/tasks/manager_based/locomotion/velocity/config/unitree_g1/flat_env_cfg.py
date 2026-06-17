@@ -13,7 +13,6 @@ from isaaclab.scene import InteractiveSceneCfg
 from isaaclab.sensors import ContactSensorCfg
 from isaaclab.utils import configclass
 
-import locolab.tasks.manager_based.locomotion.velocity.mdp as mdp
 from locolab.utils.scene import flat_terrain_visual_material_cfg, blue_sky_light_cfg
 from locolab.utils.terrains import TerrainImporterCfg
 
@@ -31,6 +30,7 @@ from locolab.tasks.manager_based.locomotion.velocity.config.unitree_g1.mdp_cfg i
     PrivObsCfg,
     PropObsCfg,
     FlatTerminationsCfg,
+    FlatCurriculumsCfg,
 )
 from locolab.assets import UNITREE_G1_29DOF_BEYONDMIMIC_CFG  # isort: skip
 
@@ -46,7 +46,6 @@ class G1FlatObservationsCfg:
     critic: PrivObsCfg = PrivObsCfg().replace(height_scan=None)
 
     policy.history_length = 5
-    #  critic.history_length = 5
 
 
 ##
@@ -99,6 +98,7 @@ class G1FlatEnvCfg(ManagerBasedRLEnvCfg):
     rewards: FlatRewardsCfg = FlatRewardsCfg()
     terminations: FlatTerminationsCfg = FlatTerminationsCfg()
     events: EventCfg = EventCfg()
+    curriculum: FlatCurriculumsCfg = FlatCurriculumsCfg()
 
     def __post_init__(self):
         """Post initialization."""
@@ -112,8 +112,7 @@ class G1FlatEnvCfg(ManagerBasedRLEnvCfg):
         self.sim.physx.gpu_max_rigid_patch_count = 10 * 2**15
         # update sensor update periods
         # we tick all the sensors based on the smallest update period (physics update period)
-        if self.scene.contact_forces is not None:
-            self.scene.contact_forces.update_period = self.sim.dt
+        self.scene.contact_forces.update_period = self.sim.dt
 
 
 @configclass
@@ -126,12 +125,12 @@ class G1FlatEnvCfg_PLAY(G1FlatEnvCfg):
         self.scene.num_envs = 10
         self.scene.env_spacing = 2.5
 
-        # set command ranges to the max
-        import math
-
-        self.commands.base_velocity.ranges = mdp.UniformVelocityCommandCfg.Ranges(
-            lin_vel_x=(-1.0, 1.5),
-            lin_vel_y=(-1.0, 1.0),
-            ang_vel_z=(-2.0, 2.0),
-            heading=(-math.pi, math.pi),
+        # set command ranges to the curriculum limits
+        lin_vel_cmd_params = self.curriculum.lin_vel_cmd_levels.params
+        ang_vel_cmd_params = self.curriculum.ang_vel_cmd_levels.params
+        self.commands.base_velocity.ranges = type(self.commands.base_velocity.ranges)(
+            lin_vel_x=lin_vel_cmd_params["max_lin_vel_x_ranges"],
+            lin_vel_y=lin_vel_cmd_params["max_lin_vel_y_ranges"],
+            ang_vel_z=ang_vel_cmd_params["max_ang_vel_z_ranges"],
+            heading=self.commands.base_velocity.ranges.heading,
         )

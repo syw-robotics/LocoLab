@@ -175,7 +175,12 @@ def main(env_cfg: ManagerBasedRLEnvCfg, agent_cfg: ZRlBaseRunnerCfg):
         runner.export_policy_to_jit(path=export_model_dir, filename="policy.pt")
     if args_cli.export_onnx:
         export_model_dir = os.path.join(os.path.dirname(resume_path), "exported")
-        runner.export_policy_to_onnx(path=export_model_dir, filename="policy.onnx")
+        default_device = torch.get_default_device()
+        try:
+            torch.set_default_device("cpu")
+            runner.export_policy_to_onnx(path=export_model_dir, filename="policy.onnx")
+        finally:
+            torch.set_default_device(default_device)
 
     dt = env.unwrapped.step_dt
 

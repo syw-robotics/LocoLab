@@ -177,7 +177,6 @@ def main(env_cfg: ManagerBasedRLEnvCfg, agent_cfg: ZRlBaseRunnerCfg):
 
     # wrap around environment for z-rl
     env = ZRlVecEnvWrapper(env, clip_actions=agent_cfg.clip_actions)
-    #  env = ZRlVecEnvWrapper(env, clip_actions=agent_cfg.clip_actions, obs_group_concat_mode="history_major")
 
     # create runner from z-rl
     if agent_cfg.class_name == "OnPolicyRunner":

@@ -83,6 +83,18 @@ def ang_vel_xy_l2(env: ManagerBasedRLEnv, asset_cfg: SceneEntityCfg = SceneEntit
     return torch.sum(torch.square(asset.data.root_ang_vel_b[:, :2]), dim=1)
 
 
+def lin_vel_z_body_l2(env: ManagerBasedRLEnv, asset_cfg: SceneEntityCfg = SceneEntityCfg("robot")) -> torch.Tensor:
+    """Penalize z-axis selected body linear velocity using L2 squared kernel."""
+    asset: RigidObject = env.scene[asset_cfg.name]
+    return torch.sum(torch.square(asset.data.body_lin_vel_w[:, asset_cfg.body_ids, 2]), dim=1)
+
+
+def ang_vel_xy_body_l2(env: ManagerBasedRLEnv, asset_cfg: SceneEntityCfg = SceneEntityCfg("robot")) -> torch.Tensor:
+    """Penalize xy-axis selected body angular velocity using L2 squared kernel."""
+    asset: RigidObject = env.scene[asset_cfg.name]
+    return torch.sum(torch.square(asset.data.body_ang_vel_w[:, asset_cfg.body_ids, :2]), dim=(1, 2))
+
+
 def flat_orientation_l2(env: ManagerBasedRLEnv, asset_cfg: SceneEntityCfg = SceneEntityCfg("robot")) -> torch.Tensor:
     """Penalize non-flat base orientation using L2 squared kernel by penalizing projected gravity xy-components."""
     asset: RigidObject = env.scene[asset_cfg.name]
@@ -328,23 +340,69 @@ def feet_gait(
     reward = torch.zeros(env.num_envs, dtype=torch.float, device=env.device)
     for i in range(len(sensor_cfg.body_ids)):
         is_stance = leg_phase[:, i] < threshold
-        mismatch = is_stance != is_contact[:, i]
-        reward -= mismatch.float()  # -1 if mismatch, 0 if match
+        reward += ~(is_stance ^ is_contact[:, i])
 
     reward *= torch.norm(env.command_manager.get_command("base_velocity")[:, :2], dim=1) > velocity_threshold
 
     return reward
 
 
-def feet_clearance(
+def feet_clearance_flat(
     env: ManagerBasedRLEnv, asset_cfg: SceneEntityCfg, target_height: float, std: float, tanh_mult: float
 ) -> torch.Tensor:
-    """Reward the swinging feet for clearing a specified height off the ground"""
+    """Reward the swinging feet for clearing a specified height off the flat ground"""
     asset: RigidObject = env.scene[asset_cfg.name]
     feet_z_target_error = torch.square(asset.data.body_pos_w[:, asset_cfg.body_ids, 2] - target_height)
     feet_velocity_tanh = torch.tanh(tanh_mult * torch.norm(asset.data.body_lin_vel_w[:, asset_cfg.body_ids, :2], dim=2))
     reward = feet_z_target_error * feet_velocity_tanh
     return torch.exp(-torch.sum(reward, dim=1) / std)
+
+
+def feet_clearance_rough(
+    env: ManagerBasedRLEnv,
+    asset_cfg: SceneEntityCfg,
+    target_height: float = 0.1,
+    std: float = 0.05,
+    tanh_mult: float = 2.0,
+) -> torch.Tensor:
+    """Reward swinging feet for reaching a target height above local rough terrain."""
+    asset: RigidObject = env.scene[asset_cfg.name]
+    feet_names = [asset.body_names[body_id] for body_id in asset_cfg.body_ids]
+    pos_z = torch.stack([env.scene.sensors[f"{name}_height_scanner"].data.pos_w[:, 2] for name in feet_names], dim=1)
+    ray_hits_z = torch.stack(
+        [env.scene.sensors[f"{name}_height_scanner"].data.ray_hits_w[..., 2] for name in feet_names], dim=1
+    )
+    feet_height = (pos_z.unsqueeze(-1) - ray_hits_z).mean(dim=-1)
+
+    feet_height_target_error = torch.square(feet_height - target_height)
+    feet_velocity_tanh = torch.tanh(tanh_mult * torch.norm(asset.data.body_lin_vel_w[:, asset_cfg.body_ids, :2], dim=2))
+    reward = feet_height_target_error * feet_velocity_tanh
+    return torch.exp(-torch.sum(reward, dim=1) / std)
+
+
+def feet_clearance(
+    env: ManagerBasedRLEnv,
+    asset_cfg: SceneEntityCfg,
+    target_height_in_base_frame: float = -0.18,
+) -> torch.Tensor:
+    """Reward swinging feet for reaching a target height in the base frame."""
+    asset: RigidObject = env.scene[asset_cfg.name]
+
+    feet_pos_rel_w = asset.data.body_pos_w[:, asset_cfg.body_ids, :] - asset.data.root_pos_w.unsqueeze(1)
+    feet_vel_rel_w = asset.data.body_lin_vel_w[:, asset_cfg.body_ids, :] - asset.data.root_lin_vel_w.unsqueeze(1)
+
+    num_feet = feet_pos_rel_w.shape[1]
+    root_quat_w = asset.data.root_quat_w.unsqueeze(1).expand(-1, num_feet, -1).reshape(-1, 4)
+    feet_pos_b = quat_apply_inverse(root_quat_w, feet_pos_rel_w.reshape(-1, 3)).reshape(
+        env.num_envs, num_feet, 3
+    )
+    feet_vel_b = quat_apply_inverse(root_quat_w, feet_vel_rel_w.reshape(-1, 3)).reshape(
+        env.num_envs, num_feet, 3
+    )
+
+    height_error = torch.square(feet_pos_b[:, :, 2] - target_height_in_base_frame)
+    feet_vel_b_xy = torch.linalg.norm(feet_vel_b[:, :, :2], dim=2)
+    return torch.sum(height_error * feet_vel_b_xy, dim=1)
 
 
 def action_rate_l2(env: ManagerBasedRLEnv) -> torch.Tensor:

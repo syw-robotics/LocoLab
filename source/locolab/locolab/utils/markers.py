@@ -57,7 +57,7 @@ RED_ARROW_X_MARKER_CFG = VisualizationMarkersCfg(
 """Configuration for the red arrow marker (along x-direction)."""
 
 
-RAY_CASTER_MARKER_CFG = VisualizationMarkersCfg(
+BLUE_RAY_CASTER_MARKER_CFG = VisualizationMarkersCfg(
     prim_path="/Visuals/RayCaster",
     markers={
         "hit": sim_utils.SphereCfg(
@@ -66,4 +66,16 @@ RAY_CASTER_MARKER_CFG = VisualizationMarkersCfg(
         ),
     },
 )
-"""Configuration for the ray-caster marker."""
+"""Configuration for the blue ray-caster marker."""
+
+PURPLE_RAY_CASTER_MARKER_CFG = VisualizationMarkersCfg(
+    prim_path="/Visuals/RayCaster",
+    markers={
+        "hit": sim_utils.SphereCfg(
+            radius=0.02,
+            visual_material=sim_utils.PreviewSurfaceCfg(diffuse_color=(0.9, 0.2, 0.5)),
+        ),
+    },
+)
+"""Configuration for the purple ray-caster marker."""
+

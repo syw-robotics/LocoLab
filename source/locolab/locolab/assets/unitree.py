@@ -84,7 +84,6 @@ class UnitreeUrdfFileCfg(sim_utils.UrdfFileCfg):
 
 UNITREE_GO2_CFG = UnitreeArticulationCfg(
     # Here we prefer URDF over USD for the convenience of modifying collision shapes
-    # Less collision shapes lead to faster rollout speed, since collision detection runs on cpu for isaacsim
     spawn=UnitreeUrdfFileCfg(
         asset_path=f"{UNITREE_MODEL_DIR}/Go2/urdf/go2_description/urdf/go2_description.urdf",
     ),
@@ -125,28 +124,69 @@ UNITREE_GO2_CFG = UnitreeArticulationCfg(
     },
     # fmt: off
     joint_sdk_names=[
-        "FR_hip_joint",
-        "FR_thigh_joint",
-        "FR_calf_joint",
-        "FL_hip_joint",
-        "FL_thigh_joint",
-        "FL_calf_joint",
-        "RR_hip_joint",
-        "RR_thigh_joint",
-        "RR_calf_joint",
-        "RL_hip_joint",
-        "RL_thigh_joint",
-        "RL_calf_joint",
+        "FR_hip_joint", "FR_thigh_joint", "FR_calf_joint",
+        "FL_hip_joint", "FL_thigh_joint", "FL_calf_joint",
+        "RR_hip_joint", "RR_thigh_joint", "RR_calf_joint",
+        "RL_hip_joint", "RL_thigh_joint", "RL_calf_joint",
     ],
     # fmt: on
 )
+"""Configuration for the Unitree G2 Quadrupedal robot."""
+
+
+UNITREE_B2_CFG = UnitreeArticulationCfg(
+    # Here we prefer URDF over USD for the convenience of modifying collision shapes
+    spawn=UnitreeUrdfFileCfg(
+        asset_path=f"{UNITREE_MODEL_DIR}/B2/urdf/b2_description/urdf/b2_description.urdf",
+    ),
+    init_state=ArticulationCfg.InitialStateCfg(
+        pos=(0.0, 0.0, 0.60),
+        joint_pos={
+            ".*R_hip_joint": -0.1,
+            ".*L_hip_joint": 0.1,
+            "F[L,R]_thigh_joint": 0.8,
+            "R[L,R]_thigh_joint": 1.0,
+            ".*_calf_joint": -1.5,
+        },
+        joint_vel={".*": 0.0},
+    ),
+    actuators={
+        "B2DelayedImplicit_Hip_Thigh": DelayedImplicitActuatorCfg(
+            joint_names_expr=[".*_hip_joint", ".*_thigh_joint"],
+            effort_limit_sim=200.0,
+            velocity_limit_sim=23.0,
+            stiffness=150.0,
+            damping=5.0,
+            friction=0.01,
+        ),
+        "B2DelayedImplicit_Calf": DelayedImplicitActuatorCfg(
+            joint_names_expr=[".*_calf_joint"],
+            effort_limit_sim=320.0,
+            velocity_limit_sim=14.0,
+            stiffness=150.0,
+            damping=5.0,
+            friction=0.01,
+        ),
+    },
+    # fmt: off
+    joint_sdk_names=[
+        "FR_hip_joint", "FR_thigh_joint", "FR_calf_joint",
+        "FL_hip_joint", "FL_thigh_joint", "FL_calf_joint",
+        "RR_hip_joint", "RR_thigh_joint", "RR_calf_joint",
+        "RL_hip_joint", "RL_thigh_joint", "RL_calf_joint",
+    ],
+    # fmt: on
+)
+"""Configuration for the Unitree G2 Quadrupedal robot."""
 
 
 UNITREE_G1_29DOF_BEYONDMIMIC_CFG = UnitreeArticulationCfg(
+    # Here we prefer URDF over USD for the convenience of modifying collision shapes
     spawn=sim_utils.UrdfFileCfg(
         fix_base=False,
         replace_cylinders_with_capsules=True,
-        asset_path=f"{UNITREE_MODEL_DIR}/G1/urdf/g1_description/g1_29dof_beyondmimic_torso_base.urdf",
+        #  asset_path=f"{UNITREE_MODEL_DIR}/G1/urdf/g1_description/g1_29dof_beyondmimic_torso_base.urdf",
+        asset_path=f"{UNITREE_MODEL_DIR}/G1/urdf/g1_description/g1_29dof_beyondmimic_pelvis_base.urdf",
         activate_contact_sensors=True,
         rigid_props=sim_utils.RigidBodyPropertiesCfg(
             disable_gravity=False,
@@ -159,8 +199,10 @@ UNITREE_G1_29DOF_BEYONDMIMIC_CFG = UnitreeArticulationCfg(
         ),
         articulation_props=sim_utils.ArticulationRootPropertiesCfg(
             enabled_self_collisions=True,
-            solver_position_iteration_count=8,
-            solver_velocity_iteration_count=4,
+            #  solver_position_iteration_count=8,
+            #  solver_velocity_iteration_count=4,
+            solver_position_iteration_count=4,
+            solver_velocity_iteration_count=2,
         ),
         joint_drive=sim_utils.UrdfConverterCfg.JointDriveCfg(
             gains=sim_utils.UrdfConverterCfg.JointDriveCfg.PDGainsCfg(stiffness=0, damping=0)
@@ -168,16 +210,15 @@ UNITREE_G1_29DOF_BEYONDMIMIC_CFG = UnitreeArticulationCfg(
     ),
     init_state=ArticulationCfg.InitialStateCfg(
         #  pos=(0.0, 0.0, 0.8),
-        pos=(0.0, 0.0, 0.88),
+        pos=(0.0, 0.0, 0.85),
         joint_pos={
-            ".*_hip_pitch_joint": -0.312,
-            ".*_knee_joint": 0.669,
-            ".*_ankle_pitch_joint": -0.363,
-            ".*_elbow_joint": 0.6,
-            "left_shoulder_roll_joint": 0.2,
-            "left_shoulder_pitch_joint": 0.2,
-            "right_shoulder_roll_joint": -0.2,
-            "right_shoulder_pitch_joint": 0.2,
+            ".*_hip_pitch_joint": -0.1,
+            ".*_knee_joint": 0.3,
+            ".*_ankle_pitch_joint": -0.2,
+            ".*_elbow_joint": 0.9,
+            ".*_shoulder_pitch_joint": 0.2,
+            "left_shoulder_roll_joint": 0.25,
+            "right_shoulder_roll_joint": -0.25,
         },
         joint_vel={".*": 0.0},
     ),
@@ -214,4 +255,4 @@ UNITREE_G1_29DOF_BEYONDMIMIC_CFG = UnitreeArticulationCfg(
         "right_wrist_yaw_joint",
     ],
 )
-"""Configuration for the Unitree G1 23DOF Humanoid robot."""
+"""Configuration for the Unitree G1 29DOF Humanoid robot."""

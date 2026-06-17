@@ -27,7 +27,7 @@ class UniformVelocityCommandCfg(CommandTermCfg):
     asset_name: str = MISSING
     """Name of the asset in the environment for which the commands are generated."""
 
-    velocity_threshold: float = 0.2
+    zero_velocity_threshold: float = 0.2
     """Velocity threshold for the command generator. Defaults to 0.2."""
 
     heading_command: bool = False

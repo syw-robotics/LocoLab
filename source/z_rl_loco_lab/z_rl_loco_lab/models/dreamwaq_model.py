@@ -199,11 +199,18 @@ class _DreamWaQEncoderLatentAdapterExporter(nn.Module):
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """Normalize a flat observation tensor and build a deterministic exported actor latent."""
         x = self.obs_normalizer(x)
-        exclude_first_obs = self.exclude_first_obs_selector.select(x)
-        last_obs = self.last_obs_selector.select(x)
+        exclude_first_obs = _select_for_export(self.exclude_first_obs_selector, x)
+        last_obs = _select_for_export(self.last_obs_selector, x)
         latent, _ = self.vae.encode(exclude_first_obs)
         lin_vel_est = self.lin_vel_est_head(latent)
         return torch.cat([lin_vel_est, latent, last_obs], dim=-1)
+
+
+def _select_for_export(selector: ObsSelector, obs: torch.Tensor) -> torch.Tensor:
+    """Select observation features while keeping tensor indices on the input device."""
+    if isinstance(selector.meta, slice):
+        return obs[:, selector.meta]
+    return obs.index_select(dim=1, index=selector.meta.to(obs.device))
 
 
 class DreamWaQEncoderMLPModel(ComposableModel):

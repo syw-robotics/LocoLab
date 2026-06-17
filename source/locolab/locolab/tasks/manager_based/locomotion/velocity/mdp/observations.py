@@ -39,7 +39,7 @@ def body_inertia(env: ManagerBasedRLEnv, asset_cfg: SceneEntityCfg = SceneEntity
     return body_inertia.view(body_inertia.shape[0], -1)
 
 
-# =====  contact  =====
+# =====  feet  =====
 def feet_contact_forces(
     env: ManagerBasedRLEnv, sensor_cfg: SceneEntityCfg = SceneEntityCfg("contact_forces", body_names=".*_foot")
 ) -> torch.Tensor:
@@ -60,6 +60,25 @@ def feet_contact_flag(
     feet_contact = contact_sensor.data.net_forces_w[:, sensor_cfg.body_ids, :]
     feet_contact_flag = torch.any(feet_contact > 1.0, dim=2).float() - 0.5
     return feet_contact_flag
+
+
+def feet_height(env: ManagerBasedRLEnv, feet_names: list[str]) -> torch.Tensor:
+    """Height of each foot relative to the ground.
+
+    Returns:
+        Tensor of shape (num_envs, 4) containing the average height of each foot above ground.
+    """
+    # Stack all sensor data at once
+    pos_z = torch.stack([env.scene.sensors[f"{name}_height_scanner"].data.pos_w[:, 2] for name in feet_names], dim=1)
+    ray_hits_z = torch.stack(
+        [env.scene.sensors[f"{name}_height_scanner"].data.ray_hits_w[..., 2] for name in feet_names], dim=1
+    )
+
+    # Compute heights: (num_envs, 4, 1) - (num_envs, 4, num_rays) = (num_envs, 4, num_rays)
+    feet_heights = pos_z.unsqueeze(-1) - ray_hits_z
+
+    # Average over rays: (num_envs, 4)
+    return feet_heights.mean(dim=-1)
 
 
 # =====  joint  =====

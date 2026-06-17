@@ -6,9 +6,9 @@
 # All rights reserved.
 # Modifications are licensed under BSD-3-Clause.
 
-from locolab.utils.rl.rsl_rl import (
+from isaaclab_rl.rsl_rl import (
+    RslRlMLPModelCfg,
     RslRlOnPolicyRunnerCfg,
-    RslRlPpoActorCriticCfg,
     RslRlPpoAlgorithmCfg,
 )
 
@@ -16,40 +16,37 @@ from isaaclab.utils import configclass
 
 
 @configclass
-class G1RoughPPORunnerCfg(RslRlOnPolicyRunnerCfg):
+class G1FlatPPORunnerCfg(RslRlOnPolicyRunnerCfg):
     num_steps_per_env = 24
     max_iterations = 20000
     save_interval = 500
     experiment_name = "g1_rough"
-    policy = RslRlPpoActorCriticCfg(
-        init_noise_std=1.0,
-        actor_obs_normalization=False,
-        critic_obs_normalization=False,
-        actor_hidden_dims=[512, 256, 128],
-        critic_hidden_dims=[512, 256, 128],
+    obs_groups = {"actor": ["policy"], "critic": ["critic"]}
+    actor = RslRlMLPModelCfg(
+        hidden_dims=[512, 256, 128],
         activation="elu",
-        #  noise_std_type="log" # "log" or "scalar"
+        obs_normalization=False,
+        distribution_cfg=RslRlMLPModelCfg.GaussianDistributionCfg(init_std=1.0),
+    )
+    critic = RslRlMLPModelCfg(
+        hidden_dims=[512, 256, 128],
+        activation="elu",
+        obs_normalization=False,
     )
     algorithm = RslRlPpoAlgorithmCfg(
-        value_loss_coef=1.0,
-        use_clipped_value_loss=True,
-        clip_param=0.2,
-        entropy_coef=0.01,
         num_learning_epochs=5,
         num_mini_batches=4,
-        learning_rate=1.0e-3,
-        schedule="adaptive",
+        clip_param=0.2,
         gamma=0.99,
         lam=0.95,
-        desired_kl=0.01,
+        value_loss_coef=1.0,
+        entropy_coef=0.01,
+        learning_rate=1.0e-3,
         max_grad_norm=1.0,
+        optimizer="adamw",
+        use_clipped_value_loss=True,
+        schedule="adaptive",
+        desired_kl=0.01,
     )
 
 
-@configclass
-class G1FlatPPORunnerCfg(G1RoughPPORunnerCfg):
-    def __post_init__(self):
-        super().__post_init__()
-
-        self.max_iterations = 10000
-        self.experiment_name = "g1_flat"

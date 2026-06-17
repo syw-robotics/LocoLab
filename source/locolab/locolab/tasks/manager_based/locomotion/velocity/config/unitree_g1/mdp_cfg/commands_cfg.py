@@ -6,7 +6,6 @@
 # All rights reserved.
 # Modifications are licensed under BSD-3-Clause.
 
-
 import math
 
 from isaaclab.utils import configclass
@@ -18,30 +17,19 @@ import locolab.tasks.manager_based.locomotion.velocity.mdp as mdp
 class CommandsCfg:
     """Command specifications for the MDP."""
 
-    #  base_velocity = mdp.UniformVelocityCommandCfg(
-    #      asset_name="robot",
-    #      resampling_time_range=(10.0, 10.0),
-    #      velocity_threshold=0.2,
-    #      heading_command=False,
-    #      debug_vis=True,
-    #      ranges=mdp.UniformVelocityCommandCfg.Ranges(
-    #          lin_vel_x=(-0.1, 0.1),
-    #          lin_vel_y=(-0.1, 0.1),
-    #          ang_vel_z=(-0.5, 0.5),
-    #      ),
-    #      vel_visualizer_offset_z=0.7,
-    #  )
     base_velocity = mdp.UniformVelocityCommandCfg(
         asset_name="robot",
-        resampling_time_range=(10.0, 10.0),
-        velocity_threshold=0.2,
+        resampling_time_range=(6.0, 12.0),
+        rel_heading_envs=1.0,
+        rel_only_lin_vel_x_envs=0.1,
+        zero_velocity_threshold=0.2,
         heading_command=True,
-        rel_heading_envs=0.5,
+        heading_control_stiffness=0.8,
         debug_vis=True,
         ranges=mdp.UniformVelocityCommandCfg.Ranges(
-            lin_vel_x=(-0.5, 1.0),
-            lin_vel_y=(-0.5, 0.5),
-            ang_vel_z=(-1.5, 1.5),
+            lin_vel_x=(-0.5, 0.5),
+            lin_vel_y=(-0.2, 0.2),
+            ang_vel_z=(-0.5, 0.5),
             heading=(-math.pi, math.pi),
         ),
         vel_visualizer_offset_z=0.7,

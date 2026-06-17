@@ -17,6 +17,7 @@ from .z_rl_ppo_cfg import Go2RoughPPOBaseRunnerCfg
 @configclass
 class Go2RoughBarlowTwinsPPORunnerCfg(Go2RoughPPOBaseRunnerCfg):
     experiment_name = "go2_rough_barlowtwins"
+    obs_group_concat_mode = "history_major"
     actor = BarlowTwinsEncoderMLPModelCfg(
         hidden_dims=[256, 128],
         activation="elu",
