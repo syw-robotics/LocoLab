@@ -16,6 +16,7 @@ from typing import TYPE_CHECKING
 import numpy as np
 import torch
 import trimesh
+
 from isaaclab.terrains.trimesh.utils import make_border
 from isaaclab.terrains.utils import color_meshes_by_height, find_flat_patches
 from isaaclab.utils.dict import dict_to_md5_hash

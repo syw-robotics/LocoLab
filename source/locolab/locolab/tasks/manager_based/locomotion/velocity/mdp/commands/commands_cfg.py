@@ -12,6 +12,7 @@ from dataclasses import MISSING
 from isaaclab.managers import CommandTermCfg
 from isaaclab.markers import VisualizationMarkersCfg
 from isaaclab.utils import configclass
+
 from locolab.utils.markers import GREEN_ARROW_X_MARKER_CFG, RED_ARROW_X_MARKER_CFG
 
 from .velocity_command import UniformVelocityCommand
@@ -26,7 +27,7 @@ class UniformVelocityCommandCfg(CommandTermCfg):
     asset_name: str = MISSING
     """Name of the asset in the environment for which the commands are generated."""
 
-    velocity_threshold: float = 0.2
+    zero_velocity_threshold: float = 0.2
     """Velocity threshold for the command generator. Defaults to 0.2."""
 
     heading_command: bool = False
@@ -47,7 +48,7 @@ class UniformVelocityCommandCfg(CommandTermCfg):
     This parameter is only used if :attr:`heading_command` is True.
     """
 
-    rel_only_lin_vel_x_envs: float = 0.1
+    rel_only_lin_vel_x_envs: float = 0.05
     """The sampled probability of environments where only x-direction velocity command is non-zero
     (y velocity and angular velocity are set to zero). Defaults to 0.05.
 
@@ -90,3 +91,6 @@ class UniformVelocityCommandCfg(CommandTermCfg):
     # Set the scale of the visualization markers to (0.5, 0.5, 0.5)
     goal_vel_visualizer_cfg.markers["arrow"].scale = (0.5, 0.5, 0.5)
     current_vel_visualizer_cfg.markers["arrow"].scale = (0.5, 0.5, 0.5)
+
+    # Marker z offset
+    vel_visualizer_offset_z: float = 0.5

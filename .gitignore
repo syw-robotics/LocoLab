@@ -1,6 +1,18 @@
+# C++
+**/cmake-build*/
+**/build*/
+**/*.so
+**/*.log*
+
 # Omniverse
 **/*.dmp
 **/.thumbs
+
+# No USD files allowed in the repo
+**/*.usd
+**/*.usda
+**/*.usdc
+**/*.usdz
 
 # Python
 .DS_Store
@@ -10,6 +22,11 @@
 **/*.pyc
 **/*.pb
 
+# Docker/Singularity
+**/*.sif
+docker/cluster/exports/
+docker/.container.cfg
+
 # IDE
 **/.idea/
 **/.vscode/
@@ -18,9 +35,6 @@
 !.vscode
 
 # Outputs
-**/runs/*
-**/logs/*
-**/recordings/*
 **/output/*
 **/outputs/*
 **/videos/*
@@ -29,11 +43,33 @@
 docker/artifacts/
 *.tmp
 
+# Doc Outputs
+**/docs/_build/*
+**/generated/*
+
 # Isaac-Sim packman
 _isaac_sim*
 _repo
 _build
 .lastformat
 
-# LSP
-pyrightconfig.json
+# RL-Games
+**/runs/*
+**/logs/*
+**/recordings/*
+
+# Pre-Trained Checkpoints
+/.pretrained_checkpoints/
+
+# Teleop Recorded Dataset
+/datasets/
+
+# Tests
+tests/
+
+# Docker history
+.isaac-lab-docker-history
+
+# TacSL sensor
+**/tactile_record/*
+**/gelsight_r15_data/*

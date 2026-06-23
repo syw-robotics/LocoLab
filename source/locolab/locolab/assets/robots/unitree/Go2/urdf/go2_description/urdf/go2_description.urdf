@@ -13,9 +13,11 @@
       </geometry>
       <material name="深色橡胶_001-effect"><color rgba="0.6717055 0.6924257 0.7742702 1" /></material><material name="白色logo_001-effect"><color rgba="1 1 1 1" /></material><material name="黑色贴纸_007-effect"><color rgba="0.009018 0.009018 0.009018 1" /></material><material name="黑色金属_007-effect"><color rgba="0.01341 0.01341 0.01341 1" /></material><material name="黑色塑料_003-effect"><color rgba="0.023455 0.023455 0.023455 1" /></material></visual>
     <collision>
-      <origin rpy="0 0 0" xyz="0 0 0" />
+      <origin rpy="0 0 0" xyz="0.05 0 0" />
       <geometry>
-        <box size="0.32 0.15 0.114" />
+        <!-- <box size="0.4762 0.0935 0.114" /> -->
+        <box size="0.4 0.20 0.114" />
+        <!-- <box size="0.4762 0.0935 0.10" /> -->
       </geometry>
     </collision>
   </link>
@@ -26,9 +28,9 @@
       <inertia ixx="9.6e-06" ixy="0" ixz="0" iyy="9.6e-06" iyz="0" izz="9.6e-06" />
     </inertial>
     <collision>
-      <origin xyz="0 0 0" rpy="0 0 0" />
+      <origin xyz="0.01 0 0.0" rpy="0 0 0" />
       <geometry>
-        <cylinder radius="0.048" length="0.11" />
+        <box size="0.07 0.1 0.15" />
       </geometry>
     </collision>
   </link>
@@ -104,9 +106,9 @@
       </geometry>
       <material name="深色橡胶_003-effect"><color rgba="0.6717055 0.6924257 0.7742702 1" /></material><material name="Material_009-effect"><color rgba="0.9 0.95 0.95 1" /></material></visual>
     <collision>
-      <origin rpy="0 1.5707963267948966 0" xyz="-0.015 0 -0.08" />
+      <origin rpy="0 1.6 0" xyz="-0.015 0 -0.06" />
       <geometry>
-        <box size="0.23 0.0245 0.032" />
+        <box size="0.20 0.0245 0.034" />
       </geometry>
     </collision>
   </link>
@@ -142,10 +144,10 @@
       </geometry>
       <material name="黑色足端_005-effect"><color rgba="0 0 0 1" /></material><material name="深色橡胶_005-effect"><color rgba="0.6717055 0.6924257 0.7742702 1" /></material></visual>
     <collision>
-      <origin rpy="0 -0.05 0" xyz="0.005 0 -0.10" />
+      <origin rpy="0 -0.1 0" xyz="0.005 0 -0.085" />
       <geometry>
         <!-- <cylinder length="0.18" radius="0.015" /> -->
-        <box size="0.035 0.025 0.18" />
+        <box size="0.025 0.025 0.21" />
       </geometry>
     </collision>
   </link>
@@ -272,9 +274,9 @@
       </geometry>
       <material name="深色橡胶_012-effect"><color rgba="0.6717055 0.6924257 0.7742702 1" /></material><material name="Material_011-effect"><color rgba="0.9 0.95 0.95 1" /></material></visual>
     <collision>
-      <origin rpy="0 1.5707963267948966 0" xyz="-0.015 0 -0.08" />
+      <origin rpy="0 1.6 0" xyz="-0.015 0 -0.06" />
       <geometry>
-        <box size="0.23 0.0245 0.032" />
+        <box size="0.20 0.0245 0.034" />
       </geometry>
     </collision>
   </link>
@@ -310,10 +312,10 @@
       </geometry>
       <material name="黑色足端_006-effect"><color rgba="0 0 0 1" /></material><material name="深色橡胶_007-effect"><color rgba="0.6717055 0.6924257 0.7742702 1" /></material></visual>
     <collision>
-      <origin rpy="0 -0.05 0" xyz="0.005 0 -0.10" />
+      <origin rpy="0 -0.1 0" xyz="0.005 0 -0.085" />
       <geometry>
         <!-- <cylinder length="0.18" radius="0.015" /> -->
-        <box size="0.035 0.025 0.18" />
+        <box size="0.025 0.025 0.21" />
       </geometry>
     </collision>
   </link>
@@ -440,9 +442,9 @@
       </geometry>
       <material name="深色橡胶_003-effect"><color rgba="0.6717055 0.6924257 0.7742702 1" /></material><material name="Material_009-effect"><color rgba="0.9 0.95 0.95 1" /></material></visual>
     <collision>
-      <origin rpy="0 1.5707963267948966 0" xyz="-0.015 0 -0.08" />
+      <origin rpy="0 1.6 0" xyz="-0.015 0 -0.06" />
       <geometry>
-        <box size="0.23 0.0245 0.032" />
+        <box size="0.20 0.0245 0.034" />
       </geometry>
     </collision>
   </link>
@@ -478,10 +480,10 @@
       </geometry>
       <material name="黑色足端_005-effect"><color rgba="0 0 0 1" /></material><material name="深色橡胶_005-effect"><color rgba="0.6717055 0.6924257 0.7742702 1" /></material></visual>
     <collision>
-      <origin rpy="0 -0.05 0" xyz="0.005 0 -0.10" />
+      <origin rpy="0 -0.1 0" xyz="0.005 0 -0.085" />
       <geometry>
         <!-- <cylinder length="0.18" radius="0.015" /> -->
-        <box size="0.035 0.025 0.18" />
+        <box size="0.025 0.025 0.21" />
       </geometry>
     </collision>
   </link>
@@ -608,9 +610,9 @@
       </geometry>
       <material name="深色橡胶_012-effect"><color rgba="0.6717055 0.6924257 0.7742702 1" /></material><material name="Material_011-effect"><color rgba="0.9 0.95 0.95 1" /></material></visual>
     <collision>
-      <origin rpy="0 1.5707963267948966 0" xyz="-0.015 0 -0.08" />
+      <origin rpy="0 1.6 0" xyz="-0.015 0 -0.06" />
       <geometry>
-        <box size="0.23 0.0245 0.032" />
+        <box size="0.20 0.0245 0.034" />
       </geometry>
     </collision>
   </link>
@@ -646,10 +648,10 @@
       </geometry>
       <material name="黑色足端_006-effect"><color rgba="0 0 0 1" /></material><material name="深色橡胶_007-effect"><color rgba="0.6717055 0.6924257 0.7742702 1" /></material></visual>
     <collision>
-      <origin rpy="0 -0.05 0" xyz="0.005 0 -0.10" />
+      <origin rpy="0 -0.1 0" xyz="0.005 0 -0.085" />
       <geometry>
         <!-- <cylinder length="0.18" radius="0.015" /> -->
-        <box size="0.035 0.025 0.18" />
+        <box size="0.025 0.025 0.21" />
       </geometry>
     </collision>
   </link>

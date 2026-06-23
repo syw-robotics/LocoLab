@@ -18,8 +18,10 @@ from collections.abc import Sequence
 from typing import TYPE_CHECKING
 
 import torch
+
 from isaaclab.assets import Articulation
 from isaaclab.managers import SceneEntityCfg
+
 from locolab.utils.terrains import TerrainImporter
 
 if TYPE_CHECKING:
@@ -87,8 +89,10 @@ def lin_vel_cmd_levels(
     env: ManagerBasedRLEnv,
     env_ids: Sequence[int],
     reward_term_name: str = "track_lin_vel_xy_exp",
+    percentage_threshold: float = 0.8,
     max_lin_vel_x_ranges: tuple[float, float] = (-1.5, 1.5),
     max_lin_vel_y_ranges: tuple[float, float] = (-1.5, 1.5),
+    velocity_step: float = 0.1,
 ) -> torch.Tensor:
     """Curriculum based on the linear velocity command levels.
 
@@ -106,8 +110,8 @@ def lin_vel_cmd_levels(
     reward = torch.mean(env.reward_manager._episode_sums[reward_term_name][env_ids]) / env.max_episode_length_s
 
     if env.common_step_counter % env.max_episode_length == 0:
-        if reward > reward_term.weight * 0.8:
-            delta_command = torch.tensor([-0.1, 0.1], device=env.device)
+        if reward > reward_term.weight * percentage_threshold:
+            delta_command = torch.tensor([-velocity_step, velocity_step], device=env.device)
             ranges.lin_vel_x = torch.clamp(
                 torch.tensor(ranges.lin_vel_x, device=env.device) + delta_command,
                 max_ranges_x[0],
@@ -126,7 +130,9 @@ def ang_vel_cmd_levels(
     env: ManagerBasedRLEnv,
     env_ids: Sequence[int],
     reward_term_name: str = "track_ang_vel_z_exp",
+    percentage_threshold: float = 0.8,
     max_ang_vel_z_ranges: tuple[float, float] = (-2.0, 2.0),
+    velocity_step: float = 0.1,
 ) -> torch.Tensor:
     """Curriculum based on the angular velocity command levels.
 
@@ -143,8 +149,8 @@ def ang_vel_cmd_levels(
     reward = torch.mean(env.reward_manager._episode_sums[reward_term_name][env_ids]) / env.max_episode_length_s
 
     if env.common_step_counter % env.max_episode_length == 0:
-        if reward > reward_term.weight * 0.8:
-            delta_command = torch.tensor([-0.1, 0.1], device=env.device)
+        if reward > reward_term.weight * percentage_threshold:
+            delta_command = torch.tensor([-velocity_step, velocity_step], device=env.device)
             ranges.ang_vel_z = torch.clamp(
                 torch.tensor(ranges.ang_vel_z, device=env.device) + delta_command,
                 max_ranges[0],
@@ -152,3 +158,38 @@ def ang_vel_cmd_levels(
             ).tolist()
 
     return torch.tensor(ranges.ang_vel_z[1], device=env.device)
+
+
+def push_robot_velocity_levels(
+    env: ManagerBasedRLEnv,
+    env_ids: Sequence[int],
+    event_term_name: str = "push_robot_by_setting_velocity",
+    reward_term_name: str = "track_lin_vel_xy_exp",
+    percentage_threshold: float = 0.8,
+    max_push_velocity_ranges: dict[str, tuple[float, float]] = {"x": (-1.0, 1.0), "y": (-1.0, 1.0)},
+    velocity_step: float = 0.1,
+) -> torch.Tensor:
+    """Curriculum based on the push velocity range.
+
+    This term is used to increase the difficulty of the push event when the robot achieves a high tracking reward.
+
+    Returns:
+        The maximum absolute push velocity range.
+    """
+    event_term = env.event_manager.get_term_cfg(event_term_name)
+    velocity_range = event_term.params["velocity_range"]
+
+    reward_term = env.reward_manager.get_term_cfg(reward_term_name)
+    reward = torch.mean(env.reward_manager._episode_sums[reward_term_name][env_ids]) / env.max_episode_length_s
+
+    if env.common_step_counter % env.max_episode_length == 0:
+        if reward > reward_term.weight * percentage_threshold:
+            delta_velocity = torch.tensor([-velocity_step, velocity_step], device=env.device)
+            for axis, max_range in max_push_velocity_ranges.items():
+                velocity_range[axis] = torch.clamp(
+                    torch.tensor(velocity_range[axis], device=env.device) + delta_velocity,
+                    max_range[0],
+                    max_range[1],
+                ).tolist()
+
+    return torch.tensor(velocity_range["x"][1], device=env.device)

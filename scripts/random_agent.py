@@ -19,7 +19,7 @@ parser = argparse.ArgumentParser(description="Random agent for Isaac Lab environ
 parser.add_argument(
     "--disable_fabric", action="store_true", default=False, help="Disable fabric and use USD I/O operations."
 )
-parser.add_argument("--num_envs", type=int, default=None, help="Number of environments to simulate.")
+parser.add_argument("--num_envs", type=int, default=1, help="Number of environments to simulate.")
 parser.add_argument("--task", type=str, default=None, help="Name of the task.")
 # append AppLauncher cli args
 AppLauncher.add_app_launcher_args(parser)
@@ -35,7 +35,60 @@ simulation_app = app_launcher.app
 import gymnasium as gym
 import locolab.tasks  # noqa: F401
 import torch
+
 from isaaclab_tasks.utils import parse_env_cfg
+
+
+def print_joint_order(env):
+    """Print the joint order in observation and action spaces."""
+    # Get the scene and robot asset
+    scene = env.unwrapped.scene
+    robot = scene["robot"]
+
+    # Get joint names from the robot
+    joint_names = robot.joint_names
+
+    # Try to extract joint names from observation and action configs
+    env_cfg = env.unwrapped.cfg
+
+    print("\n" + "=" * 80)
+    print("JOINT ORDER INFORMATION")
+    print("=" * 80)
+
+    # Print all joint names
+    print(f"\n[Joint Names] Total: {len(joint_names)} joints")
+    for idx, name in enumerate(joint_names):
+        print(f"  {idx:2d}: {name}")
+
+    # Print observation joint_pos order
+    if hasattr(env_cfg, "observations") and hasattr(env_cfg.observations, "policy"):
+        policy_obs = env_cfg.observations.policy
+        if hasattr(policy_obs, "joint_pos"):
+            print("\n[Observation - joint_pos] Indices and names:")
+            joint_pos_cfg = policy_obs.joint_pos
+            if hasattr(joint_pos_cfg, "params"):
+                scene_cfg = joint_pos_cfg.params.get("asset_cfg")
+                if scene_cfg and hasattr(scene_cfg, "joint_names"):
+                    for idx, name in enumerate(scene_cfg.joint_names):
+                        print(f"  {idx:2d}: {name}")
+            else:
+                print("  [All movable joints in order]")
+                for idx, name in enumerate(joint_names):
+                    print(f"  {idx:2d}: {name}")
+
+    # Print action order
+    if hasattr(env_cfg, "actions") and hasattr(env_cfg.actions, "joint_pos"):
+        print("\n[Action - joint_pos] Indices and names:")
+        action_cfg = env_cfg.actions.joint_pos
+        if hasattr(action_cfg, "joint_names"):
+            for idx, name in enumerate(action_cfg.joint_names):
+                print(f"  {idx:2d}: {name}")
+        else:
+            print("  [All movable joints in order]")
+            for idx, name in enumerate(joint_names):
+                print(f"  {idx:2d}: {name}")
+
+    print("\n" + "=" * 80)
 
 
 def main():
@@ -47,11 +100,18 @@ def main():
     if hasattr(env_cfg.curriculum, "terrain_levels"):
         env_cfg.curriculum.terrain_levels.params["log_by_terrain_type"] = False
         env_cfg.scene.terrain.max_init_terrain_level = None
+        env_cfg.scene.terrain.debug_vis = True
+        num_terrains = len(env_cfg.scene.terrain.terrain_generator.sub_terrains)
+        env_cfg.scene.terrain.terrain_generator.num_cols = num_terrains
+        equal_proportion = 1.0 / num_terrains
+        for terrain_cfg in env_cfg.scene.terrain.terrain_generator.sub_terrains.values():
+            terrain_cfg.proportion = equal_proportion
 
     # create environment
     env = gym.make(args_cli.task, cfg=env_cfg)
 
     # print info (this is vectorized environment)
+    print_joint_order(env)
     print(f"[INFO]: Gym observation space: {env.observation_space}")
     print(f"[INFO]: Gym action space: {env.action_space}")
     # reset environment

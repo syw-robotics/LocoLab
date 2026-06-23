@@ -8,7 +8,7 @@
 # REMOTE_SERVER_IP="10.10.10.10"
 # REMOTE_SERVER_USER="username"
 # REMOTE_SERVER_PORT="22"
-# REMOTE_LOG_ROOT_PATH="/home/$REMOTE_SERVER_USER/locolab/logs/rsl_rl/"
+# REMOTE_LOG_ROOT_PATH="/home/$REMOTE_SERVER_USER/locolab/logs/z_rl/"
 
 # Variables as script parameters
 REMOTE_LOG_TASK="go2_flat"
@@ -18,7 +18,7 @@ ONLY_CHECKPOINT=false
 CONFIG_FILE_NAME=".locolab_env"
 
 # Variables do not change
-LOCAL_LOG_ROOT_PATH="$(cd "$(dirname "$0")"/.. && pwd)/logs/rsl_rl"
+LOCAL_LOG_ROOT_PATH="$(cd "$(dirname "$0")"/.. && pwd)/logs/z_rl"
 
 # Color output
 RED='\033[0;31m'
@@ -37,7 +37,7 @@ show_help() {
     echo "  -s, --server SERVER        Server address (example: 10.10.10.10)"
     echo "  -u, --user USER            Remote username (example: username)"
     echo "  -P, --port PORT            SSH port (example: 22)"
-    echo "  -p, --path LOG_ROOT_PATH   Remote log root path (example: /home/username/locolab/logs/rsl_rl/)"
+    echo "  -p, --path LOG_ROOT_PATH   Remote log root path (example: /home/username/locolab/logs/z_rl/)"
     echo "  -c, --checkpoint CHECKPOINT_NAME     Specify checkpoint name (default: $REMOTE_LOG_CHECKPOINT)"
     echo "  -t, --task TASK_NAME       Specify task name (default: $REMOTE_LOG_TASK)"
     echo "  -r, --run RUN_NAME         Specify run name (default: $REMOTE_LOG_RUN)"

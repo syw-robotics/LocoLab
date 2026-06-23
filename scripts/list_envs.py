@@ -43,7 +43,6 @@ def _walk_packages(
         m[p] = True  # noqa: R503
 
     for info in pkgutil.iter_modules(path, prefix):
-
         if any(pattern in info.name for pattern in SKIP_MODULE_PATTERNS):
             continue
 

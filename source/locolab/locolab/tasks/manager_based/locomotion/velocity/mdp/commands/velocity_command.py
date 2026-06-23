@@ -12,8 +12,9 @@ import logging
 from collections.abc import Sequence
 from typing import TYPE_CHECKING
 
-import isaaclab.utils.math as math_utils
 import torch
+
+import isaaclab.utils.math as math_utils
 from isaaclab.assets import Articulation
 from isaaclab.managers import CommandTerm
 from isaaclab.markers import VisualizationMarkers
@@ -86,7 +87,7 @@ class UniformVelocityCommand(CommandTerm):
         self.is_heading_env = torch.zeros(self.num_envs, dtype=torch.bool, device=self.device)
         self.is_only_lin_vel_x_env = torch.zeros_like(self.is_heading_env)
         # commands are set to zero if the velocity xy is below the threshold
-        self.velocity_threshold = self.cfg.velocity_threshold
+        self.zero_velocity_threshold = self.cfg.zero_velocity_threshold
         # -- metrics
         self.metrics["error_vel_xy"] = torch.zeros(self.num_envs, device=self.device)
         self.metrics["error_vel_yaw"] = torch.zeros(self.num_envs, device=self.device)
@@ -100,8 +101,8 @@ class UniformVelocityCommand(CommandTerm):
         if self.cfg.heading_command:
             msg += f"\tHeading probability: {self.cfg.rel_heading_envs}\n"
         msg += f"\tOnly lin_vel_x probability: {self.cfg.rel_only_lin_vel_x_envs}\n"
-        if self.velocity_threshold is not None:
-            msg += f"\tVelocity threshold: {self.velocity_threshold}\n"
+        if self.zero_velocity_threshold is not None:
+            msg += f"\tVelocity threshold: {self.zero_velocity_threshold}\n"
         return msg
 
     """
@@ -150,7 +151,7 @@ class UniformVelocityCommand(CommandTerm):
 
         # set small commands to zero
         self.vel_command_b[env_ids, :2] *= (
-            torch.norm(self.vel_command_b[env_ids, :2], dim=1) > self.cfg.velocity_threshold
+            torch.norm(self.vel_command_b[env_ids, :2], dim=1) > self.cfg.zero_velocity_threshold
         ).unsqueeze(1)
 
         # set y and yaw vel to zero for only_x_envs
@@ -202,7 +203,7 @@ class UniformVelocityCommand(CommandTerm):
         # get marker location
         # -- base state
         base_pos_w = self.robot.data.root_pos_w.clone()
-        base_pos_w[:, 2] += 0.5
+        base_pos_w[:, 2] += self.cfg.vel_visualizer_offset_z
         # -- resolve the scales and quaternions
         vel_des_arrow_scale, vel_des_arrow_quat = self._resolve_xy_velocity_to_arrow(self.command[:, :2])
         vel_arrow_scale, vel_arrow_quat = self._resolve_xy_velocity_to_arrow(self.robot.data.root_lin_vel_b[:, :2])

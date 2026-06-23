@@ -1,4 +1,4 @@
-<h2 align="center"> LocoLab: Starter Environment Suite for Locomotion Task Training and Evaluation</h2>
+<h2 align="center"> LocoLab</h2>
 
 <div align="center">
 
@@ -7,10 +7,8 @@
 
 
 <!-- [![IsaacSim](https://img.shields.io/badge/IsaacSim-5.1.0-silver.svg)](https://docs.omniverse.nvidia.com/isaacsim/latest/overview.html) -->
-[![Isaac Lab](https://img.shields.io/badge/IsaacLab-2.3.1-brightgreen?logo=nvidia&logoColor=white)](https://isaac-sim.github.io/IsaacLab)
-[![RSL RL](https://img.shields.io/badge/RSL_RL-3.0.1-silver?logo=pytorch&logoColor=white)](https://isaac-sim.github.io/IsaacLab)
-[![Python](https://img.shields.io/badge/python-3.11-blue?logo=python&logoColor=white)](https://docs.python.org/3/whatsnew/3.11.html)
-[![pre-commit](https://img.shields.io/badge/pre--commit-enabled-orange?logo=pre-commit&logoColor=white)](https://pre-commit.com/)
+[![Isaac Lab](https://img.shields.io/badge/IsaacLab-2.3.2-brightgreen?logo=nvidia&logoColor=white)](https://isaac-sim.github.io/IsaacLab)
+[![Z RL](https://img.shields.io/badge/Z_RL-Flexable_RL_Lib-orange?logo=python&logoColor=white)](https://docs.python.org/3/whatsnew/3.11.html)
 
 <!-- [![Linux platform](https://img.shields.io/badge/platform-linux--64-orange.svg)](https://releases.ubuntu.com/22.04/)
 [![Windows platform](https://img.shields.io/badge/platform-windows--64-orange.svg)](https://www.microsoft.com/en-us/) -->
@@ -19,22 +17,27 @@
 
 </div>
 
-## Overview
+## 🎯 Overview
+To develop high-performance locomotion algorithms, a well-configured and stable RL environment is essential.
 
-This codebase serves as a starter **manager based rl** environment for building locomotion projects on Isaac Lab.
+Existing locomotion env projects are fragmented, lacking expandability, and oftenly do not guarantee robust sim2real transfer.
+
+We introduce **LocoLab**, a RL locomotion **env benchmark** with sim2real robustness guarantees. It enables researchers to focus on algorithm iterations instead of tedious environment setup.
+
 
 **Key Features:**
 
-- `Flexibility`: Easy to read, modifiy, reuse existing modules, and adapt to new tasks
-- `Faster Rollout speed`: Collisions of robot models are simplified, since isaacsim runs collision detection on cpu.
-- `Experiment Friendly`: Functions as adding terrain levels logging per terrain types help to experiment and debug.
+- `Flexibility`: ManagerBased Rl env, easy to read, modify, and adapt to new tasks
+- `Faster Rollout speed`: Collisions of robot models are properly simplified.
+- `Experiment Friendly`: Functions like adding terrain levels logging per terrain types help to experiment and debug.
 
 **Tested and deployable tasks are:**
+- Velocity-Flat-G1
 - Velocity-Flat-Go2
 - Velocity-Rough-Go2
 
 
-## Installation
+## 📦 Installation
 
 - Install Isaac Lab by following the [installation guide](https://isaac-sim.github.io/IsaacLab/main/source/setup/installation/index.html).
   We recommend using the conda or uv installation as it simplifies calling Python scripts from the terminal.
@@ -51,14 +54,36 @@ This codebase serves as a starter **manager based rl** environment for building 
     python -m pip install -e source/locolab
     ```
 
-## Usage
+- Install `Z RL`, which is built on `RSL-RL` but makes it more flexable for developing.
+    ```bash
+    git clone https://github.com/syw-robotics/z_rl.git
+    cd z_rl
+    python -m pip install -e .
+    ```
+
+## 🚀 Usage
+- **Training:**
+
+    ```bash
+    python scripts/z_rl/train.py --task=<TASK_NAME>
+    ```
+
+- **Playing:**
+    ```bash
+    python scripts/z_rl/train.py --task=<TASK_NAME>
+    ```
+
+<!-- - **Deployment:** -->
+<!--  -->
+<!--     For sim2im and sim2real deployment, see [go2_isaaclab_deploy](https://github.com/syw-robotics/go2_isaaclab_deploy) -->
+
 - **Helpful scripts:**
 
-    - Listing the available tasks:
-
-        ```bash
-        python scripts/list_envs.py
-        ```
+    <!-- - Listing the available tasks: -->
+    <!--  -->
+    <!--     ```bash -->
+    <!--     python scripts/list_envs.py -->
+    <!--     ``` -->
 
     - Running a task with a random agent for testing:
 
@@ -66,27 +91,13 @@ This codebase serves as a starter **manager based rl** environment for building 
         python scripts/random_agent.py --task=<TASK_NAME>
         ```
 
-    - Fetch a trainning logging from remote server:
+    - Fetch a training logging from remote server:
         ```bash
         ./scripts/sync_logs.sh --help  # check this script for usage
         ```
 
-- **Training:**
 
-    ```bash
-    python scripts/rsl_rl/train.py --task=<TASK_NAME>
-    ```
-
-- **Playing:**
-    ```bash
-    python scripts/rsl_rl/train.py --task=<TASK_NAME>
-    ```
-
-- **Deployment:**
-
-    For sim2im and sim2real deployment, see [go2_isaaclab_deploy](https://github.com/syw-robotics/go2_isaaclab_deploy)
-
-## Task Organization
+## 📂 Task Organization
 
 The tasks are organized in the following hierarchy:
 
@@ -98,7 +109,7 @@ tasks
 │   │   │   ├── config
 │   │   │   │   ├── unitree_go2
 │   │   │   │   │   ├── agents
-│   │   │   │   │   │   ├── rsl_rl_ppo_cfg.py
+│   │   │   │   │   │   ├── z_rl_ppo_cfg.py
 │   │   │   │   │   │   └── ...
 │   │   │   │   │   ├── mdp_cfg (mdp configurations)
 │   │   │   │   │   ├── flat_env_cfg.py
@@ -111,6 +122,12 @@ tasks
 ```
 
 Different types of tasks are organized in different sub-directories, such that tasks are clearly separated and mdp components are easily reusable.
+
+## 📝 TODO
+- [ ] **G1**: Add Velocity-Flat-AMP-G1 and Velocity-Rough-G1
+- [ ] **B2**: Add Velocity-Flat-B2 and Velocity-Rough-B2
+- [ ] **Go2**: Debug and refine Velocity-Rough-Go2-ZRL-BarlowTwins and Velocity-Rough-Go2-ZRL-DreamWaQ
+- [ ] **Symmetry Config Definition**: Alongside with which in Z RL
 
 <!-- ### Set up IDE (Optional)
 
@@ -140,20 +157,20 @@ To enable your extension, follow these steps:
     - Find your extension under the `Third Party` category.
     - Toggle it to enable your extension. -->
 
-## Code formatting
-
-We have a pre-commit template to automatically format your code.
-To install pre-commit:
-
-```bash
-pip install pre-commit
-```
-
-Then you can run pre-commit with:
-
-```bash
-pre-commit run --all-files
-```
+<!-- ## Code formatting -->
+<!--  -->
+<!-- We have a pre-commit template to automatically format your code. -->
+<!-- To install pre-commit: -->
+<!--  -->
+<!-- ```bash -->
+<!-- pip install pre-commit -->
+<!-- ``` -->
+<!--  -->
+<!-- Then you can run pre-commit with: -->
+<!--  -->
+<!-- ```bash -->
+<!-- pre-commit run --all-files -->
+<!-- ``` -->
 
 <!-- ### Troubleshooting -->
 <!--  -->

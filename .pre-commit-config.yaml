@@ -9,64 +9,68 @@
 # Modifications are licensed under BSD-3-Clause.
 
 repos:
-  - repo: https://github.com/python/black
-    rev: 23.10.1
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.14.10
     hooks:
-      - id: black
-        args: ["--line-length", "120", "--preview"]
-  - repo: https://github.com/pycqa/flake8
-    rev: 6.1.0
-    hooks:
-      - id: flake8
-        additional_dependencies: [flake8-simplify, flake8-return]
+      # Run the linter
+      - id: ruff
+        args: ["--fix"]
+      # Run the formatter
+      - id: ruff-format
   - repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v5.0.0
+    rev: v6.0.0
     hooks:
       - id: trailing-whitespace
       - id: check-symlinks
       - id: destroyed-symlinks
+      - id: check-added-large-files
+        args: ["--maxkb=2000"]  # restrict files more than 2 MB. Should use git-lfs instead.
       - id: check-yaml
       - id: check-merge-conflict
       - id: check-case-conflict
-      # - id: check-executables-have-shebangs
+      - id: check-executables-have-shebangs
       - id: check-toml
       - id: end-of-file-fixer
       - id: check-shebang-scripts-are-executable
       - id: detect-private-key
       - id: debug-statements
-  - repo: https://github.com/pycqa/isort
-    rev: 5.12.0
+  - repo: https://github.com/codespell-project/codespell
+    rev: v2.4.1
     hooks:
-      - id: isort
-        name: isort (python)
-        args: ["--profile", "black", "--filter-files"]
-  - repo: https://github.com/asottile/pyupgrade
-    rev: v3.15.0
-    hooks:
-      - id: pyupgrade
-        args: ["--py37-plus"]
-  # - repo: https://github.com/codespell-project/codespell
-  #   rev: v2.2.6
+      - id: codespell
+        additional_dependencies:
+        - tomli
+        exclude: "CONTRIBUTORS.md|docs/source/setup/walkthrough/concepts_env_design.rst"
+  # FIXME: Figure out why this is getting stuck under VPN.
+  # - repo: https://github.com/RobertCraigie/pyright-python
+  #   rev: v1.1.315
   #   hooks:
-  #     - id: codespell
-  #       additional_dependencies:
-  #       - tomli
-  #       # args: [-L lamda]
+  #   - id: pyright
+  - repo: https://github.com/Lucas-C/pre-commit-hooks
+    rev: v1.5.5
+    hooks:
+      - id: insert-license
+        files: \.(py|ya?ml)$
+        args:
+          # - --remove-header    # Remove existing license headers. Useful when updating license.
+          - --license-filepath
+          - .github/LICENSE_HEADER.txt
+          - --use-current-year
+        exclude: "source/isaaclab_mimic/|scripts/imitation_learning/isaaclab_mimic/"
+  # Apache 2.0 license for mimic files
+  - repo: https://github.com/Lucas-C/pre-commit-hooks
+    rev: v1.5.5
+    hooks:
+      - id: insert-license
+        files: ^(source/isaaclab_mimic|scripts/imitation_learning/isaaclab_mimic)/.*\.py$
+        args:
+          # - --remove-header    # Remove existing license headers. Useful when updating license.
+          - --license-filepath
+          - .github/LICENSE_HEADER_MIMIC.txt
+          - --use-current-year
   - repo: https://github.com/pre-commit/pygrep-hooks
     rev: v1.10.0
     hooks:
       - id: rst-backticks
       - id: rst-directive-colons
       - id: rst-inline-touching-normal
-  - repo: https://github.com/Lucas-C/pre-commit-hooks
-    rev: v1.5.1
-    hooks:
-      - id: insert-license
-        files: \.(py|ya?ml)$   # This regex includes both .py and .yml files
-        args:
-          # - --remove-header    # Remove existing license headers. Useful when updating license.
-          - --license-filepath
-          - .github/LICENSE_HEADER.txt
-          - --use-current-year
-
-exclude: ^(source/locolab/locolab/third_party/|source/locolab/data/|.vscode/|.github/)

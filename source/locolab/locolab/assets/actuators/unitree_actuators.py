@@ -11,6 +11,7 @@ from __future__ import annotations
 from dataclasses import MISSING
 
 import torch
+
 from isaaclab.actuators import DelayedPDActuator, DelayedPDActuatorCfg
 from isaaclab.utils import configclass
 from isaaclab.utils.types import ArticulationActions
@@ -128,7 +129,7 @@ class UnitreeActuatorCfg(DelayedPDActuatorCfg):
     min_delay: int = 0
     """Minimum number of physics time-steps with which the actuator command may be delayed. Defaults to 0."""
 
-    max_delay: int = 5
+    max_delay: int = 3
     """Maximum number of physics time-steps with which the actuator command may be delayed. Defaults to 0."""
 
 

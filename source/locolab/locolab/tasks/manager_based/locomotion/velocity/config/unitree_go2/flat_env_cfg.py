@@ -12,6 +12,8 @@ from isaaclab.envs import ManagerBasedRLEnvCfg
 from isaaclab.scene import InteractiveSceneCfg
 from isaaclab.sensors import ContactSensorCfg
 from isaaclab.utils import configclass
+
+from locolab.utils.scene import flat_terrain_visual_material_cfg, blue_sky_light_cfg
 from locolab.utils.terrains import TerrainImporterCfg
 
 #  from isaaclab.utils.assets import ISAAC_NUCLEUS_DIR
@@ -62,11 +64,7 @@ class Go2FlatSceneCfg(InteractiveSceneCfg):
             static_friction=1.0,
             dynamic_friction=1.0,
         ),
-        visual_material=sim_utils.PreviewSurfaceCfg(
-            diffuse_color=(1.0, 1.0, 1.0),
-            metallic=0.0,
-            roughness=0.8,
-        ),
+        visual_material=flat_terrain_visual_material_cfg(),
         debug_vis=False,
     )
 
@@ -79,15 +77,7 @@ class Go2FlatSceneCfg(InteractiveSceneCfg):
     )
 
     # =====  lights  =====
-    sky_light: AssetBaseCfg = AssetBaseCfg(
-        prim_path="/World/skyLight",
-        #  spawn=sim_utils.DomeLightCfg(
-        #      intensity=750.0,
-        #      texture_file=f"{ISAAC_NUCLEUS_DIR}/Materials/Textures/Skies/PolyHaven/kloofendal_43d_clear_puresky_4k.hdr",
-        #  ),
-        #  spawn=sim_utils.DistantLightCfg(color=(0.75, 0.75, 0.75), intensity=3000.0),
-        spawn=sim_utils.DomeLightCfg(color=(0.75, 0.75, 0.75), intensity=3000.0),
-    )
+    sky_light: AssetBaseCfg = blue_sky_light_cfg()
 
 
 ##
@@ -120,8 +110,7 @@ class Go2FlatEnvCfg(ManagerBasedRLEnvCfg):
         self.sim.physx.gpu_max_rigid_patch_count = 10 * 2**15
         # update sensor update periods
         # we tick all the sensors based on the smallest update period (physics update period)
-        if self.scene.contact_forces is not None:
-            self.scene.contact_forces.update_period = self.sim.dt
+        self.scene.contact_forces.update_period = self.sim.dt
 
 
 @configclass
