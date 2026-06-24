@@ -8,7 +8,7 @@
 
 <!-- [![IsaacSim](https://img.shields.io/badge/IsaacSim-5.1.0-silver.svg)](https://docs.omniverse.nvidia.com/isaacsim/latest/overview.html) -->
 [![Isaac Lab](https://img.shields.io/badge/IsaacLab-2.3.2-brightgreen?logo=nvidia&logoColor=white)](https://isaac-sim.github.io/IsaacLab)
-[![Z RL](https://img.shields.io/badge/Z_RL-Flexable_RL_Lib-orange?logo=python&logoColor=white)](https://docs.python.org/3/whatsnew/3.11.html)
+[![Z RL](https://img.shields.io/badge/Z_RL-Flexable_RL_Lib-orange?logo=python&logoColor=white)](https://github.com/syw-robotics/z_rl)
 
 <!-- [![Linux platform](https://img.shields.io/badge/platform-linux--64-orange.svg)](https://releases.ubuntu.com/22.04/)
 [![Windows platform](https://img.shields.io/badge/platform-windows--64-orange.svg)](https://www.microsoft.com/en-us/) -->
@@ -54,7 +54,7 @@ We introduce **LocoLab**, a RL locomotion **env benchmark** with sim2real robust
     python -m pip install -e source/locolab
     ```
 
-- Install `Z RL`, which is built on `RSL-RL` but makes it more flexable for developing.
+- Install [`Z RL`](https://github.com/syw-robotics/z_rl.git), which is built on [`RSL-RL`](https://github.com/leggedrobotics/rsl_rl) but more flexible for developing algorithms.
     ```bash
     git clone https://github.com/syw-robotics/z_rl.git
     cd z_rl
