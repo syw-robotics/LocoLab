@@ -45,9 +45,7 @@ class Go2RoughObservationsCfg:
     policy: PropObsCfg = PropObsCfg()
     critic: PrivObsCfg = PrivObsCfg()
 
-    #  policy.history_length = 6
     policy.history_length = 5
-    #  policy.concatenate_terms = False
 
 
 ##
@@ -193,3 +191,16 @@ class Go2RoughEnvCfg_PLAY(Go2RoughEnvCfg):
         self.scene.height_scanner.debug_vis = True
 
         self.curriculum.terrain_levels.params["log_by_terrain_type"] = False
+
+
+@configclass
+class Go2RoughExtraObsHistotyEnvCfg(Go2RoughEnvCfg):
+  def __post_init__(self):
+      super().__post_init__()
+      self.observations.policy.history_length += 1
+
+@configclass
+class Go2RoughExtraObsHistotyEnvCfg_PLAY(Go2RoughEnvCfg_PLAY):
+  def __post_init__(self):
+      super().__post_init__()
+      self.observations.policy.history_length += 1

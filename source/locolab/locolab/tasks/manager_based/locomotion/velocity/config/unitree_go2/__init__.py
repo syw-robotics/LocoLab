@@ -67,7 +67,7 @@ register_manager_based_rl_env(
 register_manager_based_rl_env(
     task_id="Velocity-Rough-Go2-ZRL-DreamWaQ",
     env_cfg_module=f"{__name__}.rough_env_cfg",
-    env_cfg_name="Go2RoughEnvCfg",
+    env_cfg_name="Go2RoughExtraObsHistotyEnvCfg",
     agent_cfg_entry_points={
         "z_rl_cfg_entry_point": f"{agents.__name__}.z_rl_dreamwaq_ppo_cfg:Go2RoughDreamWaQPPORunnerCfg",
     },
@@ -76,7 +76,7 @@ register_manager_based_rl_env(
 register_manager_based_rl_env(
     task_id="Velocity-Rough-Go2-ZRL-BarlowTwins",
     env_cfg_module=f"{__name__}.rough_env_cfg",
-    env_cfg_name="Go2RoughEnvCfg",
+    env_cfg_name="Go2RoughExtraObsHistotyEnvCfg",
     agent_cfg_entry_points={
         "z_rl_cfg_entry_point": f"{agents.__name__}.z_rl_barlowtwins_ppo_cfg:Go2RoughBarlowTwinsPPORunnerCfg",
     },

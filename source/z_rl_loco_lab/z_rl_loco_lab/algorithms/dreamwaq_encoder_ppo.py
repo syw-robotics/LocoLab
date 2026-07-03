@@ -58,7 +58,7 @@ class DreamWaQLossSpec(PPOLossSpec):
         actor_latent_adapter = actor.latent_adapter
         if actor_latent_adapter.reconstruction_dim != self.recon_target_selector.dim:
             raise ValueError(
-                "`dreamwaq_decoder_output_dim` must match the selected reconstruction target dim, got "
+                "`vae_decoder_output_dim` must match the selected reconstruction target dim, got "
                 f"decoder_output_dim={actor_latent_adapter.reconstruction_dim} and "
                 f"target_dim={self.recon_target_selector.dim}."
             )
@@ -83,7 +83,7 @@ class DreamWaQLossSpec(PPOLossSpec):
         lin_vel_est_loss = F.mse_loss(lin_vel_est, lin_vel_target)
 
         recon_target = self.recon_target_selector.select(minibatch.observations[self.target_obs_group_name])
-        vae_recon_loss, vae_kl_loss = actor_latent_adapter.vae.compute_vae_loss(
+        vae_recon_loss, vae_kl_loss = actor_latent_adapter.dreamwaq_vae.compute_vae_loss(
             x=context["reconstruction"],
             recon_target=recon_target,
             mu=context["reconstruction_mu"],
@@ -136,7 +136,7 @@ class DreamWaQPPO(ComposablePPO):
         )
         recon_target_obs_term_names = algorithm_cfg.pop(
             "recon_target_obs_term_names",
-            ["base_lin_vel", "base_ang_vel", "projected_gravity", "joint_pos", "joint_vel"],
+            ["base_ang_vel", "projected_gravity", "joint_pos", "joint_vel"],
         )
 
         return DreamWaQLossSpec(

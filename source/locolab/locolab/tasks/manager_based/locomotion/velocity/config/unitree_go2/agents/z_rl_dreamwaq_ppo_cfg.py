@@ -19,22 +19,25 @@ class Go2RoughDreamWaQPPORunnerCfg(Go2RoughPPOBaseRunnerCfg):
     experiment_name = "go2_rough_dreamwaq"
     obs_group_concat_mode = "history_major"
     actor = DreamWaQEncoderMLPModelCfg(
-        hidden_dims=[256, 128],
+        hidden_dims=[512, 256, 128],
         activation="elu",
         obs_normalization=False,
         distribution_cfg=ZRlMLPModelCfg.GaussianDistributionCfg(init_std=1.0),
-        latent_dim=16,
-        dreamwaq_encoder_hidden_dims=[128, 64],
-        dreamwaq_decoder_hidden_dims=[32,],
-        dreamwaq_decoder_output_dim=33,
-        dreamwaq_vae_activation="elu",
+        vae_latent_dim=32,
+        vae_encoder_hidden_dims=[128, 64],
+        vae_decoder_hidden_dims=[64, 32],
+        #  vae_decoder_output_dim=30,
+        vae_decoder_output_dim=42,
+        vae_activation="elu",
         lin_vel_dim=3,
         vae_beta=1.0,
+        init_weights=0.01,  # Use orthogonal init, which helps symmetry learning
     )
     critic = ZRlMLPModelCfg(
         hidden_dims=[512, 256, 128],
         activation="elu",
         obs_normalization=False,
+        init_weights=0.01,  # Use orthogonal init, which helps symmetry learning
     )
     algorithm = DreamWaQPpoAlgorithmCfg(
         num_learning_epochs=5,
@@ -53,6 +56,6 @@ class Go2RoughDreamWaQPPORunnerCfg(Go2RoughPPOBaseRunnerCfg):
         lin_vel_est_loss_coef=1.0,
         vae_loss_coef=1.0,
         target_obs_group_name="critic",
-        recon_target_obs_term_names=["base_lin_vel", "base_ang_vel", "projected_gravity", "joint_pos", "joint_vel"],
+        recon_target_obs_term_names=["base_ang_vel", "projected_gravity", "joint_pos", "joint_vel", "actions"],
         lin_vel_target_obs_term_names=["base_lin_vel"],
     )

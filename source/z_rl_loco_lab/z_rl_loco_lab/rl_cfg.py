@@ -38,17 +38,17 @@ class DreamWaQPpoAlgorithmCfg(ZRlPpoAlgorithmCfg):
     lin_vel_est_loss_coef: float = 1.0
     vae_loss_coef: float = 1.0
     target_obs_group_name: str = "critic"
-    recon_target_obs_term_names: list[str] = ["base_lin_vel", "base_ang_vel", "projected_gravity", "joint_pos", "joint_vel"]
+    recon_target_obs_term_names: list[str] = ["base_ang_vel", "projected_gravity", "joint_pos", "joint_vel"]
     lin_vel_target_obs_term_names: list[str] = ["base_lin_vel"]
 
 
 @configclass
 class DreamWaQEncoderMLPModelCfg(ZRlMLPModelCfg):
     class_name: str = "z_rl_loco_lab.models.dreamwaq_model:DreamWaQEncoderMLPModel"
-    latent_dim: int = 16
-    dreamwaq_encoder_hidden_dims: list[int] = (128, 64)
-    dreamwaq_decoder_hidden_dims: list[int] = (32,)
-    dreamwaq_decoder_output_dim: int = MISSING
-    dreamwaq_vae_activation: str = "elu"
+    vae_latent_dim: int = 16
+    vae_encoder_hidden_dims: list[int] = (128, 64)
+    vae_decoder_hidden_dims: list[int] = (32,)
+    vae_decoder_output_dim: int = MISSING
+    vae_activation: str = "elu"
     lin_vel_dim: int = 3
     vae_beta: float = 1.0

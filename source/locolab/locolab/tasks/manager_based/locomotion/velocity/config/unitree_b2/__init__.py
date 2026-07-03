@@ -64,20 +64,20 @@ register_manager_based_rl_env(
     },
 )
 
-register_manager_based_rl_env(
-    task_id="Velocity-Rough-B2-ZRL-DreamWaQ",
-    env_cfg_module=f"{__name__}.rough_env_cfg",
-    env_cfg_name="B2RoughEnvCfg",
-    agent_cfg_entry_points={
-        "z_rl_cfg_entry_point": f"{agents.__name__}.z_rl_dreamwaq_ppo_cfg:B2RoughDreamWaQPPORunnerCfg",
-    },
-)
-
-register_manager_based_rl_env(
-    task_id="Velocity-Rough-B2-ZRL-BarlowTwins",
-    env_cfg_module=f"{__name__}.rough_env_cfg",
-    env_cfg_name="B2RoughEnvCfg",
-    agent_cfg_entry_points={
-        "z_rl_cfg_entry_point": f"{agents.__name__}.z_rl_barlowtwins_ppo_cfg:B2RoughBarlowTwinsPPORunnerCfg",
-    },
-)
+#  register_manager_based_rl_env(
+#      task_id="Velocity-Rough-B2-ZRL-DreamWaQ",
+#      env_cfg_module=f"{__name__}.rough_env_cfg",
+#      env_cfg_name="B2RoughEnvCfg",
+#      agent_cfg_entry_points={
+#          "z_rl_cfg_entry_point": f"{agents.__name__}.z_rl_dreamwaq_ppo_cfg:B2RoughDreamWaQPPORunnerCfg",
+#      },
+#  )
+#
+#  register_manager_based_rl_env(
+#      task_id="Velocity-Rough-B2-ZRL-BarlowTwins",
+#      env_cfg_module=f"{__name__}.rough_env_cfg",
+#      env_cfg_name="B2RoughEnvCfg",
+#      agent_cfg_entry_points={
+#          "z_rl_cfg_entry_point": f"{agents.__name__}.z_rl_barlowtwins_ppo_cfg:B2RoughBarlowTwinsPPORunnerCfg",
+#      },
+#  )

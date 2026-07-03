@@ -10,11 +10,11 @@ from dataclasses import dataclass
 
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 from tensordict import TensorDict
 
 from z_rl.models.composition import ComposableModel, LatentSpec
-from z_rl.modules import HiddenState, VAE
+from z_rl.modules import HiddenState
+from z_rl_loco_lab.modules import DreamWaqVAE
 from z_rl.utils import ObsSelector, resolve_obs_temporal_selector, unpad_trajectories
 
 
@@ -22,11 +22,11 @@ from z_rl.utils import ObsSelector, resolve_obs_temporal_selector, unpad_traject
 class DreamWaQEncoderLatentSpec(LatentSpec):
     """Latent spec for a DreamWaQ-style history encoder with VAE and velocity auxiliary losses."""
 
-    latent_dim: int = 128
-    dreamwaq_encoder_hidden_dims: tuple[int, ...] | list[int] = (256,)
-    dreamwaq_decoder_hidden_dims: tuple[int, ...] | list[int] = (256,)
-    dreamwaq_decoder_output_dim: int | None = None
-    dreamwaq_vae_activation: str = "elu"
+    vae_latent_dim: int = 32
+    vae_encoder_hidden_dims: tuple[int, ...] | list[int] = (256,)
+    vae_decoder_hidden_dims: tuple[int, ...] | list[int] = (256,)
+    vae_decoder_output_dim: int | None = None
+    vae_activation: str = "elu"
     lin_vel_dim: int = 3
     vae_beta: float = 1.0
 
@@ -37,16 +37,16 @@ class DreamWaQEncoderLatentSpec(LatentSpec):
                 "`DreamWaQEncoderLatentSpec` requires exactly one active observation group named 'policy'. "
                 f"Got {getattr(model, 'obs_groups', None)}."
             )
-        if self.latent_dim <= 0:
-            raise ValueError(f"`latent_dim` must be positive, got {self.latent_dim}.")
+        if self.vae_latent_dim <= 0:
+            raise ValueError(f"`vae_latent_dim` must be positive, got {self.vae_latent_dim}.")
         if self.lin_vel_dim <= 0:
             raise ValueError(f"`lin_vel_dim` must be positive, got {self.lin_vel_dim}.")
         if self.vae_beta < 0.0:
             raise ValueError(f"`vae_beta` must be non-negative, got {self.vae_beta}.")
-        if self.dreamwaq_decoder_output_dim is not None and self.dreamwaq_decoder_output_dim <= 0:
+        if self.vae_decoder_output_dim is not None and self.vae_decoder_output_dim <= 0:
             raise ValueError(
-                "`dreamwaq_decoder_output_dim` must be positive when provided, "
-                f"got {self.dreamwaq_decoder_output_dim}."
+                "`vae_decoder_output_dim` must be positive when provided, "
+                f"got {self.vae_decoder_output_dim}."
             )
 
         # The encoder and decoder use shifted history windows.
@@ -66,22 +66,22 @@ class DreamWaQEncoderLatentSpec(LatentSpec):
 
     def build_latent_adapter(self, model: nn.Module) -> nn.Module:
         """Build the DreamWaQ VAE adapter."""
-        decoder_output_dim = self.dreamwaq_decoder_output_dim or self.exclude_last_obs_selector.dim
-        dreamwaq_vae = VAE(
+        dreamwaq_vae = DreamWaqVAE(
             input_dim=self.exclude_first_obs_selector.dim,
-            latent_dim=self.latent_dim,
-            decoder_output_dim=decoder_output_dim,
-            encoder_hidden_dims=self.dreamwaq_encoder_hidden_dims,
-            decoder_hidden_dims=self.dreamwaq_decoder_hidden_dims,
-            activation=self.dreamwaq_vae_activation,
+            latent_dim=self.vae_latent_dim,
+            extra_dim=self.lin_vel_dim,
+            decoder_input_dim=self.vae_latent_dim,
+            decoder_output_dim=self.vae_decoder_output_dim,
+            encoder_hidden_dims=self.vae_encoder_hidden_dims,
+            decoder_hidden_dims=self.vae_decoder_hidden_dims,
+            activation=self.vae_activation,
         )
-        lin_vel_est_head = nn.Linear(self.latent_dim, self.lin_vel_dim)
 
         return _DreamWaQEncoderLatentAdapter(
             obs_group="policy",
             obs_normalizer=model._build_obs_normalizer(model.obs_normalization),
-            vae=dreamwaq_vae,
-            lin_vel_est_head=lin_vel_est_head,
+            dreamwaq_vae=dreamwaq_vae,
+            lin_vel_dim=self.lin_vel_dim,
             exclude_first_obs_selector=self.exclude_first_obs_selector,
             exclude_last_obs_selector=self.exclude_last_obs_selector,
             last_obs_selector=self.last_obs_selector,
@@ -90,7 +90,7 @@ class DreamWaQEncoderLatentSpec(LatentSpec):
 
     def get_latent_dim(self, model: nn.Module) -> int:
         """Return the head input width: velocity estimate, sampled VAE latent, and last observation frame."""
-        return self.lin_vel_dim + self.latent_dim + self.last_obs_selector.dim
+        return self.lin_vel_dim + self.vae_latent_dim + self.last_obs_selector.dim
 
 
 class _DreamWaQEncoderLatentAdapter(nn.Module):
@@ -100,8 +100,8 @@ class _DreamWaQEncoderLatentAdapter(nn.Module):
         self,
         obs_group: str,
         obs_normalizer: nn.Module,
-        vae: VAE,
-        lin_vel_est_head: nn.Module,
+        dreamwaq_vae: DreamWaqVAE,
+        lin_vel_dim: int,
         exclude_first_obs_selector: ObsSelector,
         exclude_last_obs_selector: ObsSelector,
         last_obs_selector: ObsSelector,
@@ -110,14 +110,13 @@ class _DreamWaQEncoderLatentAdapter(nn.Module):
         super().__init__()
         self.obs_group = obs_group
         self.obs_normalizer = obs_normalizer
-        self.vae = vae
-        self.lin_vel_est_head = lin_vel_est_head
-        self.lin_vel_dim = lin_vel_est_head.out_features
+        self.dreamwaq_vae = dreamwaq_vae
+        self.lin_vel_dim = lin_vel_dim
         self.exclude_first_obs_selector = exclude_first_obs_selector
         self.exclude_last_obs_selector = exclude_last_obs_selector
         self.last_obs_selector = last_obs_selector
         self.vae_beta = vae_beta
-        self.reconstruction_dim = vae.decoder_output_dim
+        self.reconstruction_dim = dreamwaq_vae.decoder_output_dim
 
         self.lin_vel_est: torch.Tensor | None = None
         self.reconstruction: torch.Tensor | None = None
@@ -133,13 +132,14 @@ class _DreamWaQEncoderLatentAdapter(nn.Module):
         exclude_last_obs = self.exclude_last_obs_selector.select(x)
         last_obs = self.last_obs_selector.select(x)
 
-        mu, log_var = self.vae.encode(exclude_first_obs)
-        latent = self.vae.reparameterize(mu, log_var)
-        lin_vel_est = self.lin_vel_est_head(latent)
+        # Compute the rollout actor latent.
+        lin_vel_est, mu, log_var = self.dreamwaq_vae.encode(exclude_first_obs)
+        vae_latent = self.dreamwaq_vae.reparameterize(mu, log_var)
 
-        reconstruction_mu, reconstruction_log_var = self.vae.encode(exclude_last_obs)
-        reconstruction_latent = self.vae.reparameterize(reconstruction_mu, reconstruction_log_var)
-        reconstruction = self.vae.decode(reconstruction_latent)
+        # Compute the shifted reconstruction branch used by the auxiliary VAE loss.
+        _, reconstruction_mu, reconstruction_log_var = self.dreamwaq_vae.encode(exclude_last_obs)
+        reconstruction_latent = self.dreamwaq_vae.reparameterize(reconstruction_mu, reconstruction_log_var)
+        reconstruction = self.dreamwaq_vae.decode(reconstruction_latent)
 
         context = {
             "lin_vel_est": lin_vel_est,
@@ -147,7 +147,7 @@ class _DreamWaQEncoderLatentAdapter(nn.Module):
             "reconstruction_mu": reconstruction_mu,
             "reconstruction_log_var": reconstruction_log_var,
         }
-        return torch.cat([lin_vel_est, latent, last_obs], dim=-1), context
+        return torch.cat([lin_vel_est, vae_latent, last_obs], dim=-1), context
 
     def forward(self, obs: TensorDict) -> torch.Tensor:
         """Build the rollout latent without computing the reconstruction branch."""
@@ -155,11 +155,10 @@ class _DreamWaQEncoderLatentAdapter(nn.Module):
         exclude_first_obs = self.exclude_first_obs_selector.select(x)
         last_obs = self.last_obs_selector.select(x)
 
-        mu, log_var = self.vae.encode(exclude_first_obs)
-        latent = self.vae.reparameterize(mu, log_var)
-        lin_vel_est = self.lin_vel_est_head(latent)
+        lin_vel_est, mu, log_var = self.dreamwaq_vae.encode(exclude_first_obs)
+        vae_latent = self.dreamwaq_vae.reparameterize(mu, log_var)
 
-        return torch.cat([lin_vel_est, latent, last_obs], dim=-1)
+        return torch.cat([lin_vel_est, vae_latent, last_obs], dim=-1)
 
     def update_normalization(self, obs: TensorDict) -> None:
         """Update running normalization statistics for the full policy observation group."""
@@ -171,8 +170,7 @@ class _DreamWaQEncoderLatentAdapter(nn.Module):
         """Return a tensor-only adapter for ONNX export."""
         return _DreamWaQEncoderLatentAdapterExporter(
             obs_normalizer=self.obs_normalizer,
-            vae=self.vae,
-            lin_vel_est_head=self.lin_vel_est_head,
+            dreamwaq_vae=self.dreamwaq_vae,
             exclude_first_obs_selector=self.exclude_first_obs_selector,
             last_obs_selector=self.last_obs_selector,
         )
@@ -184,15 +182,13 @@ class _DreamWaQEncoderLatentAdapterExporter(nn.Module):
     def __init__(
         self,
         obs_normalizer: nn.Module,
-        vae: VAE,
-        lin_vel_est_head: nn.Module,
+        dreamwaq_vae: DreamWaqVAE,
         exclude_first_obs_selector: ObsSelector,
         last_obs_selector: ObsSelector,
     ) -> None:
         super().__init__()
         self.obs_normalizer = obs_normalizer
-        self.vae = vae
-        self.lin_vel_est_head = lin_vel_est_head
+        self.dreamwaq_vae = dreamwaq_vae
         self.exclude_first_obs_selector = exclude_first_obs_selector
         self.last_obs_selector = last_obs_selector
 
@@ -201,8 +197,7 @@ class _DreamWaQEncoderLatentAdapterExporter(nn.Module):
         x = self.obs_normalizer(x)
         exclude_first_obs = _select_for_export(self.exclude_first_obs_selector, x)
         last_obs = _select_for_export(self.last_obs_selector, x)
-        latent, _ = self.vae.encode(exclude_first_obs)
-        lin_vel_est = self.lin_vel_est_head(latent)
+        lin_vel_est, latent, _ = self.dreamwaq_vae.encode(exclude_first_obs)
         return torch.cat([lin_vel_est, latent, last_obs], dim=-1)
 
 
@@ -227,11 +222,11 @@ class DreamWaQEncoderMLPModel(ComposableModel):
         obs_normalization: bool = False,
         distribution_cfg: dict | None = None,
         obs_group_time_slice_map: dict[str, dict[str, ObsSelector]] | None = None,
-        latent_dim: int = 128,
-        dreamwaq_encoder_hidden_dims: tuple[int, ...] | list[int] = (256,),
-        dreamwaq_decoder_hidden_dims: tuple[int, ...] | list[int] = (256,),
-        dreamwaq_decoder_output_dim: int | None = None,
-        dreamwaq_vae_activation: str = "elu",
+        vae_latent_dim: int = 128,
+        vae_encoder_hidden_dims: tuple[int, ...] | list[int] = (256,),
+        vae_decoder_hidden_dims: tuple[int, ...] | list[int] = (256,),
+        vae_decoder_output_dim: int = 16,
+        vae_activation: str = "elu",
         lin_vel_dim: int = 3,
         vae_beta: float = 1.0,
     ) -> None:
@@ -247,11 +242,11 @@ class DreamWaQEncoderMLPModel(ComposableModel):
             distribution_cfg=distribution_cfg,
             obs_group_time_slice_map=obs_group_time_slice_map,
             latent_spec=DreamWaQEncoderLatentSpec(
-                latent_dim=latent_dim,
-                dreamwaq_encoder_hidden_dims=dreamwaq_encoder_hidden_dims,
-                dreamwaq_decoder_hidden_dims=dreamwaq_decoder_hidden_dims,
-                dreamwaq_decoder_output_dim=dreamwaq_decoder_output_dim,
-                dreamwaq_vae_activation=dreamwaq_vae_activation,
+                vae_latent_dim=vae_latent_dim,
+                vae_encoder_hidden_dims=vae_encoder_hidden_dims,
+                vae_decoder_hidden_dims=vae_decoder_hidden_dims,
+                vae_decoder_output_dim=vae_decoder_output_dim,
+                vae_activation=vae_activation,
                 lin_vel_dim=lin_vel_dim,
                 vae_beta=vae_beta,
             ),

@@ -22,7 +22,7 @@ from locolab.utils.terrains import TerrainImporterCfg
 ##
 # Pre-defined configs
 ##
-from locolab.tasks.manager_based.locomotion.velocity.config.unitree_B2.mdp_cfg import (  # isort: skip
+from locolab.tasks.manager_based.locomotion.velocity.config.unitree_b2.mdp_cfg import (  # isort: skip
     ActionsCfg,
     CommandsCfg,
     EventCfg,
