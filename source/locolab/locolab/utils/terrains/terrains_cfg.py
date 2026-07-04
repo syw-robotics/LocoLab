@@ -9,6 +9,8 @@
 """Configuration for custom terrains."""
 
 from locolab.utils.terrains import TerrainGeneratorCfg
+import locolab.utils.terrains.locolab_terrains as locolab_terrain_gen
+
 
 import isaaclab.terrains as terrain_gen
 
@@ -40,20 +42,39 @@ ROUGH_TERRAINS_CFG = TerrainGeneratorCfg(
             border_width=0.5,
             holes=False,
         ),
-        "box": terrain_gen.MeshRandomGridTerrainCfg(
-            proportion=0.1, grid_width=0.45, grid_height_range=(0.00, 0.10), platform_width=2.0
-        ),
-        "flat_rough": terrain_gen.HfRandomUniformTerrainCfg(
-            proportion=0.1, noise_range=(0.00, 0.06), noise_step=0.01, border_width=0.10
-        ),
-        #  "wave": terrain_gen.HfWaveTerrainCfg(
-        #      proportion=0.1, amplitude_range=(0.01, 0.10), num_waves=5.0, border_width=0.10
-        #  ),
         "slope": terrain_gen.HfPyramidSlopedTerrainCfg(
-            proportion=0.1, slope_range=(0.0, 0.45), platform_width=2.0, border_width=0.10
+            proportion=0.05, slope_range=(0.0, 0.45), platform_width=2.0, border_width=0.10
         ),
         "slope_inv": terrain_gen.HfInvertedPyramidSlopedTerrainCfg(
-            proportion=0.1, slope_range=(0.0, 0.45), platform_width=2.0, border_width=0.10
+            proportion=0.05, slope_range=(0.0, 0.45), platform_width=2.0, border_width=0.10
+        ),
+        "rough_slope": locolab_terrain_gen.HfPyramidSlopedRoughTerrainCfg(
+            proportion=0.05,
+            slope_range=(0.0, 0.45),
+            platform_width=2.0,
+            noise_range=(-0.02, 0.08),
+            noise_step=0.01,
+            apply_roughness=True,
+            roughness_type="difficulty",
+            border_width=0.10,
+        ),
+        "rough_slope_inv": locolab_terrain_gen.HfInvertedPyramidSlopedRoughTerrainCfg(
+            proportion=0.05,
+            slope_range=(0.0, 0.45),
+            platform_width=3.0,
+            noise_range=(-0.02, 0.08),
+            noise_step=0.01,
+            apply_roughness=True,
+            roughness_type="difficulty",
+            border_width=0.10,
+        ),
+        "discrete": locolab_terrain_gen.HfDiscreteObstaclesTerrainCfg(
+            proportion=0.2,
+            obstacle_width_range=(1.0, 2.0),
+            obstacle_height_range=(0.05, 0.25),
+            num_obstacles=20,
+            platform_width=3.0,
+            border_width=0.10,
         ),
     },
 )
