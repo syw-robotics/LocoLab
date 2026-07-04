@@ -122,3 +122,4 @@ class Go2FlatEnvCfg_PLAY(Go2FlatEnvCfg):
         # make a smaller scene for play
         self.scene.num_envs = 10
         self.scene.env_spacing = 2.5
+        self.commands.base_velocity.debug_vis = True

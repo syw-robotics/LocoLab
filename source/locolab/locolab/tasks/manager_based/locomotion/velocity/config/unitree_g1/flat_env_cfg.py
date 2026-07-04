@@ -124,6 +124,7 @@ class G1FlatEnvCfg_PLAY(G1FlatEnvCfg):
         # make a smaller scene for play
         self.scene.num_envs = 10
         self.scene.env_spacing = 2.5
+        self.commands.base_velocity.debug_vis = True
 
         # set command ranges to the curriculum limits
         lin_vel_cmd_params = self.curriculum.lin_vel_cmd_levels.params

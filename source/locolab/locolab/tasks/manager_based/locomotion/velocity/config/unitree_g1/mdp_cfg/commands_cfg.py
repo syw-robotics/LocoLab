@@ -25,7 +25,7 @@ class CommandsCfg:
         zero_velocity_threshold=0.2,
         heading_command=True,
         heading_control_stiffness=0.8,
-        debug_vis=True,
+        debug_vis=False,
         ranges=mdp.UniformVelocityCommandCfg.Ranges(
             lin_vel_x=(-0.5, 0.5),
             lin_vel_y=(-0.2, 0.2),

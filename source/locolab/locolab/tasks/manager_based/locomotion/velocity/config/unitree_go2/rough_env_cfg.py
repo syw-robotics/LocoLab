@@ -179,6 +179,7 @@ class Go2RoughEnvCfg_PLAY(Go2RoughEnvCfg):
         # make a smaller scene for play
         self.scene.num_envs = 10
         self.scene.env_spacing = 2.5
+        self.commands.base_velocity.debug_vis = True
         # spawn the robot randomly in the grid (instead of their terrain levels)
         self.scene.terrain.max_init_terrain_level = None
         # reduce the number of terrains to save memory
