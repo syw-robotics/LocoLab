@@ -140,7 +140,7 @@ class HfStraightGapTerrainCfg(HfRoughTerrainCfg):
     """ The type of gap depth dormulation. Must be one of 'diffifulty' or 'random'"""
 
     gap_offset_range: tuple[float, float] = MISSING
-    """The offset from the center to the gap in x direction in meters."""
+    """Distance from terrain center to the inner edge of each gap along x, in meters."""
 
     platform_width_range: tuple[float, float] = MISSING
     """The width in y direction of the center platform at the center of the terrain."""

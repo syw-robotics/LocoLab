@@ -372,13 +372,21 @@ def straight_gap_terrain(
     gap_width_pixels = int(gap_width / cfg.horizontal_scale)
     width_pixels = int(cfg.size[0] / cfg.horizontal_scale)
     length_pixels = int(cfg.size[1] / cfg.horizontal_scale)
+    gap_offset = (cfg.gap_offset_range[1] - cfg.gap_offset_range[0]) * np.random.random() + cfg.gap_offset_range[0]
+    gap_offset_pixels = int(gap_offset / cfg.horizontal_scale)
 
     center_x_pixels = 0.5 * cfg.size[0] / cfg.horizontal_scale
     center_y_pixels = 0.5 * cfg.size[1] / cfg.horizontal_scale
-    x1 = int(center_x_pixels - 2 / cfg.horizontal_scale)
-    x2 = int(center_x_pixels + 2 / cfg.horizontal_scale)
+    x1 = int(center_x_pixels - gap_offset_pixels)
+    x2 = int(center_x_pixels + gap_offset_pixels)
     x3 = x1 - gap_width_pixels
     x4 = x2 + gap_width_pixels
+    if x3 < 0 or x4 > width_pixels:
+        raise ValueError(
+            "The straight-gap offset and width must keep both gaps inside the terrain: "
+            f"x3={x3}, x4={x4}, width_pixels={width_pixels}. "
+            "Reduce gap_offset_range or gap_width_range."
+        )
 
     platform_width = (
         cfg.platform_width_range[1]

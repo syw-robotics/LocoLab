@@ -96,6 +96,10 @@ We introduce **LocoLab**, a RL locomotion **env benchmark** with sim2real robust
         ./scripts/sync_logs.sh --help  # check this script for usage
         ```
 
+- **Preset terrains:**
+
+    LocoLab provides additional preset terrain types beyond IsaacLab's defaults, including custom height-field and mesh terrains. See the [terrain README](source/locolab/locolab/utils/terrains/locolab_terrains/README.md).
+
 
 ## 📂 Task Organization
 
