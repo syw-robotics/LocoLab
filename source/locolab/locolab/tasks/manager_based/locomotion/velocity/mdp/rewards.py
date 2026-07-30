@@ -219,13 +219,10 @@ def stand_still(
     asset: Articulation = env.scene[asset_cfg.name]
     command_vel_xy = torch.linalg.norm(env.command_manager.get_command("base_velocity")[:, :2], dim=1)
     body_vel_xy = torch.linalg.norm(asset.data.root_lin_vel_b[:, :2], dim=1)
-    reward = torch.linalg.norm(
-        (asset.data.joint_pos[:, asset_cfg.joint_ids] - asset.data.default_joint_pos[:, asset_cfg.joint_ids]), dim=1
-    )
     return torch.where(
         torch.logical_or(command_vel_xy > 0.0, body_vel_xy > velocity_threshold),
         0.0,
-        reward,
+        torch.linalg.norm((asset.data.joint_pos[:, asset_cfg.joint_ids] - asset.data.default_joint_pos[:, asset_cfg.joint_ids]), dim=1)
     )
 
 
