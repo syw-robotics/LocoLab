@@ -13,6 +13,7 @@ from typing import TYPE_CHECKING
 import torch
 
 from isaaclab.managers import SceneEntityCfg
+from isaaclab.utils import math as math_utils
 
 if TYPE_CHECKING:
     from isaaclab.assets import Articulation
@@ -101,3 +102,67 @@ def gait_phase(env: ManagerBasedRLEnv, period: float) -> torch.Tensor:
     phase[:, 0] = torch.sin(global_phase * torch.pi * 2.0)
     phase[:, 1] = torch.cos(global_phase * torch.pi * 2.0)
     return phase
+
+
+def amp_body_state(
+    env,
+    amp_body_cfg: SceneEntityCfg,
+    amp_anchor_cfg: SceneEntityCfg,
+) -> torch.Tensor:
+    asset = env.scene[amp_body_cfg.name]
+
+    body_pos_w = asset.data.body_pos_w[:, amp_body_cfg.body_ids, :]
+    body_quat_w = asset.data.body_quat_w[:, amp_body_cfg.body_ids, :]
+    body_lin_vel_w = asset.data.body_lin_vel_w[:, amp_body_cfg.body_ids, :]
+    body_ang_vel_w = asset.data.body_ang_vel_w[:, amp_body_cfg.body_ids, :]
+
+    anchor_id = amp_anchor_cfg.body_ids[0]
+    num_envs, num_bodies = body_pos_w.shape[:2]
+
+    anchor_pos_w = asset.data.body_pos_w[:, anchor_id, :].unsqueeze(1).expand(-1, num_bodies, -1)
+    anchor_quat_w = asset.data.body_quat_w[:, anchor_id, :].unsqueeze(1).expand(-1, num_bodies, -1)
+
+    body_pos_b, body_quat_b = math_utils.subtract_frame_transforms(
+        anchor_pos_w.reshape(-1, 3),
+        anchor_quat_w.reshape(-1, 4),
+        body_pos_w.reshape(-1, 3),
+        body_quat_w.reshape(-1, 4),
+    )
+
+    body_pos_b = body_pos_b.reshape(num_envs, num_bodies, 3)
+    body_quat_b = body_quat_b.reshape(num_envs, num_bodies, 4)
+
+    body_ori_b = math_utils.matrix_from_quat(body_quat_b)[..., :, :2].reshape(num_envs, num_bodies, 6)
+    body_lin_vel_b = math_utils.quat_apply_inverse(body_quat_w, body_lin_vel_w)
+    body_ang_vel_b = math_utils.quat_apply_inverse(body_quat_w, body_ang_vel_w)
+
+    return torch.cat(
+        [
+            body_pos_b.reshape(num_envs, -1),
+            body_ori_b.reshape(num_envs, -1),
+            body_lin_vel_b.reshape(num_envs, -1),
+            body_ang_vel_b.reshape(num_envs, -1),
+        ],
+        dim=-1,
+    )
+
+
+def amp_reference_body_state(
+    env,
+    motion_dir: str,
+    amp_body_names: list[str],
+    amp_anchor_name: str,
+    motion_body_names: list[str],
+) -> torch.Tensor:
+    if not hasattr(env, "_amp_motion_reference"):
+        from locolab.motion_reference import AmpMotionReference
+
+        env._amp_motion_reference = AmpMotionReference(
+            motion_dir=motion_dir,
+            amp_body_names=amp_body_names,
+            amp_anchor_name=amp_anchor_name,
+            motion_body_names=motion_body_names,
+            device=env.device,
+        )
+
+    return env._amp_motion_reference.get_state(env)
