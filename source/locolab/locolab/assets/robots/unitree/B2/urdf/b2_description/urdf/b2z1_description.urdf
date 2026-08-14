@@ -1032,7 +1032,9 @@
             </inertial>
         </link>
 
-        <joint name="z1_jointGripper" type="revolute">
+        <!-- Currently, the gripper joint is fixed -->
+        <!-- <joint name="z1_jointGripper" type="revolute"> -->
+        <joint name="z1_jointGripper" type="fixed">
             <origin rpy="0 0 0" xyz="0.049 0.0 0"/>
             <parent link="gripperStator"/>
             <child link="gripperMover"/>

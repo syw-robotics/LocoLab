@@ -17,6 +17,7 @@ import isaaclab.sim as sim_utils
 from isaaclab.assets.articulation import ArticulationCfg
 from isaaclab.utils import configclass
 
+from isaaclab.actuators import ImplicitActuatorCfg
 from .actuators import (
     DelayedImplicitActuatorCfg,  # Implicit Atuator shows higher fidelity but no latency compensation
     beyondmimic_g1_29dof_actuators,
@@ -155,16 +156,16 @@ UNITREE_B2_CFG = UnitreeArticulationCfg(
             joint_names_expr=[".*_hip_joint", ".*_thigh_joint"],
             effort_limit_sim=200.0,
             velocity_limit_sim=23.0,
-            stiffness=150.0,
-            damping=5.0,
+            stiffness=100.0,
+            damping=2.0,
             friction=0.01,
         ),
         "B2DelayedImplicit_Calf": DelayedImplicitActuatorCfg(
             joint_names_expr=[".*_calf_joint"],
             effort_limit_sim=320.0,
             velocity_limit_sim=14.0,
-            stiffness=150.0,
-            damping=5.0,
+            stiffness=100.0,
+            damping=2.0,
             friction=0.01,
         ),
     },
@@ -179,6 +180,82 @@ UNITREE_B2_CFG = UnitreeArticulationCfg(
 )
 """Configuration for the Unitree G2 Quadrupedal robot."""
 
+
+UNITREE_B2Z1_CFG = UnitreeArticulationCfg(
+    # Here we prefer URDF over USD for the convenience of modifying collision shapes
+    spawn=UnitreeUrdfFileCfg(
+        asset_path=f"{UNITREE_MODEL_DIR}/B2/urdf/b2_description/urdf/b2z1_description.urdf",
+    ),
+    init_state=ArticulationCfg.InitialStateCfg(
+        pos=(0.0, 0.0, 0.60),
+        joint_pos={
+            ".*R_hip_joint": -0.1,
+            ".*L_hip_joint": 0.1,
+            "F[L,R]_thigh_joint": 0.8,
+            "R[L,R]_thigh_joint": 1.0,
+            ".*_calf_joint": -1.5,
+            "z1_joint1": 0.0,
+            "z1_joint2": 0.5,
+            "z1_joint3": -0.8,
+            "z1_joint4": 0.0,
+            "z1_joint5": 0.0,
+            "z1_joint6": 0.0,
+            "z1_joint_gripper": 0.0,
+        },
+        joint_vel={".*": 0.0},
+    ),
+    actuators={
+        #  "B2DelayedImplicit_Hip_Thigh": DelayedImplicitActuatorCfg(
+        "B2DelayedImplicit_Hip_Thigh": ImplicitActuatorCfg(
+            joint_names_expr=[".*_hip_joint", ".*_thigh_joint"],
+            effort_limit_sim=200.0,
+            velocity_limit_sim=23.0,
+            stiffness=100.0,
+            damping=2.0,
+            friction=0.01,
+        ),
+        "B2DelayedImplicit_Calf": ImplicitActuatorCfg(
+            joint_names_expr=[".*_calf_joint"],
+            effort_limit_sim=320.0,
+            velocity_limit_sim=14.0,
+            stiffness=100.0,
+            damping=2.0,
+            friction=0.01,
+        ),
+        "z1_arm": ImplicitActuatorCfg(
+            joint_names_expr=[
+                "z1_joint1",
+                "z1_joint3",
+                "z1_joint4",
+                "z1_joint5",
+                "z1_joint6",
+            ],
+            effort_limit_sim=30.0,
+            velocity_limit_sim=6.0,
+            stiffness=60.0,
+            damping=1.0,
+            friction=0.01,
+        ),
+        "z1_shoulder": DelayedImplicitActuatorCfg(
+            joint_names_expr=["z1_joint2"],
+            effort_limit_sim=45.0,
+            velocity_limit_sim=6.0,
+            stiffness=120.0,
+            damping=2.0,
+            friction=0.01,
+        ),
+    },
+    # fmt: off
+    joint_sdk_names=[
+        "FR_hip_joint", "FR_thigh_joint", "FR_calf_joint",
+        "FL_hip_joint", "FL_thigh_joint", "FL_calf_joint",
+        "RR_hip_joint", "RR_thigh_joint", "RR_calf_joint",
+        "RL_hip_joint", "RL_thigh_joint", "RL_calf_joint",
+        "z1_joint1", "z1_joint2", "z1_joint3",
+        "z1_joint4", "z1_joint5", "z1_joint6",
+    ],
+    # fmt: on
+)
 
 UNITREE_G1_29DOF_BEYONDMIMIC_CFG = UnitreeArticulationCfg(
     # Here we prefer URDF over USD for the convenience of modifying collision shapes
