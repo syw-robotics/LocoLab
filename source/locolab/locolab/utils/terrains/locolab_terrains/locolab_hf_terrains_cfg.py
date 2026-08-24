@@ -32,8 +32,8 @@ class RoughnessParamsCfg:
 class HfRoughTerrainCfg(RoughnessParamsCfg, HfTerrainBaseCfg):
     """Base configuration for height-field terrains with optional roughness."""
 
-    apply_roughness: bool = False
-    """Whether to apply random uniform roughness."""
+    apply_roughness: float = 0.0
+    """Probability of applying roughness to a generated sub-terrain. Must be within [0, 1]."""
 
 
 @configclass

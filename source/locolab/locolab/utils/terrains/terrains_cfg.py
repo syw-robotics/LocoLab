@@ -8,9 +8,8 @@
 
 """Configuration for custom terrains."""
 
-from locolab.utils.terrains import TerrainGeneratorCfg
 import locolab.utils.terrains.locolab_terrains as locolab_terrain_gen
-
+from locolab.utils.terrains import TerrainGeneratorCfg
 
 import isaaclab.terrains as terrain_gen
 
@@ -42,30 +41,24 @@ ROUGH_TERRAINS_CFG = TerrainGeneratorCfg(
             border_width=0.5,
             holes=False,
         ),
-        "slope": terrain_gen.HfPyramidSlopedTerrainCfg(
-            proportion=0.05, slope_range=(0.0, 0.45), platform_width=2.0, border_width=0.10
-        ),
-        "slope_inv": terrain_gen.HfInvertedPyramidSlopedTerrainCfg(
-            proportion=0.05, slope_range=(0.0, 0.45), platform_width=2.0, border_width=0.10
-        ),
-        "rough_slope": locolab_terrain_gen.HfPyramidSlopedRoughTerrainCfg(
+        "slope": locolab_terrain_gen.HfPyramidSlopedRoughTerrainCfg(
             proportion=0.05,
             slope_range=(0.0, 0.45),
             platform_width=2.0,
-            noise_range=(-0.02, 0.08),
+            noise_range=(-0.05, 0.05),
             noise_step=0.01,
-            apply_roughness=True,
-            roughness_type="difficulty",
+            apply_roughness=0.75,
+            roughness_type="random",
             border_width=0.10,
         ),
-        "rough_slope_inv": locolab_terrain_gen.HfInvertedPyramidSlopedRoughTerrainCfg(
-            proportion=0.05,
+        "slope_inv": locolab_terrain_gen.HfInvertedPyramidSlopedRoughTerrainCfg(
+            proportion=0.2,
             slope_range=(0.0, 0.45),
             platform_width=3.0,
-            noise_range=(-0.02, 0.08),
+            noise_range=(-0.05, 0.05),
             noise_step=0.01,
-            apply_roughness=True,
-            roughness_type="difficulty",
+            apply_roughness=0.75,
+            roughness_type="random",
             border_width=0.10,
         ),
         "discrete": locolab_terrain_gen.HfDiscreteObstaclesTerrainCfg(
@@ -74,6 +67,10 @@ ROUGH_TERRAINS_CFG = TerrainGeneratorCfg(
             obstacle_height_range=(0.05, 0.25),
             num_obstacles=20,
             platform_width=3.0,
+            noise_range=(-0.03, 0.05),
+            noise_step=0.01,
+            apply_roughness=0.75,
+            roughness_type="random",
             border_width=0.10,
         ),
     },

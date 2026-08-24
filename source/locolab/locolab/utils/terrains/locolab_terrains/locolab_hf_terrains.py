@@ -8,10 +8,44 @@ import numpy as np
 import scipy.interpolate as interpolate
 
 from isaaclab.terrains.height_field.utils import height_field_to_mesh
+
 from . import locolab_hf_terrains_cfg
 
 if TYPE_CHECKING:
     from isaaclab.terrains.height_field import hf_terrains_cfg
+
+
+def _sample_multiscale_noise(size: tuple[float, float], shape: tuple[int, int], downsampled_scale: float) -> np.ndarray:
+    """Sample smooth value noise over three spatial scales."""
+    noise = np.zeros(shape, dtype=np.float64)
+    weight_square_sum = 0.0
+    x_upsampled = np.linspace(0.0, size[0], shape[0])
+    y_upsampled = np.linspace(0.0, size[1], shape[1])
+
+    for octave in range(3):
+        sample_scale = downsampled_scale * 2**octave
+        sample_shape = (
+            max(2, int(size[0] / sample_scale)),
+            max(2, int(size[1] / sample_scale)),
+        )
+        samples = np.random.uniform(-1.0, 1.0, size=sample_shape)
+
+        x = np.linspace(0.0, size[0], sample_shape[0])
+        y = np.linspace(0.0, size[1], sample_shape[1])
+        spline = interpolate.RectBivariateSpline(
+            x,
+            y,
+            samples,
+            kx=min(3, sample_shape[0] - 1),
+            ky=min(3, sample_shape[1] - 1),
+        )
+        layer = spline(x_upsampled, y_upsampled)
+
+        weight = 0.5**octave
+        noise += weight * np.clip(layer, -1.0, 1.0)
+        weight_square_sum += weight**2
+
+    return np.clip(noise / np.sqrt(weight_square_sum), -1.0, 1.0)
 
 
 def apply_random_uniform_noise(
@@ -20,57 +54,74 @@ def apply_random_uniform_noise(
     # check parameters
     # -- horizontal scale
     if cfg.downsampled_scale is None:
-        cfg.downsampled_scale = cfg.horizontal_scale
+        downsampled_scale = cfg.horizontal_scale
     elif cfg.downsampled_scale < cfg.horizontal_scale:
         raise ValueError(
             "Downsampled scale must be larger than or equal to the horizontal scale:"
             f" {cfg.downsampled_scale} < {cfg.horizontal_scale}."
         )
+    else:
+        downsampled_scale = cfg.downsampled_scale
 
     # switch parameters to discrete units
-    # -- horizontal scale
     width_pixels = int(cfg.size[0] / cfg.horizontal_scale)
     length_pixels = int(cfg.size[1] / cfg.horizontal_scale)
-    # -- downsampled scale
-    width_downsampled = int(cfg.size[0] / cfg.downsampled_scale)
-    length_downsampled = int(cfg.size[1] / cfg.downsampled_scale)
-    # -- height
-    # Determine max_height based on roughness_type
+
+    # resolve roughness intensity
     roughness_type = getattr(cfg, "roughness_type", "fixed")
     if roughness_type == "difficulty":
-        max_height = (cfg.noise_range[1] - cfg.noise_range[0]) * difficulty + cfg.noise_range[
-            0
-        ]  # roughness intensity is difficulty-based
+        strength = float(np.clip(difficulty, 0.0, 1.0))
     elif roughness_type == "random":
-        max_height = np.random.uniform(cfg.noise_range[0], cfg.noise_range[1])  # randomly sample roughness intensity
+        strength = np.random.uniform(0.0, 1.0)
     elif roughness_type == "fixed":
-        max_height = cfg.noise_range[1]  # fixed roughness intensity
+        strength = 1.0
     else:
         raise ValueError(
             f"Invalid roughness type: {roughness_type}. Must be one of 'difficulty', 'random', or 'fixed'."
         )
+
     height_min = int(cfg.noise_range[0] / cfg.vertical_scale)
-    height_max = int(max_height / cfg.vertical_scale)
+    height_max = int(cfg.noise_range[1] / cfg.vertical_scale)
     height_step = int(cfg.noise_step / cfg.vertical_scale)
+    if height_min > height_max:
+        raise ValueError(f"Noise range must be ordered. Got: {cfg.noise_range}.")
+    if height_step <= 0:
+        raise ValueError(
+            f"Noise step must be greater than or equal to the vertical scale: {cfg.noise_step} < {cfg.vertical_scale}."
+        )
+    if strength == 0.0:
+        return hf_raw
 
-    # create range of heights possible
-    height_range = np.arange(height_min, height_max + height_step, height_step)
-    # sample heights randomly from the range along a grid
-    height_field_downsampled = np.random.choice(height_range, size=(width_downsampled, length_downsampled))
-    # create interpolation function for the sampled heights
-    x = np.linspace(0, cfg.size[0] * cfg.horizontal_scale, width_downsampled)
-    y = np.linspace(0, cfg.size[1] * cfg.horizontal_scale, length_downsampled)
-    func = interpolate.RectBivariateSpline(x, y, height_field_downsampled)
+    # Shape fine, medium, and coarse noise around zero so extrema form localized pits and bumps.
+    noise = _sample_multiscale_noise(cfg.size, (width_pixels, length_pixels), downsampled_scale)
+    noise = np.where(
+        noise < 0.0,
+        -(noise**2) * abs(min(height_min, 0)),
+        noise**2 * max(height_max, 0),
+    )
+    noise *= strength
+    noise = np.rint(noise / height_step) * height_step
+    scaled_min = int(np.rint(min(height_min * strength, height_max * strength) / height_step)) * height_step
+    scaled_max = int(np.rint(max(height_min * strength, height_max * strength) / height_step)) * height_step
+    if scaled_min > scaled_max:
+        return hf_raw
+    noise = np.clip(noise, scaled_min, scaled_max).astype(np.int16)
 
-    # interpolate the sampled heights to obtain the height field
-    x_upsampled = np.linspace(0, cfg.size[0] * cfg.horizontal_scale, width_pixels)
-    y_upsampled = np.linspace(0, cfg.size[1] * cfg.horizontal_scale, length_pixels)
-    z_upsampled = np.rint(func(x_upsampled, y_upsampled)).astype(np.int16)
-
-    # Add noise to terrain
-    hf_raw += z_upsampled
+    hf_raw += noise
 
     return hf_raw
+
+
+def _maybe_apply_roughness(
+    cfg: locolab_hf_terrains_cfg.HfRoughTerrainCfg, hf_raw: np.ndarray, difficulty: float
+) -> np.ndarray:
+    """Apply roughness according to the configured probability."""
+    probability = float(cfg.apply_roughness)
+    if not 0.0 <= probability <= 1.0:
+        raise ValueError(f"Roughness probability must be within [0, 1]. Got: {probability}.")
+    if probability == 0.0 or (probability < 1.0 and np.random.random() >= probability):
+        return hf_raw
+    return apply_random_uniform_noise(cfg, hf_raw, difficulty)
 
 
 @height_field_to_mesh
@@ -84,7 +135,7 @@ def pyramid_sloped_rough_terrain(difficulty: float, cfg: locolab_hf_terrains_cfg
     If the :obj:`cfg.inverted` flag is set to :obj:`True`, the terrain is inverted such that
     the platform is at the bottom.
 
-    If :obj:`cfg.apply_roughness` is set to :obj:`True`, random noise is applied to the terrain surface.
+    Roughness is randomly applied to the terrain surface according to :obj:`cfg.apply_roughness`.
 
     Args:
         difficulty: The difficulty of the terrain. This is a value between 0 and 1.
@@ -134,9 +185,7 @@ def pyramid_sloped_rough_terrain(difficulty: float, cfg: locolab_hf_terrains_cfg
     z_pf = hf_raw[x_pf, y_pf]
     hf_raw = np.clip(hf_raw, min(0, z_pf), max(0, z_pf))
 
-    # Apply roughness if enabled
-    if cfg.apply_roughness:
-        hf_raw = apply_random_uniform_noise(cfg, hf_raw, difficulty)
+    hf_raw = _maybe_apply_roughness(cfg, hf_raw, difficulty)
 
     # round off the heights to the nearest vertical step
     return np.rint(hf_raw).astype(np.int16)
@@ -202,9 +251,8 @@ def discrete_obstacles_terrain(
     y2 = (length_pixels + platform_width) // 2
     hf_raw[x1:x2, y1:y2] = 0
 
-    if cfg.apply_roughness:
-        hf_raw = apply_random_uniform_noise(cfg, hf_raw, difficulty)
-        hf_raw[x1:x2, y1:y2] = 0
+    hf_raw = _maybe_apply_roughness(cfg, hf_raw, difficulty)
+    hf_raw[x1:x2, y1:y2] = 0
 
     return np.rint(hf_raw).astype(np.int16)
 
@@ -268,9 +316,7 @@ def gap_terrain(
     hf_raw[x11:x22, y22:] = 0
     hf_raw[x22:, :] = 0
 
-    # Apply roughness if enabled
-    if cfg.apply_roughness:
-        hf_raw = apply_random_uniform_noise(cfg, hf_raw, difficulty)
+    hf_raw = _maybe_apply_roughness(cfg, hf_raw, difficulty)
 
     # round off the heights to the nearest vertical step
     return np.rint(hf_raw).astype(np.int16)
@@ -352,9 +398,7 @@ def double_gap_terrain(
 
     hf_raw[x1:x2, y1:y2] = platform_height_pixels
 
-    # Apply roughness if enabled
-    if cfg.apply_roughness:
-        hf_raw = apply_random_uniform_noise(cfg, hf_raw, difficulty)
+    hf_raw = _maybe_apply_roughness(cfg, hf_raw, difficulty)
 
     # round off the heights to the nearest vertical step
     return np.rint(hf_raw).astype(np.int16)
@@ -419,8 +463,7 @@ def straight_gap_terrain(
     hf_raw[x1:x2, y1:y2] = platform_height_pixels
     hf_raw[x4:, y1:y2] = 0
 
-    if cfg.apply_roughness:
-        hf_raw = apply_random_uniform_noise(cfg, hf_raw, difficulty)
+    hf_raw = _maybe_apply_roughness(cfg, hf_raw, difficulty)
     return np.rint(hf_raw).astype(np.int16)
 
 @height_field_to_mesh
@@ -471,9 +514,7 @@ def hurdle_terrain(
     hf_raw[x1:x2, y11:y1] = hurdle_height_pixels
     hf_raw[x1:x2, y2:y22] = hurdle_height_pixels
 
-    # Apply roughness if enabled
-    if cfg.apply_roughness:
-        hf_raw = apply_random_uniform_noise(cfg, hf_raw, difficulty)
+    hf_raw = _maybe_apply_roughness(cfg, hf_raw, difficulty)
 
     # round off the heights to the nearest vertical step
     return np.rint(hf_raw).astype(np.int16)
