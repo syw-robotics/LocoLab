@@ -2,126 +2,12 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
-
 import numpy as np
-import scipy.interpolate as interpolate
 
 from isaaclab.terrains.height_field.utils import height_field_to_mesh
 
 from . import locolab_hf_terrains_cfg
-
-if TYPE_CHECKING:
-    from isaaclab.terrains.height_field import hf_terrains_cfg
-
-
-def _sample_multiscale_noise(size: tuple[float, float], shape: tuple[int, int], downsampled_scale: float) -> np.ndarray:
-    """Sample smooth value noise over three spatial scales."""
-    noise = np.zeros(shape, dtype=np.float64)
-    weight_square_sum = 0.0
-    x_upsampled = np.linspace(0.0, size[0], shape[0])
-    y_upsampled = np.linspace(0.0, size[1], shape[1])
-
-    for octave in range(3):
-        sample_scale = downsampled_scale * 2**octave
-        sample_shape = (
-            max(2, int(size[0] / sample_scale)),
-            max(2, int(size[1] / sample_scale)),
-        )
-        samples = np.random.uniform(-1.0, 1.0, size=sample_shape)
-
-        x = np.linspace(0.0, size[0], sample_shape[0])
-        y = np.linspace(0.0, size[1], sample_shape[1])
-        spline = interpolate.RectBivariateSpline(
-            x,
-            y,
-            samples,
-            kx=min(3, sample_shape[0] - 1),
-            ky=min(3, sample_shape[1] - 1),
-        )
-        layer = spline(x_upsampled, y_upsampled)
-
-        weight = 0.5**octave
-        noise += weight * np.clip(layer, -1.0, 1.0)
-        weight_square_sum += weight**2
-
-    return np.clip(noise / np.sqrt(weight_square_sum), -1.0, 1.0)
-
-
-def apply_random_uniform_noise(
-    cfg: hf_terrains_cfg.HfRandomUniformTerrainCfg, hf_raw: np.ndarray, difficulty: float = 0.0
-) -> np.ndarray:
-    # check parameters
-    # -- horizontal scale
-    if cfg.downsampled_scale is None:
-        downsampled_scale = cfg.horizontal_scale
-    elif cfg.downsampled_scale < cfg.horizontal_scale:
-        raise ValueError(
-            "Downsampled scale must be larger than or equal to the horizontal scale:"
-            f" {cfg.downsampled_scale} < {cfg.horizontal_scale}."
-        )
-    else:
-        downsampled_scale = cfg.downsampled_scale
-
-    # switch parameters to discrete units
-    width_pixels = int(cfg.size[0] / cfg.horizontal_scale)
-    length_pixels = int(cfg.size[1] / cfg.horizontal_scale)
-
-    # resolve roughness intensity
-    roughness_type = getattr(cfg, "roughness_type", "fixed")
-    if roughness_type == "difficulty":
-        strength = float(np.clip(difficulty, 0.0, 1.0))
-    elif roughness_type == "random":
-        strength = np.random.uniform(0.0, 1.0)
-    elif roughness_type == "fixed":
-        strength = 1.0
-    else:
-        raise ValueError(
-            f"Invalid roughness type: {roughness_type}. Must be one of 'difficulty', 'random', or 'fixed'."
-        )
-
-    height_min = int(cfg.noise_range[0] / cfg.vertical_scale)
-    height_max = int(cfg.noise_range[1] / cfg.vertical_scale)
-    height_step = int(cfg.noise_step / cfg.vertical_scale)
-    if height_min > height_max:
-        raise ValueError(f"Noise range must be ordered. Got: {cfg.noise_range}.")
-    if height_step <= 0:
-        raise ValueError(
-            f"Noise step must be greater than or equal to the vertical scale: {cfg.noise_step} < {cfg.vertical_scale}."
-        )
-    if strength == 0.0:
-        return hf_raw
-
-    # Shape fine, medium, and coarse noise around zero so extrema form localized pits and bumps.
-    noise = _sample_multiscale_noise(cfg.size, (width_pixels, length_pixels), downsampled_scale)
-    noise = np.where(
-        noise < 0.0,
-        -(noise**2) * abs(min(height_min, 0)),
-        noise**2 * max(height_max, 0),
-    )
-    noise *= strength
-    noise = np.rint(noise / height_step) * height_step
-    scaled_min = int(np.rint(min(height_min * strength, height_max * strength) / height_step)) * height_step
-    scaled_max = int(np.rint(max(height_min * strength, height_max * strength) / height_step)) * height_step
-    if scaled_min > scaled_max:
-        return hf_raw
-    noise = np.clip(noise, scaled_min, scaled_max).astype(np.int16)
-
-    hf_raw += noise
-
-    return hf_raw
-
-
-def _maybe_apply_roughness(
-    cfg: locolab_hf_terrains_cfg.HfRoughTerrainCfg, hf_raw: np.ndarray, difficulty: float
-) -> np.ndarray:
-    """Apply roughness according to the configured probability."""
-    probability = float(cfg.apply_roughness)
-    if not 0.0 <= probability <= 1.0:
-        raise ValueError(f"Roughness probability must be within [0, 1]. Got: {probability}.")
-    if probability == 0.0 or (probability < 1.0 and np.random.random() >= probability):
-        return hf_raw
-    return apply_random_uniform_noise(cfg, hf_raw, difficulty)
+from .utils import _maybe_apply_roughness
 
 
 @height_field_to_mesh
@@ -243,7 +129,7 @@ def discrete_obstacles_terrain(
 
         hf_raw[x_start : x_start + width, y_start : y_start + length] = np.random.choice(height_range)
 
-    # keep a flat spawn platform in the center.
+    # Keep the center platform free of discrete obstacles before adding surface roughness.
     platform_width = min(platform_width, width_pixels, length_pixels)
     x1 = (width_pixels - platform_width) // 2
     x2 = (width_pixels + platform_width) // 2
@@ -252,7 +138,6 @@ def discrete_obstacles_terrain(
     hf_raw[x1:x2, y1:y2] = 0
 
     hf_raw = _maybe_apply_roughness(cfg, hf_raw, difficulty)
-    hf_raw[x1:x2, y1:y2] = 0
 
     return np.rint(hf_raw).astype(np.int16)
 

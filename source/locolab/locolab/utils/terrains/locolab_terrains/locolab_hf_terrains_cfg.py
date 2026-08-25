@@ -22,10 +22,13 @@ class RoughnessParamsCfg:
     """The height increment used when sampling roughness in meters."""
 
     downsampled_scale: float | None = 0.20
-    """Distance between sampled roughness points in meters."""
+    """Minimum distance between sampled roughness points in meters.
+
+    The effective distance is sampled over one octave for each sub-terrain.
+    """
 
     roughness_type: Literal["difficulty", "random", "fixed"] = "fixed"
-    """The roughness intensity mode."""
+    """The roughness intensity mode. Random mode samples from 0.2, 0.4, 0.6, 0.8 and 1.0."""
 
 
 @configclass
