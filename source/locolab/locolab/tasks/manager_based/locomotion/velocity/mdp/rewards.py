@@ -21,6 +21,8 @@ if TYPE_CHECKING:
     from isaaclab.sensors import ContactSensor, RayCaster
 
 
+# -------------------- Velocity Tracking Rewards -------------------- #
+
 def track_lin_vel_xy_exp(
     env: ManagerBasedRLEnv, std: float, command_name: str, asset_cfg: SceneEntityCfg = SceneEntityCfg("robot")
 ) -> torch.Tensor:
@@ -71,6 +73,35 @@ def track_ang_vel_z_world_exp(
     return torch.exp(-ang_vel_error / std**2)
 
 
+def track_lin_vel_xy_yaw_frame_body_exp(
+    env: ManagerBasedRLEnv, std: float, command_name: str, asset_cfg: SceneEntityCfg
+) -> torch.Tensor:
+    """Reward tracking of linear velocity commands for a selected body in its gravity-aligned yaw frame."""
+    asset: Articulation = env.scene[asset_cfg.name]
+    body_id = asset_cfg.body_ids[0]
+    body_vel_yaw = quat_apply_inverse(
+        yaw_quat(asset.data.body_quat_w[:, body_id]), asset.data.body_lin_vel_w[:, body_id]
+    )
+    lin_vel_error = torch.sum(
+        torch.square(env.command_manager.get_command(command_name)[:, :2] - body_vel_yaw[:, :2]), dim=1
+    )
+    return torch.exp(-lin_vel_error / std**2)
+
+
+def track_ang_vel_z_world_body_exp(
+    env: ManagerBasedRLEnv, command_name: str, std: float, asset_cfg: SceneEntityCfg
+) -> torch.Tensor:
+    """Reward tracking of angular velocity commands for a selected body about the world z-axis."""
+    asset: Articulation = env.scene[asset_cfg.name]
+    body_id = asset_cfg.body_ids[0]
+    ang_vel_error = torch.square(
+        env.command_manager.get_command(command_name)[:, 2] - asset.data.body_ang_vel_w[:, body_id, 2]
+    )
+    return torch.exp(-ang_vel_error / std**2)
+
+
+# -------------------- Stability Rewards -------------------- #
+
 def lin_vel_z_l2(env: ManagerBasedRLEnv, asset_cfg: SceneEntityCfg = SceneEntityCfg("robot")) -> torch.Tensor:
     """Penalize z-axis base linear velocity using L2 squared kernel."""
     asset: RigidObject = env.scene[asset_cfg.name]
@@ -101,22 +132,12 @@ def flat_orientation_l2(env: ManagerBasedRLEnv, asset_cfg: SceneEntityCfg = Scen
     return torch.sum(torch.square(asset.data.projected_gravity_b[:, :2]), dim=1)
 
 
-def joint_torques_l2(env: ManagerBasedRLEnv, asset_cfg: SceneEntityCfg = SceneEntityCfg("robot")) -> torch.Tensor:
-    """Penalize joint torques applied on the articulation using L2 squared kernel."""
+def flat_orientation_body_l2(env: ManagerBasedRLEnv, asset_cfg: SceneEntityCfg) -> torch.Tensor:
+    """Penalize non-flat orientation of a selected body using projected gravity xy-components."""
     asset: Articulation = env.scene[asset_cfg.name]
-    return torch.sum(torch.square(asset.data.applied_torque[:, asset_cfg.joint_ids]), dim=1)
-
-
-def joint_vel_l2(env: ManagerBasedRLEnv, asset_cfg: SceneEntityCfg = SceneEntityCfg("robot")) -> torch.Tensor:
-    """Penalize joint velocities on the articulation using L2 squared kernel."""
-    asset: Articulation = env.scene[asset_cfg.name]
-    return torch.sum(torch.square(asset.data.joint_vel[:, asset_cfg.joint_ids]), dim=1)
-
-
-def joint_acc_l2(env: ManagerBasedRLEnv, asset_cfg: SceneEntityCfg = SceneEntityCfg("robot")) -> torch.Tensor:
-    """Penalize joint accelerations on the articulation using L2 squared kernel."""
-    asset: Articulation = env.scene[asset_cfg.name]
-    return torch.sum(torch.square(asset.data.joint_acc[:, asset_cfg.joint_ids]), dim=1)
+    body_id = asset_cfg.body_ids[0]
+    projected_gravity_body = quat_apply_inverse(asset.data.body_quat_w[:, body_id], asset.data.GRAVITY_VEC_W)
+    return torch.sum(torch.square(projected_gravity_body[:, :2]), dim=1)
 
 
 def base_height_l2(
@@ -153,6 +174,26 @@ def base_height_l2(
     return reward
 
 
+# -------------------- Joint Regularization Rewards -------------------- #
+
+def joint_torques_l2(env: ManagerBasedRLEnv, asset_cfg: SceneEntityCfg = SceneEntityCfg("robot")) -> torch.Tensor:
+    """Penalize joint torques applied on the articulation using L2 squared kernel."""
+    asset: Articulation = env.scene[asset_cfg.name]
+    return torch.sum(torch.square(asset.data.applied_torque[:, asset_cfg.joint_ids]), dim=1)
+
+
+def joint_vel_l2(env: ManagerBasedRLEnv, asset_cfg: SceneEntityCfg = SceneEntityCfg("robot")) -> torch.Tensor:
+    """Penalize joint velocities on the articulation using L2 squared kernel."""
+    asset: Articulation = env.scene[asset_cfg.name]
+    return torch.sum(torch.square(asset.data.joint_vel[:, asset_cfg.joint_ids]), dim=1)
+
+
+def joint_acc_l2(env: ManagerBasedRLEnv, asset_cfg: SceneEntityCfg = SceneEntityCfg("robot")) -> torch.Tensor:
+    """Penalize joint accelerations on the articulation using L2 squared kernel."""
+    asset: Articulation = env.scene[asset_cfg.name]
+    return torch.sum(torch.square(asset.data.joint_acc[:, asset_cfg.joint_ids]), dim=1)
+
+
 def joint_power_l1(env: ManagerBasedRLEnv, asset_cfg: SceneEntityCfg = SceneEntityCfg("robot")) -> torch.Tensor:
     """Reward joint_power l1"""
     # extract the used quantities (to enable type-hinting)
@@ -179,22 +220,24 @@ def joint_deviation_l2(env: ManagerBasedRLEnv, asset_cfg: SceneEntityCfg = Scene
     return torch.sum(torch.square(angle), dim=1)
 
 
-def joint_deviation_humanoid_hip_yaw_l1(
+def joint_paired_coordination(
     env: ManagerBasedRLEnv,
+    direction_scale: float,
     asset_cfg: SceneEntityCfg = SceneEntityCfg("robot"),
-    ang_vel_threshold: float = 0.1,
-    zero_ang_vel_command_weight_scale: float = 1.0,
 ) -> torch.Tensor:
-    """Penalize joint positions that deviate from the default one."""
+    """Penalize opposing relative-position directions between two joint pairs using a smooth kernel.
+
+    The asset configuration must select four joints in the order
+    ``[pair_0_a, pair_0_b, pair_1_a, pair_1_b]``.
+    """
     asset: Articulation = env.scene[asset_cfg.name]
-    angle = asset.data.joint_pos[:, asset_cfg.joint_ids] - asset.data.default_joint_pos[:, asset_cfg.joint_ids]
-    command_vel_z = torch.abs(env.command_manager.get_command("base_velocity")[:, 2])
-    reward = torch.sum(torch.abs(angle), dim=1)
-    return torch.where(
-        command_vel_z > ang_vel_threshold,
-        reward,
-        reward * zero_ang_vel_command_weight_scale,
+    joint_pos_rel = (
+        asset.data.joint_pos[:, asset_cfg.joint_ids] - asset.data.default_joint_pos[:, asset_cfg.joint_ids]
     )
+    joint_direction = torch.tanh(joint_pos_rel / direction_scale)
+    first_pair_penalty = torch.relu(-joint_direction[:, 0] * joint_direction[:, 1])
+    second_pair_penalty = torch.relu(-joint_direction[:, 2] * joint_direction[:, 3])
+    return 0.5 * (first_pair_penalty + second_pair_penalty)
 
 
 def joint_pos_limits(env: ManagerBasedRLEnv, asset_cfg: SceneEntityCfg = SceneEntityCfg("robot")) -> torch.Tensor:
@@ -208,6 +251,8 @@ def joint_pos_limits(env: ManagerBasedRLEnv, asset_cfg: SceneEntityCfg = SceneEn
     ).clip(min=0.0)
     return torch.sum(out_of_limits, dim=1)
 
+
+# -------------------- Gait Rewards -------------------- #
 
 def stand_still(
     env: ManagerBasedRLEnv,
@@ -294,6 +339,21 @@ def feet_slide(
     reward = torch.sum(body_vel.norm(dim=-1) * contacts, dim=1)
     #  reward *= torch.clamp(-env.scene["robot"].data.projected_gravity_b[:, 2], 0, 1.0)  # don't penalize when upside down
     return reward
+
+
+def feet_landing_vel_l2(
+    env: ManagerBasedRLEnv,
+    velocity_threshold: float,
+    sensor_cfg: SceneEntityCfg,
+    asset_cfg: SceneEntityCfg = SceneEntityCfg("robot"),
+) -> torch.Tensor:
+    """Penalize excessive downward foot velocity at the first contact after a swing phase."""
+    contact_sensor: ContactSensor = env.scene.sensors[sensor_cfg.name]
+    first_contact = contact_sensor.compute_first_contact(env.step_dt)[:, sensor_cfg.body_ids]
+    asset: Articulation = env.scene[asset_cfg.name]
+    downward_velocity = torch.clamp(-asset.data.body_lin_vel_w[:, asset_cfg.body_ids, 2], min=0.0)
+    excessive_velocity = downward_velocity > velocity_threshold
+    return torch.sum(torch.square(downward_velocity) * excessive_velocity * first_contact, dim=1)
 
 
 def feet_flat_contact_humanoid(
@@ -401,6 +461,8 @@ def feet_clearance(
     feet_vel_b_xy = torch.linalg.norm(feet_vel_b[:, :, :2], dim=2)
     return torch.sum(height_error * feet_vel_b_xy, dim=1)
 
+
+# -------------------- MISC Rewards -------------------- #
 
 def action_rate_l2(env: ManagerBasedRLEnv) -> torch.Tensor:
     """Penalize the rate of change of the actions using L2 squared kernel."""

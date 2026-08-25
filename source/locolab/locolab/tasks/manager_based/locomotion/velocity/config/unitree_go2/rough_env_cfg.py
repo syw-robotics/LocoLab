@@ -32,7 +32,7 @@ from locolab.tasks.manager_based.locomotion.velocity.config.unitree_go2.mdp_cfg 
 )
 from locolab.assets import UNITREE_GO2_CFG  # isort: skip
 from locolab.utils.terrains.terrains_cfg import ROUGH_TERRAINS_CFG  # isort: skip
-from locolab.utils.markers import BLUE_RAY_CASTER_MARKER_CFG, PURPLE_RAY_CASTER_MARKER_CFG
+from locolab.utils.markers import BLUE_RAY_CASTER_MARKER_CFG  # isort: skip
 
 
 ##

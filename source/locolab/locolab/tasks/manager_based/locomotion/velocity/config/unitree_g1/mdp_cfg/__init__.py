@@ -13,6 +13,8 @@ HIP_ROLL_JOINT_NAME = ".*_hip_roll_.*"
 HIP_YAW_JOINT_NAME = ".*_hip_yaw_.*"
 WAIST_JOINT_NAMES = ["waist_.*"]
 TORSO_LINK_NAME = "torso_link"
+COORDINATION_JOINT_NAMES = [ "left_hip_pitch_joint", "right_shoulder_pitch_joint",
+                            "right_hip_pitch_joint", "left_shoulder_pitch_joint", ]
 
 PRESERVE_ORDER = True
 
@@ -29,18 +31,23 @@ JOINT_NAMES = [
 from .actions_cfg import ActionsCfg
 from .commands_cfg import CommandsCfg
 from .curriculumns_cfg import FlatCurriculumsCfg
-from .events_cfg import EventCfg
-from .observations_cfg import PrivObsCfg, PropObsCfg
-from .rewards_cfg import FlatRewardsCfg
-from .terminations_cfg import FlatTerminationsCfg
+from .events_cfg import EventCfg, RoughEventCfg
+from .observations_cfg import PrivObsCfg, PropObsCfg, HeightmapPropObsCfg
+from .rewards_cfg import FlatRewardsCfg, RoughRewardsCfg
+from .terminations_cfg import FlatTerminationsCfg, RoughTerminationsCfg
 
 __all__ = [
     "ActionsCfg",
     "CommandsCfg",
     "EventCfg",
+    "RoughEventCfg",
     "FlatCurriculumsCfg",
+    "RoughTerminationsCfg",
     "PropObsCfg",
     "PrivObsCfg",
+    "HeightmapPropObsCfg",
     "FlatRewardsCfg",
+    "RoughRewardsCfg",
     "FlatTerminationsCfg",
+    "RoughTerminationsCfg",
 ]

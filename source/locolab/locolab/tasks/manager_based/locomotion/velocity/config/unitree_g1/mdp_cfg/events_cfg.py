@@ -91,3 +91,7 @@ class EventCfg:
         interval_range_s=(12.0, 16.0),
         params={"velocity_range": {"x": (-0.5, 0.5), "y": (-0.5, 0.5)}},
     )
+
+@configclass
+class RoughEventCfg(EventCfg):
+    pass

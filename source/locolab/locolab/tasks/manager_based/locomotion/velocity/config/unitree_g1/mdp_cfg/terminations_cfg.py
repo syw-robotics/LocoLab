@@ -24,3 +24,17 @@ class FlatTerminationsCfg:
 
     # terminate when robot is excessively tilted
     #  bad_orientation = DoneTerm(func=mdp.bad_orientation, params={"limit_angle": 0.9})
+
+
+@configclass
+class RoughTerminationsCfg:
+    """Termination terms for the rough terrain."""
+
+    # terminate when max episode length is reached
+    time_out = DoneTerm(func=mdp.time_out, time_out=True)
+
+    # terminate when robot falls (pelvis lower than 0.3m)
+    base_height = DoneTerm(func=mdp.root_height_below_minimum, params={"minimum_height": 0.3})
+
+    # terminate when robot is excessively tilted
+    #  bad_orientation = DoneTerm(func=mdp.bad_orientation, params={"limit_angle": 0.9})
