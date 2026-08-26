@@ -14,8 +14,14 @@ from isaaclab.utils.noise import AdditiveUniformNoiseCfg as Unoise
 
 import locolab.tasks.manager_based.locomotion.velocity.mdp as mdp
 
-from . import FOOT_LINK_NAMES, JOINT_NAMES, PRESERVE_ORDER
-
+from . import (
+    AMP_ANCHOR_NAME,
+    AMP_BODY_NAMES,
+    AMP_MOTION_BODY_NAMES,
+    FOOT_LINK_NAMES,
+    JOINT_NAMES,
+    PRESERVE_ORDER,
+)
 
 @configclass
 class PropObsCfg(ObsGroup):
@@ -110,6 +116,49 @@ class PrivObsCfg(ObsGroup):
         params={"sensor_cfg": SceneEntityCfg("contact_forces", body_names=FOOT_LINK_NAMES)},
     )
     gait_phase = ObsTerm(func=mdp.gait_phase, params={"period": 0.8})
+
+    def __post_init__(self):
+        self.enable_corruption = False
+        self.concatenate_terms = True
+
+
+@configclass
+class AmpPolicyObsCfg(ObsGroup):
+    """AMP observations from the simulated policy robot."""
+
+    amp_body_state = ObsTerm(
+        func=mdp.amp_body_state,
+        params={
+            "amp_body_cfg": SceneEntityCfg(
+                "robot",
+                body_names=AMP_BODY_NAMES,
+                preserve_order=PRESERVE_ORDER,
+            ),
+            "amp_anchor_cfg": SceneEntityCfg(
+                "robot",
+                body_names=AMP_ANCHOR_NAME,
+            ),
+        },
+    )
+
+    def __post_init__(self):
+        self.enable_corruption = False
+        self.concatenate_terms = True
+
+
+@configclass
+class AmpReferenceObsCfg(ObsGroup):
+    """AMP observations sampled from reference motion files."""
+
+    amp_reference_body_state = ObsTerm(
+        func=mdp.amp_reference_body_state,
+        params={
+            "motion_dir": "/home/d086/workspace/RL/LocoLab/source/locolab/locolab/assets/motions/g1/amp/WalkOnly",
+            "amp_body_names": AMP_BODY_NAMES,
+            "amp_anchor_name": AMP_ANCHOR_NAME,
+            "motion_body_names": AMP_MOTION_BODY_NAMES,
+        },
+    )
 
     def __post_init__(self):
         self.enable_corruption = False

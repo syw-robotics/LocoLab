@@ -23,3 +23,14 @@ register_manager_based_rl_env(
         "z_rl_cfg_entry_point": f"{agents.__name__}.z_rl_ppo_cfg:G1FlatPPORunnerCfg",
     },
 )
+
+
+# ===== Flat terrain + AMP =====
+register_manager_based_rl_env(
+    task_id="Velocity-Flat-AMP-G1",
+    env_cfg_module=f"{__name__}.flat_amp_env_cfg",
+    env_cfg_name="G1FlatAmpEnvCfg",
+    agent_cfg_entry_points={
+        "z_rl_cfg_entry_point": f"{agents.__name__}.z_rl_amp_ppo_cfg:G1FlatAMPRunnerCfg",
+    },
+)

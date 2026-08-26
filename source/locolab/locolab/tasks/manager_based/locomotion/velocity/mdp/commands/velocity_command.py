@@ -132,6 +132,7 @@ class UniformVelocityCommand(CommandTerm):
         )
 
     def _resample_command(self, env_ids: Sequence[int]):
+        env_ids = torch.as_tensor(env_ids, device=self.device, dtype=torch.long)
         # sample velocity commands
         r = torch.empty(len(env_ids), device=self.device)
         # -- linear velocity - x direction
@@ -158,6 +159,30 @@ class UniformVelocityCommand(CommandTerm):
         only_x_env_ids = self.is_only_lin_vel_x_env.nonzero(as_tuple=False).flatten()
         self.vel_command_b[only_x_env_ids, 1] = 0.0
         self.vel_command_b[only_x_env_ids, 2] = 0.0
+
+        # Sample special command modes after the generic command so they fully override it.
+        # These modes use direct yaw-rate commands even when heading_command is enabled.
+        mode_sample = torch.rand(len(env_ids), device=self.device)
+        standing_mask = mode_sample < self.cfg.rel_standing_envs
+        turn_in_place_mask = (mode_sample >= self.cfg.rel_standing_envs) & (
+            mode_sample < self.cfg.rel_standing_envs + self.cfg.rel_turn_in_place_envs
+        )
+
+        standing_env_ids = env_ids[standing_mask]
+        if standing_env_ids.numel() > 0:
+            self.vel_command_b[standing_env_ids, :] = 0.0
+            self.is_only_lin_vel_x_env[standing_env_ids] = False
+            if self.cfg.heading_command:
+                self.is_heading_env[standing_env_ids] = False
+
+        turn_in_place_env_ids = env_ids[turn_in_place_mask]
+        if turn_in_place_env_ids.numel() > 0:
+            yaw_command = torch.empty(turn_in_place_env_ids.numel(), device=self.device)
+            self.vel_command_b[turn_in_place_env_ids, :2] = 0.0
+            self.vel_command_b[turn_in_place_env_ids, 2] = yaw_command.uniform_(*self.cfg.ranges.ang_vel_z)
+            self.is_only_lin_vel_x_env[turn_in_place_env_ids] = False
+            if self.cfg.heading_command:
+                self.is_heading_env[turn_in_place_env_ids] = False
 
     def _update_command(self):
         """Post-processes the velocity command.

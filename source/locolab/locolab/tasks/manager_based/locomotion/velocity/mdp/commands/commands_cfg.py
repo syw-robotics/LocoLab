@@ -56,6 +56,12 @@ class UniformVelocityCommandCfg(CommandTermCfg):
     while others have full 3-DOF velocity commands.
     """
 
+    rel_standing_envs: float = 0.0
+    """The sampled probability of environments where all velocity commands are set to zero."""
+
+    rel_turn_in_place_envs: float = 0.0
+    """The sampled probability of environments where linear velocity is zero but yaw velocity is non-zero."""
+
     @configclass
     class Ranges:
         """Uniform distribution ranges for the velocity commands."""

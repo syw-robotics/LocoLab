@@ -22,6 +22,8 @@ class CommandsCfg:
         resampling_time_range=(6.0, 12.0),
         rel_heading_envs=1.0,
         rel_only_lin_vel_x_envs=0.1,
+        rel_standing_envs=0.2,
+        rel_turn_in_place_envs=0.2,
         zero_velocity_threshold=0.2,
         heading_command=True,
         heading_control_stiffness=0.8,
