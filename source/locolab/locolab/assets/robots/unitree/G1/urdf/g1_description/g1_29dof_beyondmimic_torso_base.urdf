@@ -434,13 +434,13 @@
     <!-- Torso -->
     <link name="waist_yaw_link">
         <inertial>
-            <origin xyz="0.003494 0.000233 0.018034" rpy="0 0 0"/>
+            <origin xyz="0.0074575 0.000233 -0.025966" rpy="0 0 0"/>
             <mass value="0.214"/>
             <inertia ixx="0.00010673" ixy="2.703E-06" ixz="-7.631E-06" iyy="0.00010422" iyz="-2.01E-07"
                      izz="0.0001625"/>
         </inertial>
         <visual>
-            <origin xyz="0 0 0" rpy="0 0 0"/>
+            <origin xyz="0.0039635 0 -0.044" rpy="0 0 0"/>
             <geometry>
                 <mesh filename="meshes/waist_yaw_link_rev_1_0.STL"/>
             </geometry>
@@ -450,10 +450,10 @@
         </visual>
     </link>
     <joint name="waist_yaw_joint" type="revolute">
-        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <origin xyz="0.0039635 0 -0.044" rpy="0 0 0"/>
         <parent link="waist_yaw_link"/>
         <child link="pelvis"/>
-        <axis xyz="0 0 1"/>
+        <axis xyz="0 0 -1"/>
         <limit lower="-2.618" upper="2.618" effort="88" velocity="32"/>
     </joint>
     <link name="waist_roll_link">
@@ -473,10 +473,10 @@
         </visual>
     </link>
     <joint name="waist_roll_joint" type="revolute">
-        <origin xyz="0.0039635 0 -0.044" rpy="0 0 0"/>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
         <parent link="waist_roll_link"/>
         <child link="waist_yaw_link"/>
-        <axis xyz="1 0 0"/>
+        <axis xyz="-1 0 0"/>
         <limit lower="-0.52" upper="0.52" effort="50" velocity="37"/>
     </joint>
     <link name="torso_link">
@@ -523,7 +523,7 @@
         <origin xyz="0 0 0" rpy="0 0 0"/>
         <parent link="torso_link"/>
         <child link="waist_roll_link"/>
-        <axis xyz="0 1 0"/>
+        <axis xyz="0 -1 0"/>
         <limit lower="-0.52" upper="0.52" effort="50" velocity="37"/>
     </joint>
 
@@ -661,7 +661,7 @@
             </material>
         </visual>
         <collision>
-            <origin xyz="0 0 0.05" rpy="3.1416 0 0"/>
+            <origin xyz="0 0 -0.015" rpy="3.1416 0 0"/>
             <geometry>
                 <cylinder radius="0.035" length="0.13"/>
             </geometry>
@@ -865,7 +865,7 @@
             </material>
         </visual>
         <collision>
-            <origin xyz="0 0 0.05" rpy="3.1416 0 0"/>
+            <origin xyz="0 0 -0.015" rpy="3.1416 0 0"/>
             <geometry>
                 <cylinder radius="0.035" length="0.13"/>
             </geometry>

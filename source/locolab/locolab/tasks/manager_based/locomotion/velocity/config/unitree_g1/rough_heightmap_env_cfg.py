@@ -31,8 +31,9 @@ from locolab.tasks.manager_based.locomotion.velocity.config.unitree_g1.mdp_cfg i
     PropObsCfg,
     RoughTerminationsCfg,
     RoughCurriculumsCfg,
+    CONTACT_SENSOR_LINK_NAMES,
 )
-from locolab.assets import UNITREE_G1_29DOF_BEYONDMIMIC_CFG  # isort: skip
+from locolab.assets import UNITREE_G1_29DOF_BEYONDMIMIC_TORSO_BASE_CFG  # isort: skip
 from locolab.utils.terrains.terrains_cfg import ROUGH_TERRAINS_CFG  # isort: skip
 from locolab.utils.markers import BLUE_RAY_CASTER_MARKER_CFG  # isort: skip
 
@@ -73,7 +74,7 @@ class G1RoughSceneCfg(InteractiveSceneCfg):
     )
 
     # =====  robots  =====
-    robot: ArticulationCfg = UNITREE_G1_29DOF_BEYONDMIMIC_CFG.replace(prim_path="{ENV_REGEX_NS}/Robot")
+    robot: ArticulationCfg = UNITREE_G1_29DOF_BEYONDMIMIC_TORSO_BASE_CFG.replace(prim_path="{ENV_REGEX_NS}/Robot")
 
     # =====  sensors  =====
     height_scanner: RayCasterCfg = RayCasterCfg(
@@ -86,7 +87,7 @@ class G1RoughSceneCfg(InteractiveSceneCfg):
         visualizer_cfg=BLUE_RAY_CASTER_MARKER_CFG,
     )
     contact_forces: ContactSensorCfg = ContactSensorCfg(
-        prim_path="{ENV_REGEX_NS}/Robot/.*", history_length=3, track_air_time=True
+        prim_path=f"{{ENV_REGEX_NS}}/Robot/{CONTACT_SENSOR_LINK_NAMES}", history_length=3, track_air_time=True
     )
 
     # =====  lights  =====

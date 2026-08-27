@@ -119,7 +119,7 @@ class RoughRewardsCfg:
     # -- joint --
     joint_hip_deviation_l1 = RewTerm(
         func=mdp.joint_deviation_l1,
-        weight=-0.01,
+        weight=-0.05,
         params={"asset_cfg": SceneEntityCfg("robot", joint_names=HIP_JOINT_NAMES)},
     )
     joint_acc_l2 = RewTerm(
@@ -149,15 +149,15 @@ class RoughRewardsCfg:
         },
     )
     # -- feet --
-    #  feet_air_time = RewTerm(
-    #      func=mdp.feet_air_time,
-    #      weight=0.1,
-    #      params={
-    #          "command_name": "base_velocity",
-    #          "threshold": 0.5,
-    #          "sensor_cfg": SceneEntityCfg("contact_forces", body_names=FOOT_LINK_NAMES),
-    #      },
-    #  )
+    feet_air_time = RewTerm(
+        func=mdp.feet_air_time,
+        weight=0.1,
+        params={
+            "command_name": "base_velocity",
+            "threshold": 0.5,
+            "sensor_cfg": SceneEntityCfg("contact_forces", body_names=FOOT_LINK_NAMES),
+        },
+    )
     #  feet_clearance_rough = RewTerm(
     #      func=mdp.feet_clearance_rough,
     #      weight=0.1,
@@ -169,26 +169,26 @@ class RoughRewardsCfg:
     #      },
     #  )
 
-    feet_clearance = RewTerm(
-        func=mdp.feet_clearance,
-        weight=-0.1,
-        params={
-            "target_height_in_base_frame": -0.18,
-            "asset_cfg": SceneEntityCfg("robot", body_names=FOOT_LINK_NAMES),
-        },
-    )
-    #  feet_stumble = RewTerm(
-    #      func=mdp.feet_stumble,
+    #  feet_clearance = RewTerm(
+    #      func=mdp.feet_clearance,
     #      weight=-0.1,
     #      params={
-    #          "sensor_cfg": SceneEntityCfg("contact_forces", body_names=FOOT_LINK_NAMES),
+    #          "target_height_in_base_frame": -0.18,
+    #          "asset_cfg": SceneEntityCfg("robot", body_names=FOOT_LINK_NAMES),
     #      },
     #  )
+    feet_stumble = RewTerm(
+        func=mdp.feet_stumble,
+        weight=-0.1,
+        params={
+            "sensor_cfg": SceneEntityCfg("contact_forces", body_names=FOOT_LINK_NAMES),
+        },
+    )
     # -- stand still --
-    #  stand_still = RewTerm(
-    #      func=mdp.stand_still,
-    #      weight=-1.0,
-    #      params={
-    #          "asset_cfg": SceneEntityCfg("robot", joint_names=JOINT_NAMES),
-    #      },
-    #  )
+    stand_still = RewTerm(
+        func=mdp.stand_still,
+        weight=-1.0,
+        params={
+            "asset_cfg": SceneEntityCfg("robot", joint_names=JOINT_NAMES),
+        },
+    )

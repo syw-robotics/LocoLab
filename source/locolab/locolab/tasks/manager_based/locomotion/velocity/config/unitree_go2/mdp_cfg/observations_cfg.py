@@ -6,7 +6,6 @@
 # All rights reserved.
 # Modifications are licensed under BSD-3-Clause.
 
-from typing import ParamSpec
 from isaaclab.managers import ObservationGroupCfg as ObsGroup
 from isaaclab.managers import ObservationTermCfg as ObsTerm
 from isaaclab.managers import SceneEntityCfg

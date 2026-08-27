@@ -56,6 +56,19 @@ class UniformVelocityCommandCfg(CommandTermCfg):
     while others have full 3-DOF velocity commands.
     """
 
+    rel_zero_lin_vel_envs: float = 0.0
+    """The sampled probability of in-place environments with zero x/y velocity.
+
+    The yaw command is preserved so these environments can learn in-place turning. This mode,
+    :attr:`rel_standing_envs`, and :attr:`rel_only_lin_vel_x_envs` are mutually exclusive. Defaults to 0.0.
+    """
+
+    rel_standing_envs: float = 0.0
+    """The sampled probability of environments with a fully zero velocity command.
+
+    This is a separate, mutually exclusive command mode. Defaults to 0.0.
+    """
+
     @configclass
     class Ranges:
         """Uniform distribution ranges for the velocity commands."""

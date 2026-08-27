@@ -128,10 +128,11 @@ tasks
 Different types of tasks are organized in different sub-directories, such that tasks are clearly separated and mdp components are easily reusable.
 
 ## 📝 TODO
+- [ ] **Symmetry Config Definition**: Alongside with which in Z RL
 - [ ] **G1**: Add Velocity-Flat-AMP-G1 and Velocity-Rough-G1
 - [ ] **B2**: Add Velocity-Flat-B2 and Velocity-Rough-B2
 - [ ] **Go2**: Debug and refine Velocity-Rough-Go2-ZRL-BarlowTwins and Velocity-Rough-Go2-ZRL-DreamWaQ
-- [ ] **Symmetry Config Definition**: Alongside with which in Z RL
+- [ ] **Active Adaptation Port**: Migrate LocoLab tasks to (AA)[https://github.com/Agent-3154/active-adaptation]
 
 <!-- ### Set up IDE (Optional)
 

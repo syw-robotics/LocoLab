@@ -152,7 +152,8 @@ UNITREE_B2_CFG = UnitreeArticulationCfg(
         joint_vel={".*": 0.0},
     ),
     actuators={
-        "B2DelayedImplicit_Hip_Thigh": DelayedImplicitActuatorCfg(
+        #  "B2DelayedImplicit_Hip_Thigh": DelayedImplicitActuatorCfg(
+        "B2Implicit_Hip_Thigh": ImplicitActuatorCfg(
             joint_names_expr=[".*_hip_joint", ".*_thigh_joint"],
             effort_limit_sim=200.0,
             velocity_limit_sim=23.0,
@@ -160,7 +161,7 @@ UNITREE_B2_CFG = UnitreeArticulationCfg(
             damping=2.0,
             friction=0.01,
         ),
-        "B2DelayedImplicit_Calf": DelayedImplicitActuatorCfg(
+        "B2Implicit_Calf": ImplicitActuatorCfg(
             joint_names_expr=[".*_calf_joint"],
             effort_limit_sim=320.0,
             velocity_limit_sim=14.0,
@@ -206,7 +207,7 @@ UNITREE_B2Z1_CFG = UnitreeArticulationCfg(
     ),
     actuators={
         #  "B2DelayedImplicit_Hip_Thigh": DelayedImplicitActuatorCfg(
-        "B2DelayedImplicit_Hip_Thigh": ImplicitActuatorCfg(
+        "B2Implicit_Hip_Thigh": ImplicitActuatorCfg(
             joint_names_expr=[".*_hip_joint", ".*_thigh_joint"],
             effort_limit_sim=200.0,
             velocity_limit_sim=23.0,
@@ -214,7 +215,7 @@ UNITREE_B2Z1_CFG = UnitreeArticulationCfg(
             damping=2.0,
             friction=0.01,
         ),
-        "B2DelayedImplicit_Calf": ImplicitActuatorCfg(
+        "B2Implicit_Calf": ImplicitActuatorCfg(
             joint_names_expr=[".*_calf_joint"],
             effort_limit_sim=320.0,
             velocity_limit_sim=14.0,
@@ -222,7 +223,7 @@ UNITREE_B2Z1_CFG = UnitreeArticulationCfg(
             damping=2.0,
             friction=0.01,
         ),
-        "z1_arm": ImplicitActuatorCfg(
+        "Z1Implicit_Arm": ImplicitActuatorCfg(
             joint_names_expr=[
                 "z1_joint1",
                 "z1_joint3",
@@ -236,7 +237,7 @@ UNITREE_B2Z1_CFG = UnitreeArticulationCfg(
             damping=1.0,
             friction=0.01,
         ),
-        "z1_shoulder": DelayedImplicitActuatorCfg(
+        "Z1Implicit_Shoulder": DelayedImplicitActuatorCfg(
             joint_names_expr=["z1_joint2"],
             effort_limit_sim=45.0,
             velocity_limit_sim=6.0,
@@ -257,12 +258,11 @@ UNITREE_B2Z1_CFG = UnitreeArticulationCfg(
     # fmt: on
 )
 
-UNITREE_G1_29DOF_BEYONDMIMIC_CFG = UnitreeArticulationCfg(
+UNITREE_G1_29DOF_BEYONDMIMIC_PELVIS_BASE_CFG = UnitreeArticulationCfg(
     # Here we prefer URDF over USD for the convenience of modifying collision shapes
     spawn=sim_utils.UrdfFileCfg(
         fix_base=False,
         replace_cylinders_with_capsules=True,
-        #  asset_path=f"{UNITREE_MODEL_DIR}/G1/urdf/g1_description/g1_29dof_beyondmimic_torso_base.urdf",
         asset_path=f"{UNITREE_MODEL_DIR}/G1/urdf/g1_description/g1_29dof_beyondmimic_pelvis_base.urdf",
         activate_contact_sensors=True,
         rigid_props=sim_utils.RigidBodyPropertiesCfg(
@@ -286,8 +286,8 @@ UNITREE_G1_29DOF_BEYONDMIMIC_CFG = UnitreeArticulationCfg(
         ),
     ),
     init_state=ArticulationCfg.InitialStateCfg(
-        #  pos=(0.0, 0.0, 0.8),
-        pos=(0.0, 0.0, 0.85),
+        #  pos=(0.0, 0.0, 0.85),
+        pos=(0.0, 0.0, 0.88),
         joint_pos={
             ".*_hip_pitch_joint": -0.1,
             ".*_knee_joint": 0.3,
@@ -332,4 +332,12 @@ UNITREE_G1_29DOF_BEYONDMIMIC_CFG = UnitreeArticulationCfg(
         "right_wrist_yaw_joint",
     ],
 )
-"""Configuration for the Unitree G1 29DOF Humanoid robot."""
+"""Configuration for the pelvis-base Unitree G1 29DOF humanoid robot."""
+
+
+UNITREE_G1_29DOF_BEYONDMIMIC_TORSO_BASE_CFG = UNITREE_G1_29DOF_BEYONDMIMIC_PELVIS_BASE_CFG.replace(
+    spawn=UNITREE_G1_29DOF_BEYONDMIMIC_PELVIS_BASE_CFG.spawn.replace(
+        asset_path=f"{UNITREE_MODEL_DIR}/G1/urdf/g1_description/g1_29dof_beyondmimic_torso_base.urdf"
+    )
+)
+"""Configuration for the torso-base Unitree G1 29DOF humanoid robot."""

@@ -13,10 +13,8 @@ from isaaclab.scene import InteractiveSceneCfg
 from isaaclab.sensors import ContactSensorCfg
 from isaaclab.utils import configclass
 
-from locolab.utils.scene import flat_terrain_visual_material_cfg, blue_sky_light_cfg
+from locolab.utils.scene import blue_sky_light_cfg, flat_terrain_visual_material_cfg
 from locolab.utils.terrains import TerrainImporterCfg
-
-#  from isaaclab.utils.assets import ISAAC_NUCLEUS_DIR
 
 
 ##
@@ -31,8 +29,9 @@ from locolab.tasks.manager_based.locomotion.velocity.config.unitree_g1.mdp_cfg i
     PropObsCfg,
     FlatTerminationsCfg,
     FlatCurriculumsCfg,
+    CONTACT_SENSOR_LINK_NAMES,
 )
-from locolab.assets import UNITREE_G1_29DOF_BEYONDMIMIC_CFG  # isort: skip
+from locolab.assets import UNITREE_G1_29DOF_BEYONDMIMIC_PELVIS_BASE_CFG  # isort: skip
 
 
 ##
@@ -53,7 +52,7 @@ class G1FlatObservationsCfg:
 ##
 @configclass
 class G1FlatSceneCfg(InteractiveSceneCfg):
-    """Configuration for G1 on flat terrain scene"""
+    """Configuration for pelvis based G1 on flat terrain scene"""
 
     # =====  terrain  =====
     terrain: TerrainImporterCfg = TerrainImporterCfg(
@@ -70,11 +69,11 @@ class G1FlatSceneCfg(InteractiveSceneCfg):
     )
 
     # =====  robots  =====
-    robot: ArticulationCfg = UNITREE_G1_29DOF_BEYONDMIMIC_CFG.replace(prim_path="{ENV_REGEX_NS}/Robot")
+    robot: ArticulationCfg = UNITREE_G1_29DOF_BEYONDMIMIC_PELVIS_BASE_CFG.replace(prim_path="{ENV_REGEX_NS}/Robot")
 
     # =====  sensors  =====
     contact_forces: ContactSensorCfg = ContactSensorCfg(
-        prim_path="{ENV_REGEX_NS}/Robot/.*", history_length=3, track_air_time=True
+        prim_path=f"{{ENV_REGEX_NS}}/Robot/{CONTACT_SENSOR_LINK_NAMES}", history_length=3, track_air_time=True
     )
 
     # =====  lights  =====
@@ -115,23 +114,25 @@ class G1FlatEnvCfg(ManagerBasedRLEnvCfg):
         self.scene.contact_forces.update_period = self.sim.dt
 
 
+def _configure_play_env(cfg: G1FlatEnvCfg) -> None:
+    cfg.scene.num_envs = 10
+    cfg.scene.env_spacing = 2.5
+    cfg.commands.base_velocity.debug_vis = True
+
+    lin_vel_cmd_params = cfg.curriculum.lin_vel_cmd_levels.params
+    ang_vel_cmd_params = cfg.curriculum.ang_vel_cmd_levels.params
+    cfg.commands.base_velocity.ranges = type(cfg.commands.base_velocity.ranges)(
+        lin_vel_x=lin_vel_cmd_params["max_lin_vel_x_ranges"],
+        lin_vel_y=lin_vel_cmd_params["max_lin_vel_y_ranges"],
+        ang_vel_z=ang_vel_cmd_params["max_ang_vel_z_ranges"],
+        heading=cfg.commands.base_velocity.ranges.heading,
+    )
+
+
 @configclass
 class G1FlatEnvCfg_PLAY(G1FlatEnvCfg):
     def __post_init__(self) -> None:
-        # post init of parent
         super().__post_init__()
+        _configure_play_env(self)
 
-        # make a smaller scene for play
-        self.scene.num_envs = 10
-        self.scene.env_spacing = 2.5
-        self.commands.base_velocity.debug_vis = True
 
-        # set command ranges to the curriculum limits
-        lin_vel_cmd_params = self.curriculum.lin_vel_cmd_levels.params
-        ang_vel_cmd_params = self.curriculum.ang_vel_cmd_levels.params
-        self.commands.base_velocity.ranges = type(self.commands.base_velocity.ranges)(
-            lin_vel_x=lin_vel_cmd_params["max_lin_vel_x_ranges"],
-            lin_vel_y=lin_vel_cmd_params["max_lin_vel_y_ranges"],
-            ang_vel_z=ang_vel_cmd_params["max_ang_vel_z_ranges"],
-            heading=self.commands.base_velocity.ranges.heading,
-        )

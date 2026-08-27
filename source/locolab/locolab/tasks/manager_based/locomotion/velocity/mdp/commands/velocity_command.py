@@ -75,6 +75,20 @@ class UniformVelocityCommand(CommandTerm):
                 f"The velocity command has the 'ranges.heading' attribute set to '{self.cfg.ranges.heading}'"
                 " but the heading command is not active. Consider setting the flag for the heading command to True."
             )
+        mode_probabilities = {
+            "rel_standing_envs": self.cfg.rel_standing_envs,
+            "rel_zero_lin_vel_envs": self.cfg.rel_zero_lin_vel_envs,
+            "rel_only_lin_vel_x_envs": self.cfg.rel_only_lin_vel_x_envs,
+        }
+        for name, probability in mode_probabilities.items():
+            if not 0.0 <= probability <= 1.0:
+                raise ValueError(f"Expected {name} to be in [0, 1], got {probability}.")
+        mode_probability = sum(mode_probabilities.values())
+        if mode_probability > 1.0:
+            raise ValueError(
+                "Expected the standing, in-place, and x-only probabilities to sum to at most 1, "
+                f"got {mode_probability}."
+            )
 
         # obtain the robot asset
         # -- robot
@@ -85,7 +99,6 @@ class UniformVelocityCommand(CommandTerm):
         self.vel_command_b = torch.zeros(self.num_envs, 3, device=self.device)
         self.heading_target = torch.zeros(self.num_envs, device=self.device)
         self.is_heading_env = torch.zeros(self.num_envs, dtype=torch.bool, device=self.device)
-        self.is_only_lin_vel_x_env = torch.zeros_like(self.is_heading_env)
         # commands are set to zero if the velocity xy is below the threshold
         self.zero_velocity_threshold = self.cfg.zero_velocity_threshold
         # -- metrics
@@ -100,6 +113,8 @@ class UniformVelocityCommand(CommandTerm):
         msg += f"\tHeading command: {self.cfg.heading_command}\n"
         if self.cfg.heading_command:
             msg += f"\tHeading probability: {self.cfg.rel_heading_envs}\n"
+        msg += f"\tStanding probability: {self.cfg.rel_standing_envs}\n"
+        msg += f"\tIn-place probability: {self.cfg.rel_zero_lin_vel_envs}\n"
         msg += f"\tOnly lin_vel_x probability: {self.cfg.rel_only_lin_vel_x_envs}\n"
         if self.zero_velocity_threshold is not None:
             msg += f"\tVelocity threshold: {self.zero_velocity_threshold}\n"
@@ -146,18 +161,30 @@ class UniformVelocityCommand(CommandTerm):
             # update heading envs
             self.is_heading_env[env_ids] = r.uniform_(0.0, 1.0) <= self.cfg.rel_heading_envs
 
-        # update only_lin_vel_x envs
-        self.is_only_lin_vel_x_env[env_ids] = r.uniform_(0.0, 1.0) <= self.cfg.rel_only_lin_vel_x_envs
+        # Sample mutually exclusive command modes so their configured probabilities remain interpretable.
+        mode_sample = r.uniform_(0.0, 1.0)
+        standing_end = self.cfg.rel_standing_envs
+        in_place_end = standing_end + self.cfg.rel_zero_lin_vel_envs
+        only_lin_vel_x_end = in_place_end + self.cfg.rel_only_lin_vel_x_envs
+        is_standing = mode_sample < standing_end
+        is_zero_lin_vel = (mode_sample >= standing_end) & (mode_sample < in_place_end)
+        is_only_lin_vel_x = (mode_sample >= in_place_end) & (mode_sample < only_lin_vel_x_end)
+
+        # Standing and x-only modes never need per-step heading updates.
+        if self.cfg.heading_command:
+            self.is_heading_env[env_ids] = self.is_heading_env[env_ids] & ~(is_standing | is_only_lin_vel_x)
 
         # set small commands to zero
         self.vel_command_b[env_ids, :2] *= (
             torch.norm(self.vel_command_b[env_ids, :2], dim=1) > self.cfg.zero_velocity_threshold
         ).unsqueeze(1)
 
-        # set y and yaw vel to zero for only_x_envs
-        only_x_env_ids = self.is_only_lin_vel_x_env.nonzero(as_tuple=False).flatten()
-        self.vel_command_b[only_x_env_ids, 1] = 0.0
-        self.vel_command_b[only_x_env_ids, 2] = 0.0
+        # Apply each mode to the sampled command.
+        resampled_commands = self.vel_command_b[env_ids]
+        resampled_commands[is_zero_lin_vel, :2] = 0.0
+        resampled_commands[is_standing] = 0.0
+        resampled_commands[is_only_lin_vel_x, 1:] = 0.0
+        self.vel_command_b[env_ids] = resampled_commands
 
     def _update_command(self):
         """Post-processes the velocity command.
@@ -167,7 +194,6 @@ class UniformVelocityCommand(CommandTerm):
         """
         # Compute angular velocity from heading direction
         if self.cfg.heading_command:
-            # resolve indices of heading envs
             env_ids = self.is_heading_env.nonzero(as_tuple=False).flatten()
             # compute angular velocity
             heading_error = math_utils.wrap_to_pi(self.heading_target[env_ids] - self.robot.data.heading_w[env_ids])

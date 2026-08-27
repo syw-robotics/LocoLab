@@ -16,12 +16,14 @@ import locolab.tasks.manager_based.locomotion.velocity.mdp as mdp
 
 from . import (
     ARM_JOINT_NAMES,
+    ARM_JOINT_NAMES_WO_SHOULDER_PITCH,
+    ARM_SHOULDER_PITCH_JOINT_NAME,
     COORDINATION_JOINT_NAMES,
     FOOT_LINK_NAMES,
     HIP_ROLL_JOINT_NAME,
     HIP_YAW_JOINT_NAME,
-    PRESERVE_ORDER,
     TORSO_LINK_NAME,
+    PELVIS_LINK_NAME,
     UNDESIRED_CONTACT_LINK_NAMES,
     WAIST_JOINT_NAMES,
 )
@@ -29,49 +31,46 @@ from . import (
 
 @configclass
 class FlatRewardsCfg:
-    """Reward terms for flat terrain."""
+    """V1 reward terms for the pelvis-base G1 task."""
 
     # ===== task-specific rewards =====
-    # assign velocity command to torso link
     track_lin_vel_xy_exp = RewTerm(
-        func=mdp.track_lin_vel_xy_yaw_frame_body_exp,
+        func=mdp.track_lin_vel_xy_yaw_frame_exp,
         weight=1.5,
-        params={
-            "command_name": "base_velocity",
-            "std": math.sqrt(0.25),
-            "asset_cfg": SceneEntityCfg("robot", body_names=TORSO_LINK_NAME),
-        },
+        params={"command_name": "base_velocity", "std": math.sqrt(0.25)},
     )
     track_ang_vel_z_exp = RewTerm(
-        func=mdp.track_ang_vel_z_world_body_exp,
+        func=mdp.track_ang_vel_z_world_exp,
         weight=1.0,
-        params={
-            "command_name": "base_velocity",
-            "std": math.sqrt(0.25),
-            "asset_cfg": SceneEntityCfg("robot", body_names=TORSO_LINK_NAME),
-        },
+        params={"command_name": "base_velocity", "std": math.sqrt(0.25)},
     )
     alive = RewTerm(func=mdp.is_alive, weight=0.1)
 
     # ===== penalty rewards =====
     # -- base --
-    # assign base stablity rewards to torso link
     lin_vel_z_l2 = RewTerm(
-        func=mdp.lin_vel_z_body_l2,
-        weight=-2.0, 
-        params={"asset_cfg": SceneEntityCfg("robot", body_names=TORSO_LINK_NAME)},
+        func=mdp.lin_vel_z_l2,
+        weight=-2.0,
+        params={
+            "selected_bodies": True,
+            "asset_cfg": SceneEntityCfg("robot", body_names=[TORSO_LINK_NAME, PELVIS_LINK_NAME])},
     )
     ang_vel_xy_l2 = RewTerm(
-        func=mdp.ang_vel_xy_body_l2,
+        func=mdp.ang_vel_xy_l2,
         weight=-0.05,
-        params={"asset_cfg": SceneEntityCfg("robot", body_names=TORSO_LINK_NAME)},
+        params={
+            "selected_bodies": True,
+            "asset_cfg": SceneEntityCfg("robot", body_names=[TORSO_LINK_NAME, PELVIS_LINK_NAME])},
     )
-    flat_orientation_l2 = RewTerm(
-        func=mdp.flat_orientation_body_l2,
-        weight=-2.0,
-        params={"asset_cfg": SceneEntityCfg("robot", body_names=TORSO_LINK_NAME)},
+    flat_orientation_torso_l2 = RewTerm(
+        func=mdp.flat_orientation_l2,
+        weight=-10.0,
+        params={
+            "selected_bodies": True,
+            "asset_cfg": SceneEntityCfg("robot", body_names=[TORSO_LINK_NAME]),
+        },
     )
-    base_height = RewTerm(func=mdp.base_height_l2, weight=-2.0, params={"target_height": 0.76})  # TODO: change to torso link: component
+    base_height = RewTerm(func=mdp.base_height_l2, weight=-10.0, params={"target_height": 0.76})
     # -- joint --
     joint_acc = RewTerm(func=mdp.joint_acc_l2, weight=-2.5e-7)
     joint_pos_limits = RewTerm(func=mdp.joint_pos_limits, weight=-5.0)
@@ -83,8 +82,8 @@ class FlatRewardsCfg:
     )
     joint_deviation_arms_l1 = RewTerm(
         func=mdp.joint_deviation_l1,
-        weight=-0.1,
-        params={"asset_cfg": SceneEntityCfg("robot", joint_names=ARM_JOINT_NAMES)},
+        weight=-0.5,
+        params={"asset_cfg": SceneEntityCfg("robot", joint_names=ARM_JOINT_NAMES_WO_SHOULDER_PITCH)},
     )
     joint_deviation_waists_l1 = RewTerm(
         func=mdp.joint_deviation_l1,
@@ -93,24 +92,25 @@ class FlatRewardsCfg:
     )
     joint_deviation_hips_l1 = RewTerm(
         func=mdp.joint_deviation_l1,
-        weight=-0.1,
-        params={"asset_cfg": SceneEntityCfg("robot", joint_names=[HIP_ROLL_JOINT_NAME, HIP_YAW_JOINT_NAME])},
+        weight=-0.2,
+        params={"asset_cfg": SceneEntityCfg("robot", joint_names=[HIP_ROLL_JOINT_NAME, HIP_YAW_JOINT_NAME, ARM_SHOULDER_PITCH_JOINT_NAME])},
     )
     # penalize opposing hip and contralateral shoulder pitch directions
-    joint_pair_direction_penalty = RewTerm(
-        func=mdp.joint_pair_direction_penalty,
-        weight=-0.1,
+    joint_paired_coordination = RewTerm(
+        func=mdp.joint_paired_position_coordination,
+        weight=-0.05,
         params={
-            "direction_scale": 0.2,
+            "target_scale": 0.8,
+            "error_scale": 0.10,
             "asset_cfg": SceneEntityCfg(
                 "robot",
                 joint_names=COORDINATION_JOINT_NAMES,
-                preserve_order=PRESERVE_ORDER,
+                preserve_order=True,
             ),
         },
     )
     # -- action --
-    action_rate = RewTerm(func=mdp.action_rate_l2, weight=-0.1)
+    action_rate = RewTerm(func=mdp.action_rate_l2, weight=-0.05)
     # -- collision --
     undesired_contacts = RewTerm(
         func=mdp.undesired_contacts,
@@ -123,13 +123,13 @@ class FlatRewardsCfg:
     # -- feet --
     feet_gait = RewTerm(
         func=mdp.feet_gait,
-        weight=0.5,
+        weight=1.0,
         params={
             "period": 0.8,
             "offset": [0.0, 0.5],
             "threshold": 0.55,
+            "command_name": "base_velocity",
             "sensor_cfg": SceneEntityCfg("contact_forces", body_names=FOOT_LINK_NAMES),
-            "velocity_threshold": 0.2,
         },
     )
     feet_slide = RewTerm(
@@ -140,15 +140,14 @@ class FlatRewardsCfg:
             "sensor_cfg": SceneEntityCfg("contact_forces", body_names=FOOT_LINK_NAMES),
         },
     )
-    feet_landing_vel = RewTerm(
-        func=mdp.feet_landing_vel_l2,
-        weight=-0.5,
-        params={
-            "velocity_threshold": 0.1,
-            "asset_cfg": SceneEntityCfg("robot", body_names=FOOT_LINK_NAMES),
-            "sensor_cfg": SceneEntityCfg("contact_forces", body_names=FOOT_LINK_NAMES),
-        },
-    )
+    #  feet_too_near = RewTerm(
+    #      func=mdp.feet_too_near_bipedal,
+    #      weight=-1.0,
+    #      params={
+    #          "threshold": 0.15,
+    #          "asset_cfg": SceneEntityCfg("robot", body_names=FOOT_LINK_NAMES),
+    #      },
+    #  )
     feet_clearance_flat = RewTerm(
         func=mdp.feet_clearance_flat,
         weight=1.0,
@@ -159,6 +158,16 @@ class FlatRewardsCfg:
             "asset_cfg": SceneEntityCfg("robot", body_names=FOOT_LINK_NAMES),
         },
     )
+    #  feet_air_time = RewTerm(
+    #      func=mdp.feet_air_time,
+    #      weight=0.5,
+    #      params={
+    #          "command_name": "base_velocity",
+    #          "threshold": 0.3,
+    #          "sensor_cfg": SceneEntityCfg("contact_forces", body_names=FOOT_LINK_NAMES),
+    #      },
+    #  )
+
 
 @configclass
 class RoughRewardsCfg:

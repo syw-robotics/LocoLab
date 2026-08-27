@@ -26,7 +26,6 @@ class Go2RoughPPOBaseRunnerCfg(ZRlOnPolicyRunnerCfg):
     save_interval = 500
     experiment_name = "go2_rough"
     obs_groups = {"actor": ["policy"], "critic": ["critic"]}
-    torch_compile_mode = "default"
     algorithm = ZRlPpoAlgorithmCfg(
         num_learning_epochs=5,
         num_mini_batches=4,

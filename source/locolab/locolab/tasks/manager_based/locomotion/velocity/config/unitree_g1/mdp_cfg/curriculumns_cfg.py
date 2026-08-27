@@ -21,7 +21,7 @@ class FlatCurriculumsCfg:
         params={
             "max_lin_vel_x_ranges": (-0.5, 1.0),
             "max_lin_vel_y_ranges": (-0.5, 0.5),
-            "percentage_threshold": 0.7,
+            "percentage_threshold": 0.75,
             "velocity_step": 0.1,
         },
     )
@@ -37,7 +37,7 @@ class FlatCurriculumsCfg:
         mdp.push_robot_velocity_levels,
         params={
             "max_push_velocity_ranges": {"x": (-1.5, 1.5), "y": (-1.0, 1.0)},
-            "percentage_threshold": 0.7,
+            "percentage_threshold": 0.75,
             "velocity_step": 0.1,
         },
     )

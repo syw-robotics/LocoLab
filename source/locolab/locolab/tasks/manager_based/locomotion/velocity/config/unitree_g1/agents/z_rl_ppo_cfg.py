@@ -19,7 +19,7 @@ from z_rl.adaptor.isaaclab import (
 @configclass
 class G1RoughPPOBaseRunnerCfg(ZRlOnPolicyRunnerCfg):
     num_steps_per_env = 24
-    max_iterations = 20000
+    max_iterations = 10000
     save_interval = 500
     experiment_name = "g1_rough"
     obs_groups = {"actor": ["policy"], "critic": ["critic"]}
@@ -71,5 +71,5 @@ class G1FlatPPORunnerCfg(G1RoughPPORunnerCfg):
     def __post_init__(self):
         super().__post_init__()
 
-        self.max_iterations = 10000
+        self.max_iterations = 8000
         self.experiment_name = "g1_flat"

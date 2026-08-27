@@ -198,6 +198,18 @@ def main(env_cfg: ManagerBasedRLEnvCfg, agent_cfg: ZRlBaseRunnerCfg):
             obs, _, dones, _ = env.step(actions)
             # reset recurrent states for episodes that have terminated
             policy.reset(dones)
+
+        # -------------------- Print Data for Debugging --------------------
+        # example:
+        #  robot = env.unwrapped.scene["robot"]
+        #  torso_body_id = robot.body_names.index("torso_link")
+        #  base_body_id = robot.body_names.index("base_link")
+        #  pelvis_body_id = robot.body_names.index("pelvis")
+        #  print("base_link height (env 0-10):", robot.data.body_pos_w[:11, base_body_id, 2])
+        #  print("torso_link height (env 0-10):", robot.data.body_pos_w[:11, torso_body_id, 2])
+        #  print("pelvis height (env 0-10):", robot.data.body_pos_w[:11, pelvis_body_id, 2])
+        # -------------------- Print Data for Debugging --------------------
+
         if args_cli.video:
             timestep += 1
             # Exit the play loop after recording one video
