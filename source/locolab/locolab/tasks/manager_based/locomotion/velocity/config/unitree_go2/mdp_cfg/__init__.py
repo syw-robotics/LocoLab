@@ -9,8 +9,10 @@
 BASE_LINK_NAME = "base"
 FOOT_LINK_NAMES = ".*_foot"
 HIP_JOINT_NAMES = [".*_hip_joint"]
-UNDESIRED_CONTACT_LINK_NAMES = ["Head_.*", ".*_hip", ".*_thigh", ".*_calf"]
+UNDESIRED_CONTACT_LINK_NAMES = ["(?!.*_foot).*"]
 OTHER_BODY_LINK_NAMES = [".*_hip", ".*_thigh", ".*_calf"]
+FLAT_CONTACT_SENSOR_LINK_NAMES = "(base|.*_(foot|calf))"
+ROUGH_CONTACT_SENSOR_LINK_NAMES = "(base|.*_(foot|calf|thigh))"
 
 PRESERVE_ORDER = True
 

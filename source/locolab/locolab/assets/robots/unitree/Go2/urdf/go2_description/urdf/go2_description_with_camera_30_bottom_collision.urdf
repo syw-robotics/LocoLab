@@ -13,18 +13,11 @@
       </geometry>
       <material name="深色橡胶_001-effect"><color rgba="0.6717055 0.6924257 0.7742702 1" /></material><material name="白色logo_001-effect"><color rgba="1 1 1 1" /></material><material name="黑色贴纸_007-effect"><color rgba="0.009018 0.009018 0.009018 1" /></material><material name="黑色金属_007-effect"><color rgba="0.01341 0.01341 0.01341 1" /></material><material name="黑色塑料_003-effect"><color rgba="0.023455 0.023455 0.023455 1" /></material></visual>
     <collision>
-      <!-- <origin rpy="0 0 0" xyz="0.05 0 0" /> -->
-      <origin rpy="0 0 0" xyz="0.06 0 0" />
+      <origin rpy="0 0 0" xyz="0.05 0 0" />
       <geometry>
-        <box size="0.4 0.20 0.12" />
+        <!-- <box size="0.4762 0.0935 0.114" /> -->
+        <box size="0.4 0.20 0.114" />
         <!-- <box size="0.4762 0.0935 0.10" /> -->
-        <!-- <box size="0.4762 0.20 0.10" /> -->
-      </geometry>
-    </collision>
-    <collision>
-      <origin rpy="0 0 0" xyz="0.295 0 0.015" />
-      <geometry>
-        <box size="0.07 0.10 0.13" />
       </geometry>
     </collision>
   </link>
@@ -46,6 +39,55 @@
     <parent link="base" />
     <child link="Head_upper" />
     <axis xyz="0 0 0" />
+  </joint>
+  <!-- Realsense Rack -->
+  <link name="realsense_rack_link">
+    <inertial>
+      <mass value="0.032" />
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <inertia ixx="0.0003" ixy="0.0" ixz="0.0" iyy="0.0003" iyz="0.0" izz="0.0003" />
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="1.5707963 0 1.5707963" />
+      <geometry>
+        <mesh filename="package://go2_description/meshes/cam_rack_2_30.STL" />
+      </geometry>
+    </visual>
+    <collision>
+      <!-- <origin xyz="-0.04 0 0.01" rpy="0 -0.35 0" />
+      <geometry>
+        <box size="0.037 0.09 0.048" />
+      </geometry> -->
+      <origin xyz="-0.03 0 -0.05" rpy="0 -0.16 0" />
+      <geometry>
+        <box size="0.05 0.1 0.18" />
+      </geometry>
+    </collision>
+    <!-- bottom front bulges -->
+    <collision>
+      <origin rpy="0 0.0 0" xyz="0.18 0 -0.16" />
+      <geometry>
+        <box size="0.04 0.13 0.03" />
+      </geometry>
+    </collision>
+    <!-- bottom rear bulges -->
+    <collision>
+      <origin rpy="0 0.0 0" xyz="0.395 0 -0.15" />
+      <geometry>
+        <box size="0.03 0.13 0.02" />
+      </geometry>
+    </collision>
+    <!-- <collision> -->
+    <!--   <origin xyz="-0.01 0 -0.135" rpy="0 0 0" /> -->
+    <!--   <geometry> -->
+    <!--     <box size="0.066 0.095 0.006" /> -->
+    <!--   </geometry> -->
+    <!-- </collision> -->
+  </link>
+  <joint name="realsense_rack_joint" type="fixed">
+    <origin xyz="0.286 0 0.081" rpy="0 0 3.14159" />
+    <parent link="base" />
+    <child link="realsense_rack_link" />
   </joint>
   <!-- <link name="Head_lower"> -->
   <!--   <inertial> -->
@@ -788,4 +830,31 @@
       </material>
     </visual>
   </link>
+  <!-- RealSense D435i camera depth origin point -->
+  <link name="realsense_depth_origin_link">
+    <inertial>
+      <!-- The following are not reliable values, and should not be used for modeling (fine, whatever)-->
+      <mass value="0.072" />
+      <origin xyz="0 0 0" />
+      <inertia ixx="0.003881243" ixy="0.0" ixz="0.0" iyy="0.000498940" iyz="0.0" izz="0.003879257" />
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <sphere radius="0.003" />
+      </geometry>
+      <material name="green">
+        <color rgba="0.0 1.0 0.0 1.0"/>
+      </material>
+    </visual>
+  </link>
+  <joint name="realsense_depth_origin_joint" type="fixed">
+    <!-- <origin xyz="0.01 0.016 0.048" rpy="0 0 0" /> -->
+    <!-- <parent link="front_camera" /> --> --> -->
+    <origin xyz="0.335 0.015 0.088" rpy="0 0 0" />
+    <parent link="base" />
+    <child link="realsense_depth_origin_link" />
+  </joint>
+
+
 </robot>
