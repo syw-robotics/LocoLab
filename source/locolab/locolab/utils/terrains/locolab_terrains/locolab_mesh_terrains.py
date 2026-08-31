@@ -3,16 +3,45 @@
 
 from __future__ import annotations
 
-import trimesh
-from isaaclab.terrains.trimesh.utils import make_border
 from typing import TYPE_CHECKING
 
 import numpy as np
+import trimesh
+from isaaclab.terrains.trimesh import mesh_terrains as isaac_mesh_terrains
+from isaaclab.terrains.trimesh.utils import make_border
 
 
 if TYPE_CHECKING:
     from . import locolab_mesh_terrains_cfg
 
+
+def mesh_random_width_pyramid_stairs_terrain(
+    difficulty: float, cfg: locolab_mesh_terrains_cfg.MeshRandomWidthPyramidStairsTerrainCfg
+) -> tuple[list[trimesh.Trimesh], np.ndarray]:
+    """Generate pyramid stairs with a discretely sampled step width."""
+    width_min, width_max = cfg.step_width_range
+    if width_min <= 0.0 or width_min > width_max:
+        raise ValueError(f"Invalid step_width_range: {cfg.step_width_range}.")
+    if cfg.step_width_step <= 0.0:
+        raise ValueError(f"step_width_step must be positive, got {cfg.step_width_step}.")
+
+    num_increments = int(np.floor((width_max - width_min) / cfg.step_width_step + 1e-9))
+    seed = getattr(cfg, "seed", None)
+    if seed is None:
+        width_index = np.random.randint(num_increments + 1)
+    else:
+        difficulty_bits = int(np.float64(difficulty).view(np.uint64))
+        seed_sequence = np.random.SeedSequence([seed, difficulty_bits & 0xFFFFFFFF, difficulty_bits >> 32])
+        width_index = np.random.default_rng(seed_sequence).integers(num_increments + 1)
+    resolved_cfg = cfg.copy()
+    resolved_cfg.step_width = width_min + width_index * cfg.step_width_step
+
+    terrain_function = (
+        isaac_mesh_terrains.inverted_pyramid_stairs_terrain
+        if cfg.inverted
+        else isaac_mesh_terrains.pyramid_stairs_terrain
+    )
+    return terrain_function(difficulty, resolved_cfg)
 
 
 def mesh_straight_gap_terrain(

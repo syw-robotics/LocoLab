@@ -1,5 +1,6 @@
 from .locolab_hf_terrains_cfg import (
     HfDiscreteObstaclesTerrainCfg,
+    HfFlatRoughTerrainCfg,
     HfInvertedPyramidSlopedRoughTerrainCfg,
     HfPyramidSlopedRoughTerrainCfg,
     HfGapTerrainCfg,
@@ -11,6 +12,7 @@ from .locolab_hf_terrains_cfg import (
 )
 
 from .locolab_mesh_terrains_cfg import (
+    MeshRandomWidthPyramidStairsTerrainCfg,
     MeshStraightGapTerrainCfg,
     MeshStraightStairsTerrainCfg,
     MeshInvertedStraightStairsTerrainCfg,

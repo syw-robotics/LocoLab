@@ -40,6 +40,16 @@ class HfRoughTerrainCfg(RoughnessParamsCfg, HfTerrainBaseCfg):
 
 
 @configclass
+class HfFlatRoughTerrainCfg(HfRoughTerrainCfg):
+    """Configuration for flat terrain with LocoLab fractal Perlin roughness."""
+
+    function = locolab_hf_terrains.flat_rough_terrain
+
+    apply_roughness: float = 1.0
+    """Probability of applying roughness. Defaults to always enabled for this terrain type."""
+
+
+@configclass
 class HfPyramidSlopedRoughTerrainCfg(HfRoughTerrainCfg):
     """Configuration for a pyramid sloped terrain with optional roughness."""
 

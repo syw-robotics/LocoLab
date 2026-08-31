@@ -26,8 +26,8 @@ class EventCfg:
         mode="startup",
         params={
             "asset_cfg": SceneEntityCfg("robot", body_names=FOOT_LINK_NAMES),
-            "static_friction_range": (0.2, 1.5),
-            "dynamic_friction_range": (0.2, 1.5),
+            "static_friction_range": (0.2, 1.2),
+            "dynamic_friction_range": (0.2, 1.2),
             "restitution_range": (0.0, 0.5),
             "num_buckets": 64,
             "make_consistent": (
@@ -41,7 +41,7 @@ class EventCfg:
         mode="startup",
         params={
             "asset_cfg": SceneEntityCfg("robot", body_names=BASE_LINK_NAME),
-            "mass_distribution_params": (-3.0, 20.0),
+            "mass_distribution_params": (-2.0, 20.0),
             "operation": "add",
             "recompute_inertia": True,
         },
@@ -63,7 +63,7 @@ class EventCfg:
         mode="startup",
         params={
             "asset_cfg": SceneEntityCfg("robot", body_names=BASE_LINK_NAME),
-            "com_range": {"x": (-0.20, 0.20), "y": (-0.08, 0.08), "z": (-0.08, 0.08)},
+            "com_range": {"x": (-0.10, 0.20), "y": (-0.08, 0.08), "z": (-0.08, 0.12)},
         },
     )
     # 5.
@@ -121,7 +121,7 @@ class EventCfg:
             "pose_range": {
                 "x": (-0.5, 0.5),
                 "y": (-0.5, 0.5),
-                "z": (0.0, 0.2),
+                "z": (0.0, 0.1),
                 "roll": (0.0, 0.0),
                 "pitch": (0.0, 0.0),
                 "yaw": (-3.14, 3.14),

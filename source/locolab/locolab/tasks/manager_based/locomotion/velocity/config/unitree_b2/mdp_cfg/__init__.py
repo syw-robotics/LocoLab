@@ -6,11 +6,12 @@
 # All rights reserved.
 # Modifications are licensed under BSD-3-Clause.
 
-BASE_LINK_NAME = "base"
+BASE_LINK_NAME = "base_link"
 FOOT_LINK_NAMES = ".*_foot"
 HIP_JOINT_NAMES = [".*_hip_joint"]
-UNDESIRED_CONTACT_LINK_NAMES = ["Head_.*", ".*_hip", ".*_thigh", ".*_calf"]
+UNDESIRED_CONTACT_LINK_NAMES = ["(?!.*_foot).*"]
 OTHER_BODY_LINK_NAMES = [".*_hip", ".*_thigh", ".*_calf"]
+CONTACT_SENSOR_LINK_NAMES = "(base_link|.*_(foot|calf))"
 
 PRESERVE_ORDER = True
 
@@ -28,7 +29,7 @@ from .commands_cfg import CommandsCfg
 from .curriculumns_cfg import RoughCurriculumsCfg
 from .events_cfg import EventCfg
 from .observations_cfg import PrivObsCfg, PropObsCfg
-from .rewards_cfg import FlatRewardsCfg, RoughRewardsCfg
+from .rewards_cfg import FlatRewardsCfg
 from .terminations_cfg import FlatTerminationsCfg, RoughTerminationsCfg
 
 __all__ = [
@@ -39,7 +40,6 @@ __all__ = [
     "PropObsCfg",
     "PrivObsCfg",
     "FlatRewardsCfg",
-    "RoughRewardsCfg",
     "FlatTerminationsCfg",
     "RoughTerminationsCfg",
 ]

@@ -6,7 +6,6 @@
 # All rights reserved.
 # Modifications are licensed under BSD-3-Clause.
 
-from typing import ParamSpec
 from isaaclab.managers import ObservationGroupCfg as ObsGroup
 from isaaclab.managers import ObservationTermCfg as ObsTerm
 from isaaclab.managers import SceneEntityCfg
@@ -112,6 +111,7 @@ class PrivObsCfg(ObsGroup):
         func=mdp.feet_contact_flag,
         params={"sensor_cfg": SceneEntityCfg("contact_forces", body_names=".*_foot")},
     )
+    gait_phase = ObsTerm(func=mdp.gait_phase, params={"period": 1.0})
     #  feet_height = ObsTerm(
     #      func=mdp.feet_height,
     #      params={"feet_names": ["FL_foot", "FR_foot", "RL_foot", "RR_foot"]},

@@ -23,16 +23,16 @@ class FlatTerminationsCfg:
     time_out = DoneTerm(func=mdp.time_out, time_out=True)
 
     # bad_orientation is a substitute to illegal_contact, in case of not training fall-recovery behavior
-    #  bad_orientation = DoneTerm(func=mdp.bad_orientation, params={"limit_angle": 0.8})
+    bad_orientation = DoneTerm(func=mdp.bad_orientation, params={"limit_angle": 0.8})
 
     # terminate when contact happens on specified links
-    illegal_contact = DoneTerm(
-        func=mdp.illegal_contact,
-        params={
-            "sensor_cfg": SceneEntityCfg("contact_forces", body_names=BASE_LINK_NAME),
-            "threshold": 1.0,
-        },
-    )
+    #  illegal_contact = DoneTerm(
+    #      func=mdp.illegal_contact,
+    #      params={
+    #          "sensor_cfg": SceneEntityCfg("contact_forces", body_names=BASE_LINK_NAME),
+    #          "threshold": 1.0,
+    #      },
+    #  )
 
 
 @configclass

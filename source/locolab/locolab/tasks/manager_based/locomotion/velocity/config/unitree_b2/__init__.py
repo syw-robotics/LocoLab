@@ -24,60 +24,15 @@ register_manager_based_rl_env(
     },
 )
 
-# -- test additional z_rl tasks --
-register_manager_based_rl_env(
-    task_id="Velocity-Flat-B2-ZRL-MoE",
-    env_cfg_module=f"{__name__}.flat_env_cfg",
-    env_cfg_name="B2FlatEnvCfg",
-    agent_cfg_entry_points={
-        "z_rl_cfg_entry_point": f"{agents.__name__}.z_rl_ppo_cfg:B2FlatMoEPPORunnerCfg",
-    },
-)
-
-register_manager_based_rl_env(
-    task_id="Velocity-Flat-B2-ZRL-RNN",
-    env_cfg_module=f"{__name__}.flat_env_cfg",
-    env_cfg_name="B2FlatEnvCfg",
-    agent_cfg_entry_points={
-        "z_rl_cfg_entry_point": f"{agents.__name__}.z_rl_ppo_cfg:B2FlatRNNPPORunnerCfg",
-    },
-)
-
-register_manager_based_rl_env(
-    task_id="Velocity-Flat-B2-ZRL-EncoderEstimation",
-    env_cfg_module=f"{__name__}.flat_env_cfg",
-    env_cfg_name="B2FlatEnvCfg",
-    agent_cfg_entry_points={
-        "z_rl_cfg_entry_point": f"{agents.__name__}.z_rl_ppo_cfg:B2FlatEncoderEstimationPPORunnerCfg",
-    },
-)
-
 
 # ===== Rough terrain =====
-register_manager_based_rl_env(
-    task_id="Velocity-Rough-B2",
-    env_cfg_module=f"{__name__}.rough_env_cfg",
-    env_cfg_name="B2RoughEnvCfg",
-    agent_cfg_entry_points={
-        "rsl_rl_cfg_entry_point": f"{agents.__name__}.rsl_rl_ppo_cfg:B2RoughPPORunnerCfg",
-        "z_rl_cfg_entry_point": f"{agents.__name__}.z_rl_ppo_cfg:B2RoughPPORunnerCfg",
-    },
-)
-
 #  register_manager_based_rl_env(
-#      task_id="Velocity-Rough-B2-ZRL-DreamWaQ",
+#      task_id="Velocity-Rough-B2",
 #      env_cfg_module=f"{__name__}.rough_env_cfg",
 #      env_cfg_name="B2RoughEnvCfg",
 #      agent_cfg_entry_points={
-#          "z_rl_cfg_entry_point": f"{agents.__name__}.z_rl_dreamwaq_ppo_cfg:B2RoughDreamWaQPPORunnerCfg",
+#          "rsl_rl_cfg_entry_point": f"{agents.__name__}.rsl_rl_ppo_cfg:B2RoughPPORunnerCfg",
+#          "z_rl_cfg_entry_point": f"{agents.__name__}.z_rl_ppo_cfg:B2RoughPPORunnerCfg",
 #      },
 #  )
 #
-#  register_manager_based_rl_env(
-#      task_id="Velocity-Rough-B2-ZRL-BarlowTwins",
-#      env_cfg_module=f"{__name__}.rough_env_cfg",
-#      env_cfg_name="B2RoughEnvCfg",
-#      agent_cfg_entry_points={
-#          "z_rl_cfg_entry_point": f"{agents.__name__}.z_rl_barlowtwins_ppo_cfg:B2RoughBarlowTwinsPPORunnerCfg",
-#      },
-#  )

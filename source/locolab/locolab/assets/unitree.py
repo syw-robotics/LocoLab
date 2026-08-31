@@ -35,6 +35,8 @@ class UnitreeArticulationCfg(ArticulationCfg):
     joint_sdk_names: list[str] = None
 
     soft_joint_pos_limit_factor = 0.9
+    
+    # expected to add some symmetry config, so that the learning algo can use it to do symmetry augmentation, e.g. for the bipedal robots, the left and right side are symmetric, so we can use this to augment the data for learning. 
 
 
 @configclass
@@ -141,7 +143,7 @@ UNITREE_B2_CFG = UnitreeArticulationCfg(
         asset_path=f"{UNITREE_MODEL_DIR}/B2/urdf/b2_description/urdf/b2_description.urdf",
     ),
     init_state=ArticulationCfg.InitialStateCfg(
-        pos=(0.0, 0.0, 0.60),
+        pos=(0.0, 0.0, 0.58),
         joint_pos={
             ".*R_hip_joint": -0.1,
             ".*L_hip_joint": 0.1,
@@ -160,6 +162,7 @@ UNITREE_B2_CFG = UnitreeArticulationCfg(
             stiffness=100.0,
             damping=2.0,
             friction=0.01,
+            armature=0.01,
         ),
         "B2Implicit_Calf": ImplicitActuatorCfg(
             joint_names_expr=[".*_calf_joint"],
@@ -168,6 +171,7 @@ UNITREE_B2_CFG = UnitreeArticulationCfg(
             stiffness=100.0,
             damping=2.0,
             friction=0.01,
+            armature=0.01,
         ),
     },
     # fmt: off

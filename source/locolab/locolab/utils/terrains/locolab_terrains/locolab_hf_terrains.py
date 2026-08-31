@@ -11,6 +11,15 @@ from .utils import _maybe_apply_roughness
 
 
 @height_field_to_mesh
+def flat_rough_terrain(difficulty: float, cfg: locolab_hf_terrains_cfg.HfFlatRoughTerrainCfg) -> np.ndarray:
+    """Generate flat terrain with LocoLab fractal Perlin roughness."""
+    width_pixels = int(cfg.size[0] / cfg.horizontal_scale)
+    length_pixels = int(cfg.size[1] / cfg.horizontal_scale)
+    hf_raw = np.zeros((width_pixels, length_pixels), dtype=np.int16)
+    return _maybe_apply_roughness(cfg, hf_raw, difficulty)
+
+
+@height_field_to_mesh
 def pyramid_sloped_rough_terrain(difficulty: float, cfg: locolab_hf_terrains_cfg.HfPyramidSlopedRoughTerrainCfg) -> np.ndarray:
     """Generate a terrain with a truncated pyramid structure with optional roughness.
 

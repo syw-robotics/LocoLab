@@ -8,7 +8,7 @@
 
 <!-- [![IsaacSim](https://img.shields.io/badge/IsaacSim-5.1.0-silver.svg)](https://docs.omniverse.nvidia.com/isaacsim/latest/overview.html) -->
 [![Isaac Lab](https://img.shields.io/badge/IsaacLab-2.3.2-brightgreen?logo=nvidia&logoColor=white)](https://isaac-sim.github.io/IsaacLab)
-[![Z RL](https://img.shields.io/badge/Z_RL-Flexable_RL_Lib-orange?logo=python&logoColor=white)](https://github.com/syw-robotics/z_rl)
+[![Z RL](https://img.shields.io/badge/Z_RL-Flexible_RL_Lib-orange?logo=python&logoColor=white)](https://github.com/syw-robotics/z_rl)
 
 <!-- [![Linux platform](https://img.shields.io/badge/platform-linux--64-orange.svg)](https://releases.ubuntu.com/22.04/)
 [![Windows platform](https://img.shields.io/badge/platform-windows--64-orange.svg)](https://www.microsoft.com/en-us/) -->
@@ -130,9 +130,11 @@ Different types of tasks are organized in different sub-directories, such that t
 ## 📝 TODO
 - [ ] **Symmetry Config Definition**: Alongside with which in Z RL
 - [ ] **G1**: Add Velocity-Flat-AMP-G1 and Velocity-Rough-G1
-- [ ] **B2**: Add Velocity-Flat-B2 and Velocity-Rough-B2
+- [x] **B2**: Added Velocity-Flat-B2
+- [ ] **B2**: Add Velocity-Rough-B2
 - [ ] **Go2**: Debug and refine Velocity-Rough-Go2-ZRL-BarlowTwins and Velocity-Rough-Go2-ZRL-DreamWaQ
 - [ ] **Active Adaptation Port**: Migrate LocoLab tasks to (AA)[https://github.com/Agent-3154/active-adaptation]
+- [ ] **Terrain**: Test MeshRandomWidthPyramidStairsTerrain
 
 <!-- ### Set up IDE (Optional)
 

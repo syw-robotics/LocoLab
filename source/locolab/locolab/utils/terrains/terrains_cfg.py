@@ -13,6 +13,29 @@ from locolab.utils.terrains import TerrainGeneratorCfg
 
 import isaaclab.terrains as terrain_gen
 
+"""Flat terrain with small geometric roughness."""
+FLAT_ROUGH_TERRAINS_CFG = TerrainGeneratorCfg(
+    curriculum=False,
+    size=(8.0, 8.0),
+    border_width=20.0,
+    num_rows=5,
+    num_cols=5,
+    horizontal_scale=0.1,
+    vertical_scale=0.01,
+    slope_threshold=0.75,
+    use_cache=False,
+    sub_terrains={
+        "flat_rough": locolab_terrain_gen.HfFlatRoughTerrainCfg(
+            proportion=1.0,
+            noise_range=(-0.06, 0.06),
+            noise_step=0.01,
+            downsampled_scale=0.1,
+            roughness_type="random",
+            apply_roughness=0.8,
+        ),
+    },
+)
+
 """Rough terrains configuration - for blind locomotion"""
 ROUGH_TERRAINS_CFG = TerrainGeneratorCfg(
     curriculum=True,
@@ -23,7 +46,7 @@ ROUGH_TERRAINS_CFG = TerrainGeneratorCfg(
     horizontal_scale=0.1,
     vertical_scale=0.01,
     slope_threshold=0.75,
-    use_cache=True,
+    use_cache=False,
     sub_terrains={
         "stairs_30": terrain_gen.MeshPyramidStairsTerrainCfg(
             proportion=0.20,
@@ -41,6 +64,25 @@ ROUGH_TERRAINS_CFG = TerrainGeneratorCfg(
             border_width=0.5,
             holes=False,
         ),
+        #  "stairs_30": locolab_terrain_gen.MeshRandomWidthPyramidStairsTerrainCfg(
+        #      proportion=0.20,
+        #      step_height_range=(0.05, 0.22),
+        #      step_width_range=(0.29, 0.33),
+        #      step_width_step=0.02,
+        #      platform_width=3.0,
+        #      border_width=0.5,
+        #      holes=False,
+        #  ),
+        #  "stairs_30_inv": locolab_terrain_gen.MeshRandomWidthPyramidStairsTerrainCfg(
+        #      proportion=0.40,
+        #      step_height_range=(0.05, 0.22),
+        #      step_width_range=(0.29, 0.33),
+        #      step_width_step=0.02,
+        #      platform_width=3.0,
+        #      border_width=0.5,
+        #      holes=False,
+        #      inverted=True,
+        #  ),
         "slope": locolab_terrain_gen.HfPyramidSlopedRoughTerrainCfg(
             proportion=0.05,
             slope_range=(0.0, 0.45),

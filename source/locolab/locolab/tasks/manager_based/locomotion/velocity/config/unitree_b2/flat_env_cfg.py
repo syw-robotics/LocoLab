@@ -13,7 +13,7 @@ from isaaclab.scene import InteractiveSceneCfg
 from isaaclab.sensors import ContactSensorCfg
 from isaaclab.utils import configclass
 
-from locolab.utils.scene import flat_terrain_visual_material_cfg, blue_sky_light_cfg
+from locolab.utils.scene import flat_rough_terrain_visual_material_cfg, blue_sky_light_cfg
 from locolab.utils.terrains import TerrainImporterCfg
 
 #  from isaaclab.utils.assets import ISAAC_NUCLEUS_DIR
@@ -30,8 +30,10 @@ from locolab.tasks.manager_based.locomotion.velocity.config.unitree_b2.mdp_cfg i
     PrivObsCfg,
     PropObsCfg,
     FlatTerminationsCfg,
+    CONTACT_SENSOR_LINK_NAMES,
 )
 from locolab.assets import UNITREE_B2_CFG  # isort: skip
+from locolab.utils.terrains.terrains_cfg import FLAT_ROUGH_TERRAINS_CFG  # isort: skip
 
 
 ##
@@ -57,14 +59,15 @@ class B2FlatSceneCfg(InteractiveSceneCfg):
     # =====  terrain  =====
     terrain: TerrainImporterCfg = TerrainImporterCfg(
         prim_path="/World/ground",
-        terrain_type="plane",
+        terrain_type="generator",
+        terrain_generator=FLAT_ROUGH_TERRAINS_CFG,
         physics_material=sim_utils.RigidBodyMaterialCfg(
             friction_combine_mode="multiply",
             restitution_combine_mode="multiply",
             static_friction=1.0,
             dynamic_friction=1.0,
         ),
-        visual_material=flat_terrain_visual_material_cfg(),
+        visual_material=flat_rough_terrain_visual_material_cfg(),
         debug_vis=False,
     )
 
@@ -73,7 +76,7 @@ class B2FlatSceneCfg(InteractiveSceneCfg):
 
     # =====  sensors  =====
     contact_forces: ContactSensorCfg = ContactSensorCfg(
-        prim_path="{ENV_REGEX_NS}/Robot/.*", history_length=3, track_air_time=True
+        prim_path=f"{{ENV_REGEX_NS}}/Robot/{CONTACT_SENSOR_LINK_NAMES}", history_length=3, track_air_time=True
     )
 
     # =====  lights  =====

@@ -12,6 +12,34 @@ from . import locolab_mesh_terrains
 
 
 @configclass
+class MeshRandomWidthPyramidStairsTerrainCfg(SubTerrainBaseCfg):
+    """Configuration for pyramid stairs with a discretely sampled step width."""
+
+    function = locolab_mesh_terrains.mesh_random_width_pyramid_stairs_terrain
+
+    step_height_range: tuple[float, float] = MISSING
+    """The minimum and maximum step height (in m). Scales with difficulty."""
+
+    step_width_range: tuple[float, float] = MISSING
+    """The minimum and maximum step width (in m)."""
+
+    step_width_step: float = MISSING
+    """The sampling increment for step width (in m)."""
+
+    platform_width: float = 1.0
+    """The width of the square platform at the center of the terrain (in m)."""
+
+    border_width: float = 0.0
+    """The width of the flat border around the terrain (in m)."""
+
+    holes: bool = False
+    """Whether to leave holes outside the pyramid stairs."""
+
+    inverted: bool = False
+    """Whether to generate inverted pyramid stairs."""
+
+
+@configclass
 class MeshStraightGapTerrainCfg(SubTerrainBaseCfg):
     """Configuration for a terrain with a gap in x direction."""
 
