@@ -6,6 +6,7 @@
 # All rights reserved.
 # Modifications are licensed under BSD-3-Clause.
 
+from collections.abc import Callable
 from dataclasses import MISSING
 
 from isaaclab.envs.mdp.actions import joint_actions
@@ -32,6 +33,8 @@ class JointActionCfg(ActionTermCfg):
     """Offset factor for the action (float or dict of regex expressions). Defaults to 0.0."""
     preserve_order: bool = False
     """Whether to preserve the order of the joint names in the action output. Defaults to False."""
+    symmetry_transform: Callable | None = None
+    """Optional runtime provider for the raw action's symmetry transform."""
 
 
 @configclass

@@ -128,7 +128,7 @@ tasks
 Different types of tasks are organized in different sub-directories, such that tasks are clearly separated and mdp components are easily reusable.
 
 ## 📝 TODO
-- [ ] **Symmetry Config Definition**: Alongside with which in Z RL
+- [x] **Symmetry Config Definition**: Alongside with which in Z RL
 - [ ] **G1**: Add Velocity-Flat-AMP-G1 and Velocity-Rough-G1
 - [x] **B2**: Added Velocity-Flat-B2
 - [ ] **B2**: Add Velocity-Rough-B2

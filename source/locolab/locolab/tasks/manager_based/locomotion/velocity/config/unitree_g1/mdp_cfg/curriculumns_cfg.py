@@ -19,7 +19,7 @@ class FlatCurriculumsCfg:
     lin_vel_cmd_levels = CurrTerm(
         mdp.lin_vel_cmd_levels,
         params={
-            "max_lin_vel_x_ranges": (-0.5, 1.0),
+            "max_lin_vel_x_ranges": (-0.5, 1.5),
             "max_lin_vel_y_ranges": (-0.5, 0.5),
             "percentage_threshold": 0.75,
             "velocity_step": 0.1,

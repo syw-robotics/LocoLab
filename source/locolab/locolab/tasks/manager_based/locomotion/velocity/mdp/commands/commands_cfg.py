@@ -30,6 +30,9 @@ class UniformVelocityCommandCfg(CommandTermCfg):
     zero_velocity_threshold: float = 0.2
     """Velocity threshold for the command generator. Defaults to 0.2."""
 
+    metrics_update_interval: int = 500
+    """Number of control steps between metric updates. Defaults to 500."""
+
     heading_command: bool = False
     """Whether to use heading command or angular velocity command. Defaults to False.
 

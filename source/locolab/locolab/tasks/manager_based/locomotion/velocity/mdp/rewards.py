@@ -75,40 +75,47 @@ def track_ang_vel_z_world_exp(
 
 # -------------------- Stability Rewards -------------------- #
 
+# def _apply_body_weights(body_error, body_weights):
+#     if body_weights is None:
+#         return body_error
+#     weights = torch.as_tensor(body_weights, device=body_error.device, dtype=body_error.dtype)
+#     return body_error * weights.view(1, -1, *([1] * (body_error.ndim - 2)))
+
+
 def lin_vel_z_l2(
     env: ManagerBasedRLEnv,
     asset_cfg: SceneEntityCfg = SceneEntityCfg("robot"),
-    selected_bodies: bool = False,
+    select_bodies: bool = False,
+    # body_weights: Sequence[float] | torch.Tensor | None = None,
 ) -> torch.Tensor:
     """Penalize z-axis root or selected-body linear velocity using an L2 squared kernel."""
     asset: RigidObject = env.scene[asset_cfg.name]
-    if selected_bodies:
+    if select_bodies:
         return torch.sum(torch.square(asset.data.body_lin_vel_w[:, asset_cfg.body_ids, 2]), dim=1)
-    else:
-        return torch.square(asset.data.root_lin_vel_b[:, 2])
+    return torch.square(asset.data.root_lin_vel_b[:, 2])
 
 
 def ang_vel_xy_l2(
     env: ManagerBasedRLEnv,
     asset_cfg: SceneEntityCfg = SceneEntityCfg("robot"),
-    selected_bodies: bool = False,
+    select_bodies: bool = False,
+    # body_weights: Sequence[float] | torch.Tensor | None = None,
 ) -> torch.Tensor:
     """Penalize xy-axis root or selected-body angular velocity using an L2 squared kernel."""
     asset: RigidObject = env.scene[asset_cfg.name]
-    if selected_bodies:
+    if select_bodies:
         return torch.sum(torch.square(asset.data.body_ang_vel_w[:, asset_cfg.body_ids, :2]), dim=(1, 2))
-    else:
-        return torch.sum(torch.square(asset.data.root_ang_vel_b[:, :2]), dim=1)
+    return torch.sum(torch.square(asset.data.root_ang_vel_b[:, :2]), dim=1)
 
 
 def flat_orientation_l2(
     env: ManagerBasedRLEnv,
     asset_cfg: SceneEntityCfg = SceneEntityCfg("robot"),
-    selected_bodies: bool = False,
+    select_bodies: bool = False,
 ) -> torch.Tensor:
     """Penalize non-flat base orientation using L2 squared kernel by penalizing projected gravity xy-components."""
     asset: RigidObject = env.scene[asset_cfg.name]
-    if selected_bodies:
+    if select_bodies:
         body_quat_w = asset.data.body_quat_w[:, asset_cfg.body_ids]
         gravity_w = asset.data.GRAVITY_VEC_W[:, None, :].expand(*body_quat_w.shape[:-1], -1)
         projected_gravity_b = quat_apply_inverse(body_quat_w, gravity_w)
@@ -262,16 +269,16 @@ def joint_pos_limits(env: ManagerBasedRLEnv, asset_cfg: SceneEntityCfg = SceneEn
 
 # -------------------- Gait Rewards -------------------- #
 
-def command_is_moving(
+def _command_is_moving(
     env: ManagerBasedRLEnv,
     command_name: str,
     threshold: float = 0.1,
 ) -> torch.Tensor:
-    """Return whether the planar or yaw velocity command exceeds a threshold."""
+    """ This is not a valid reward term !!! But a utility function to check if the command is moving. """
     command = env.command_manager.get_command(command_name)
-    planar_is_moving = torch.sum(command[:, :2].square(), dim=1) > threshold**2
-    yaw_is_moving = command[:, 2].abs() > threshold
-    return planar_is_moving | yaw_is_moving
+    lin_vel_is_moving = torch.sum(command[:, :2].square(), dim=1) > threshold**2
+    ang_vel_is_moving = command[:, 2].abs() > threshold
+    return lin_vel_is_moving | ang_vel_is_moving
 
 
 def stand_still(
@@ -317,7 +324,7 @@ def feet_air_time(
     first_contact = contact_sensor.compute_first_contact(env.step_dt)[:, sensor_cfg.body_ids]
     last_air_time = contact_sensor.data.last_air_time[:, sensor_cfg.body_ids]
     reward = torch.sum((last_air_time - threshold) * first_contact, dim=1)
-    reward *= command_is_moving(env, command_name)
+    reward *= _command_is_moving(env, command_name)
     #  reward *= torch.clamp(-env.scene["robot"].data.projected_gravity_b[:, 2], 0, 1.0)  # don't penalize when upside down
     return reward
 
@@ -445,7 +452,7 @@ class feet_gait(ManagerTermBase):
     def __init__(self, cfg: RewardTermCfg, env: ManagerBasedRLEnv):
         super().__init__(cfg, env)
         period = cfg.params["period"]
-        offset = cfg.params.get("offset", [0.0, 0.5])
+        offset = cfg.params.get("offset", [0.0, 0.5])  # this is a bipedal setup
         sensor_cfg = cfg.params["sensor_cfg"]
 
         if period <= 0.0:
@@ -478,7 +485,7 @@ class feet_gait(ManagerTermBase):
         reward = torch.sum(is_stance == is_contact, dim=1, dtype=torch.float)
 
         if command_name is not None:
-            reward *= command_is_moving(env, command_name)
+            reward *= _command_is_moving(env, command_name)
         return reward
 
 

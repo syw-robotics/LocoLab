@@ -14,10 +14,12 @@ Reference: https://github.com/unitreerobotics/unitree_rl_lab
 import os
 
 import isaaclab.sim as sim_utils
+from isaaclab.actuators import ImplicitActuatorCfg
 from isaaclab.assets.articulation import ArticulationCfg
 from isaaclab.utils import configclass
 
-from isaaclab.actuators import ImplicitActuatorCfg
+from locolab.utils.symmetry import complete_symmetry_mapping
+
 from .actuators import (
     DelayedImplicitActuatorCfg,  # Implicit Atuator shows higher fidelity but no latency compensation
     beyondmimic_g1_29dof_actuators,
@@ -34,9 +36,10 @@ class UnitreeArticulationCfg(ArticulationCfg):
 
     joint_sdk_names: list[str] = None
 
+    joint_symmetry_mapping: dict[str, tuple[float, str]] | None = None
+    spatial_symmetry_mapping: dict[str, str] | None = None
+
     soft_joint_pos_limit_factor = 0.9
-    
-    # expected to add some symmetry config, so that the learning algo can use it to do symmetry augmentation, e.g. for the bipedal robots, the left and right side are symmetric, so we can use this to augment the data for learning. 
 
 
 @configclass
@@ -262,6 +265,50 @@ UNITREE_B2Z1_CFG = UnitreeArticulationCfg(
     # fmt: on
 )
 
+G1_JOINT_SYMMETRY_MAPPING = complete_symmetry_mapping(
+    {
+        "left_hip_pitch_joint": (1.0, "right_hip_pitch_joint"),
+        "left_hip_roll_joint": (-1.0, "right_hip_roll_joint"),
+        "left_hip_yaw_joint": (-1.0, "right_hip_yaw_joint"),
+        "left_knee_joint": (1.0, "right_knee_joint"),
+        "left_ankle_pitch_joint": (1.0, "right_ankle_pitch_joint"),
+        "left_ankle_roll_joint": (-1.0, "right_ankle_roll_joint"),
+        "waist_yaw_joint": (-1.0, "waist_yaw_joint"),
+        "waist_roll_joint": (-1.0, "waist_roll_joint"),
+        "waist_pitch_joint": (1.0, "waist_pitch_joint"),
+        "left_shoulder_pitch_joint": (1.0, "right_shoulder_pitch_joint"),
+        "left_shoulder_roll_joint": (-1.0, "right_shoulder_roll_joint"),
+        "left_shoulder_yaw_joint": (-1.0, "right_shoulder_yaw_joint"),
+        "left_elbow_joint": (1.0, "right_elbow_joint"),
+        "left_wrist_roll_joint": (-1.0, "right_wrist_roll_joint"),
+        "left_wrist_pitch_joint": (1.0, "right_wrist_pitch_joint"),
+        "left_wrist_yaw_joint": (-1.0, "right_wrist_yaw_joint"),
+    }
+)
+
+G1_SPATIAL_SYMMETRY_MAPPING = complete_symmetry_mapping(
+    {
+        "pelvis": "pelvis",
+        "left_hip_pitch_link": "right_hip_pitch_link",
+        "left_hip_roll_link": "right_hip_roll_link",
+        "left_hip_yaw_link": "right_hip_yaw_link",
+        "left_knee_link": "right_knee_link",
+        "left_ankle_pitch_link": "right_ankle_pitch_link",
+        "left_ankle_roll_link": "right_ankle_roll_link",
+        "waist_yaw_link": "waist_yaw_link",
+        "waist_roll_link": "waist_roll_link",
+        "torso_link": "torso_link",
+        "left_shoulder_pitch_link": "right_shoulder_pitch_link",
+        "left_shoulder_roll_link": "right_shoulder_roll_link",
+        "left_shoulder_yaw_link": "right_shoulder_yaw_link",
+        "left_elbow_link": "right_elbow_link",
+        "left_wrist_roll_link": "right_wrist_roll_link",
+        "left_wrist_pitch_link": "right_wrist_pitch_link",
+        "left_wrist_yaw_link": "right_wrist_yaw_link",
+    }
+)
+
+
 UNITREE_G1_29DOF_BEYONDMIMIC_PELVIS_BASE_CFG = UnitreeArticulationCfg(
     # Here we prefer URDF over USD for the convenience of modifying collision shapes
     spawn=sim_utils.UrdfFileCfg(
@@ -304,6 +351,8 @@ UNITREE_G1_29DOF_BEYONDMIMIC_PELVIS_BASE_CFG = UnitreeArticulationCfg(
         joint_vel={".*": 0.0},
     ),
     actuators=beyondmimic_g1_29dof_actuators,
+    joint_symmetry_mapping=G1_JOINT_SYMMETRY_MAPPING,
+    spatial_symmetry_mapping=G1_SPATIAL_SYMMETRY_MAPPING,
     joint_sdk_names=[
         "left_hip_pitch_joint",
         "left_hip_roll_joint",

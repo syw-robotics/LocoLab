@@ -36,12 +36,12 @@ class FlatRewardsCfg:
     # ===== task-specific rewards =====
     track_lin_vel_xy_exp = RewTerm(
         func=mdp.track_lin_vel_xy_yaw_frame_exp,
-        weight=1.5,
+        weight=1.0,
         params={"command_name": "base_velocity", "std": math.sqrt(0.25)},
     )
     track_ang_vel_z_exp = RewTerm(
         func=mdp.track_ang_vel_z_world_exp,
-        weight=1.0,
+        weight=0.5,
         params={"command_name": "base_velocity", "std": math.sqrt(0.25)},
     )
     alive = RewTerm(func=mdp.is_alive, weight=0.1)
@@ -52,28 +52,28 @@ class FlatRewardsCfg:
         func=mdp.lin_vel_z_l2,
         weight=-2.0,
         params={
-            "selected_bodies": True,
-            "asset_cfg": SceneEntityCfg("robot", body_names=[TORSO_LINK_NAME, PELVIS_LINK_NAME])},
+            "select_bodies": True,
+            "asset_cfg": SceneEntityCfg("robot", body_names=[TORSO_LINK_NAME])},
     )
     ang_vel_xy_l2 = RewTerm(
         func=mdp.ang_vel_xy_l2,
-        weight=-0.05,
+        weight=-0.1,
         params={
-            "selected_bodies": True,
-            "asset_cfg": SceneEntityCfg("robot", body_names=[TORSO_LINK_NAME, PELVIS_LINK_NAME])},
+            "select_bodies": True,
+            "asset_cfg": SceneEntityCfg("robot", body_names=[TORSO_LINK_NAME])},
     )
-    flat_orientation_torso_l2 = RewTerm(
+    flat_orientation_l2 = RewTerm(
         func=mdp.flat_orientation_l2,
         weight=-10.0,
         params={
-            "selected_bodies": True,
-            "asset_cfg": SceneEntityCfg("robot", body_names=[TORSO_LINK_NAME]),
+            "select_bodies": True,
+            "asset_cfg": SceneEntityCfg("robot", body_names=[TORSO_LINK_NAME, PELVIS_LINK_NAME]),
         },
     )
-    base_height = RewTerm(func=mdp.base_height_l2, weight=-10.0, params={"target_height": 0.76})
+    base_height = RewTerm(func=mdp.base_height_l2, weight=-5.0, params={"target_height": 0.76})
     # -- joint --
     joint_acc = RewTerm(func=mdp.joint_acc_l2, weight=-2.5e-7)
-    joint_pos_limits = RewTerm(func=mdp.joint_pos_limits, weight=-5.0)
+    joint_pos_limits = RewTerm(func=mdp.joint_pos_limits, weight=-10.0)
     joint_power_l1 = RewTerm(func=mdp.joint_power_l1, weight=-2.0e-5)
     joint_vel_l2 = RewTerm(
         func=mdp.joint_vel_l2,
@@ -82,7 +82,7 @@ class FlatRewardsCfg:
     )
     joint_deviation_arms_l1 = RewTerm(
         func=mdp.joint_deviation_l1,
-        weight=-0.5,
+        weight=-0.2,
         params={"asset_cfg": SceneEntityCfg("robot", joint_names=ARM_JOINT_NAMES_WO_SHOULDER_PITCH)},
     )
     joint_deviation_waists_l1 = RewTerm(
@@ -114,7 +114,7 @@ class FlatRewardsCfg:
     # -- collision --
     undesired_contacts = RewTerm(
         func=mdp.undesired_contacts,
-        weight=-1,
+        weight=-1.0,
         params={
             "threshold": 1.0,
             "sensor_cfg": SceneEntityCfg("contact_forces", body_names=UNDESIRED_CONTACT_LINK_NAMES),
@@ -123,7 +123,7 @@ class FlatRewardsCfg:
     # -- feet --
     feet_gait = RewTerm(
         func=mdp.feet_gait,
-        weight=1.0,
+        weight=0.5,
         params={
             "period": 0.8,
             "offset": [0.0, 0.5],

@@ -45,7 +45,7 @@ from .actions_cfg import ActionsCfg
 from .commands_cfg import CommandsCfg
 from .curriculumns_cfg import FlatCurriculumsCfg
 from .events_cfg import EventCfg, RoughEventCfg
-from .observations_cfg import HeightmapPropObsCfg, PrivObsCfg, PropObsCfg
+from .observations_cfg import PrivObsCfg, PropObsCfg
 from .rewards_cfg import FlatRewardsCfg, RoughRewardsCfg
 from .terminations_cfg import FlatTerminationsCfg, RoughTerminationsCfg
 
@@ -58,7 +58,6 @@ __all__ = [
     "RoughTerminationsCfg",
     "PropObsCfg",
     "PrivObsCfg",
-    "HeightmapPropObsCfg",
     "FlatRewardsCfg",
     "RoughRewardsCfg",
     "FlatTerminationsCfg",

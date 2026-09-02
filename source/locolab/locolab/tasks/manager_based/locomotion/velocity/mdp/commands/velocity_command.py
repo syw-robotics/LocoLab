@@ -89,6 +89,11 @@ class UniformVelocityCommand(CommandTerm):
                 "Expected the standing, in-place, and x-only probabilities to sum to at most 1, "
                 f"got {mode_probability}."
             )
+        if not isinstance(self.cfg.metrics_update_interval, int) or self.cfg.metrics_update_interval < 1:
+            raise ValueError(
+                "Expected metrics_update_interval to be a positive integer, "
+                f"got {self.cfg.metrics_update_interval}."
+            )
 
         # obtain the robot asset
         # -- robot
@@ -104,6 +109,10 @@ class UniformVelocityCommand(CommandTerm):
         # -- metrics
         self.metrics["error_vel_xy"] = torch.zeros(self.num_envs, device=self.device)
         self.metrics["error_vel_yaw"] = torch.zeros(self.num_envs, device=self.device)
+        self._metrics_update_counter = 0
+        self._metrics_update_scale = (
+            self.cfg.metrics_update_interval * self._env.step_dt / self.cfg.resampling_time_range[1]
+        )
 
     def __str__(self) -> str:
         """Return a string representation of the command generator."""
@@ -118,6 +127,7 @@ class UniformVelocityCommand(CommandTerm):
         msg += f"\tOnly lin_vel_x probability: {self.cfg.rel_only_lin_vel_x_envs}\n"
         if self.zero_velocity_threshold is not None:
             msg += f"\tVelocity threshold: {self.zero_velocity_threshold}\n"
+        msg += f"\tMetrics update interval: {self.cfg.metrics_update_interval} control steps\n"
         return msg
 
     """
@@ -134,16 +144,18 @@ class UniformVelocityCommand(CommandTerm):
     """
 
     def _update_metrics(self):
-        # time for which the command was executed
-        max_command_time = self.cfg.resampling_time_range[1]
-        max_command_step = max_command_time / self._env.step_dt
+        self._metrics_update_counter = (self._metrics_update_counter + 1) % self.cfg.metrics_update_interval
+        if self._metrics_update_counter != 0:
+            return
+
         # logs data
-        # TODO: add velocity error metric for each type of terrain, this could be helpful for evaluation
-        self.metrics["error_vel_xy"] += (
-            torch.norm(self.vel_command_b[:, :2] - self.robot.data.root_lin_vel_b[:, :2], dim=-1) / max_command_step
+        self.metrics["error_vel_xy"].add_(
+            torch.norm(self.vel_command_b[:, :2] - self.robot.data.root_lin_vel_b[:, :2], dim=-1),
+            alpha=self._metrics_update_scale,
         )
-        self.metrics["error_vel_yaw"] += (
-            torch.abs(self.vel_command_b[:, 2] - self.robot.data.root_ang_vel_b[:, 2]) / max_command_step
+        self.metrics["error_vel_yaw"].add_(
+            torch.abs(self.vel_command_b[:, 2] - self.robot.data.root_ang_vel_b[:, 2]),
+            alpha=self._metrics_update_scale,
         )
 
     def _resample_command(self, env_ids: Sequence[int]):
