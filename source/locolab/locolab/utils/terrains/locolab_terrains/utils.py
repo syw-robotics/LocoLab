@@ -73,7 +73,7 @@ def apply_perlin_noise(
     if roughness_type == "difficulty":
         strength = float(np.clip(difficulty, 0.0, 1.0))
     elif roughness_type == "random":
-        strength = np.random.choice((0.4, 0.6, 0.8, 1.0))
+        strength = np.random.choice((0.2, 0.4, 0.6, 0.8, 1.0))
     elif roughness_type == "fixed":
         strength = 1.0
     else:

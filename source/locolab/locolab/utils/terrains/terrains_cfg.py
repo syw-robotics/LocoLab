@@ -50,7 +50,7 @@ ROUGH_TERRAINS_CFG = TerrainGeneratorCfg(
     sub_terrains={
         "stairs_30": terrain_gen.MeshPyramidStairsTerrainCfg(
             proportion=0.20,
-            step_height_range=(0.05, 0.22),
+            step_height_range=(0.02, 0.22),
             step_width=0.30,
             platform_width=3.0,
             border_width=0.5,
@@ -58,7 +58,7 @@ ROUGH_TERRAINS_CFG = TerrainGeneratorCfg(
         ),
         "stairs_30_inv": terrain_gen.MeshInvertedPyramidStairsTerrainCfg(
             proportion=0.40,
-            step_height_range=(0.05, 0.22),
+            step_height_range=(0.02, 0.22),
             step_width=0.30,
             platform_width=3.0,
             border_width=0.5,
@@ -106,10 +106,10 @@ ROUGH_TERRAINS_CFG = TerrainGeneratorCfg(
         "discrete": locolab_terrain_gen.HfDiscreteObstaclesTerrainCfg(
             proportion=0.2,
             obstacle_width_range=(1.0, 2.0),
-            obstacle_height_range=(0.05, 0.25),
+            obstacle_height_range=(0.02, 0.22),
             num_obstacles=20,
             platform_width=3.0,
-            noise_range=(-0.06, 0.06),
+            noise_range=(-0.05, 0.05),
             noise_step=0.01,
             apply_roughness=0.75,
             roughness_type="random",
