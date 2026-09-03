@@ -238,6 +238,41 @@ def _make_border(
     return [box_mesh_left, box_mesh_right, box_mesh_top, box_mesh_bottom]
 
 
+def _make_plane(size, height=0.0, center_zero=False):
+    center = (0.0, 0.0) if center_zero else (size[0] / 2.0, size[1] / 2.0)
+    return trimesh.creation.box(
+        (size[0], size[1], 0.01),
+        trimesh.transformations.translation_matrix((center[0], center[1], height - 0.005)),
+    )
+
+
+def _make_box(length, width, height, position, angle=0.0, angle_degrees=True):
+    transform = trimesh.transformations.translation_matrix(
+        (position[0], position[1], position[2] + height / 2.0)
+    )
+    if angle:
+        transform = transform @ trimesh.transformations.rotation_matrix(
+            np.deg2rad(angle) if angle_degrees else angle, (0.0, 0.0, 1.0), (position[0], position[1], 0.0)
+        )
+    return trimesh.creation.box((length, width, height), transform)
+
+
+def _mesh_pyramid_stairs_terrain(difficulty, cfg):
+    height = cfg.step_height_range[0] + difficulty * (cfg.step_height_range[1] - cfg.step_height_range[0])
+    if getattr(cfg, "inverted", False):
+        height = -height
+    meshes = [_make_plane(cfg.size)]
+    center = (cfg.size[0] / 2.0, cfg.size[1] / 2.0)
+    step_width = cfg.step_width
+    level = 0
+    while cfg.platform_width + 2.0 * (level + 1) * step_width < min(cfg.size):
+        level += 1
+        extent = min(cfg.size) - 2.0 * (level - 1) * step_width
+        z = level * height
+        meshes.append(_make_box(extent, extent, abs(z), (center[0], center[1], min(0.0, z))))
+    return meshes, np.array([center[0], center[1], max(0.0, level * height)])
+
+
 def _install_isaaclab_preview_stubs():
     """Install the small IsaacLab API surface needed by terrain generation code."""
     isaaclab = _module("isaaclab")
@@ -260,9 +295,15 @@ def _install_isaaclab_preview_stubs():
     hf_pkg.utils = hf_utils
 
     trimesh_pkg = _module("isaaclab.terrains.trimesh")
+    mesh_terrains = _module("isaaclab.terrains.trimesh.mesh_terrains")
+    mesh_terrains.pyramid_stairs_terrain = _mesh_pyramid_stairs_terrain
+    mesh_terrains.inverted_pyramid_stairs_terrain = _mesh_pyramid_stairs_terrain
     trimesh_utils = _module("isaaclab.terrains.trimesh.utils")
     trimesh_utils.make_border = _make_border
+    trimesh_utils.make_box = _make_box
+    trimesh_utils.make_plane = _make_plane
     trimesh_pkg.utils = trimesh_utils
+    trimesh_pkg.mesh_terrains = mesh_terrains
 
 
 def _clear_imports():

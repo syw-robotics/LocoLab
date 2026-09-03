@@ -412,3 +412,47 @@ def hurdle_terrain(
 
     # round off the heights to the nearest vertical step
     return np.rint(hf_raw).astype(np.int16)
+
+
+@height_field_to_mesh
+def pyramid_stairs_terrain(difficulty: float, cfg: locolab_hf_terrains_cfg.HfPyramidStairsTerrainCfg) -> np.ndarray:
+    # resolve terrain configuration
+    step_height = cfg.step_height_range[0] + difficulty * (cfg.step_height_range[1] - cfg.step_height_range[0])
+    if cfg.inverted:
+        step_height *= -1
+    # switch parameters to discrete units
+    # -- terrain
+    width_pixels = int(cfg.size[0] / cfg.horizontal_scale)
+    length_pixels = int(cfg.size[1] / cfg.horizontal_scale)
+    # -- stairs
+    step_width = int(cfg.step_width / cfg.horizontal_scale)
+    step_height = int(step_height / cfg.vertical_scale)
+    # -- platform
+    platform_width = int(cfg.platform_width / cfg.horizontal_scale)
+
+    # create a terrain with a flat platform at the center
+    hf_raw = np.zeros((width_pixels, length_pixels))
+    # add the steps
+    current_step_height = 0
+    start_x, start_y = 0, 0
+    stop_x, stop_y = width_pixels, length_pixels
+    while (stop_x - start_x) > platform_width and (stop_y - start_y) > platform_width:
+        # increment position
+        # -- x
+        start_x += step_width
+        stop_x -= step_width
+        # -- y
+        start_y += step_width
+        stop_y -= step_width
+        # increment height
+        current_step_height += step_height
+        # add the step
+        hf_raw[start_x:stop_x, start_y:stop_y] = current_step_height
+
+    # Apply optional roughness after constructing the stair profile.  This keeps the
+    # stair geometry intact while adding the same configurable surface noise used by
+    # the other LocoLab height-field terrains.
+    hf_raw = _maybe_apply_roughness(cfg, hf_raw, difficulty)
+
+    # round off the heights to the nearest vertical step
+    return np.rint(hf_raw).astype(np.int16)

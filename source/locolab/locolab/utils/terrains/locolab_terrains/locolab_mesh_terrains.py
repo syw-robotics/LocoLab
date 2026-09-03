@@ -7,12 +7,77 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 import trimesh
+
 from isaaclab.terrains.trimesh import mesh_terrains as isaac_mesh_terrains
-from isaaclab.terrains.trimesh.utils import make_border
+from isaaclab.terrains.trimesh.utils import make_border, make_box, make_plane
 
 
 if TYPE_CHECKING:
     from . import locolab_mesh_terrains_cfg
+
+
+def mesh_random_size_repeated_boxes_terrain(
+    difficulty: float, cfg: locolab_mesh_terrains_cfg.MeshRepeatedBoxesTerrainCfg
+) -> tuple[list[trimesh.Trimesh], np.ndarray]:
+    """Generate repeated boxes whose dimensions are sampled independently per object."""
+    num_min, num_max = cfg.num_objects_range
+    if num_min < 0 or num_min > num_max:
+        raise ValueError(f"Invalid num_objects_range: {cfg.num_objects_range}.")
+    if cfg.num_objects_type == "difficulty":
+        num_objects = int(round(num_min + difficulty * (num_max - num_min)))
+    elif cfg.num_objects_type == "random":
+        num_objects = int(np.random.randint(num_min, num_max + 1))
+    else:
+        raise ValueError(f"Unsupported num_objects_type: {cfg.num_objects_type}.")
+
+    height_min, height_max = cfg.box_height_range
+    height = height_min + difficulty * (height_max - height_min)
+    platform_height = cfg.platform_height if cfg.platform_height >= 0.0 else height
+    length_min, length_max = cfg.box_length_range
+    width_min, width_max = cfg.box_width_range
+    if min(length_min, width_min, height) <= 0 or length_min > length_max or width_min > width_max:
+        raise ValueError(
+            f"Invalid repeated-box dimensions: length={cfg.box_length_range}, "
+            f"width={cfg.box_width_range}, height={height}."
+        )
+
+    origin = np.asarray((0.5 * cfg.size[0], 0.5 * cfg.size[1], 0.5 * platform_height))
+    clearance = 1.1
+    platform_half = cfg.platform_width * 0.5 * clearance
+    objects = []
+    for _ in range(max(0, num_objects)):
+        for _attempt in range(1000):
+            length = np.random.uniform(length_min, length_max)
+            width = np.random.uniform(width_min, width_max)
+            x = np.random.uniform(length / 2, cfg.size[0] - length / 2)
+            y = np.random.uniform(width / 2, cfg.size[1] - width / 2)
+            if not (abs(x - origin[0]) <= platform_half + length / 2 and abs(y - origin[1]) <= platform_half + width / 2):
+                objects.append((x, y, 0.0, length, width))
+                break
+        else:
+            break
+
+    meshes = [make_plane(cfg.size, height=0.0, center_zero=False)]
+    for x, y, z, length, width in objects:
+        if cfg.angle_type == "difficulty":
+            angle_max = cfg.angle_range[0] + difficulty * (cfg.angle_range[1] - cfg.angle_range[0])
+            angle = np.random.uniform(cfg.angle_range[0], angle_max)
+        elif cfg.angle_type == "random":
+            angle = np.random.uniform(*cfg.angle_range)
+        else:
+            raise ValueError(f"Unsupported angle_type: {cfg.angle_type}.")
+        abs_noise = np.random.uniform(*cfg.abs_height_noise)
+        rel_noise = np.random.uniform(*cfg.rel_height_noise)
+        object_height = height * rel_noise + abs_noise
+        if object_height > 0.0:
+            meshes.append(make_box(length, width, object_height, (x, y, z), angle, cfg.angle_degrees))
+
+    platform = trimesh.creation.box(
+        (cfg.platform_width, cfg.platform_width, 0.5 * platform_height),
+        trimesh.transformations.translation_matrix((origin[0], origin[1], 0.25 * platform_height)),
+    )
+    meshes.append(platform)
+    return meshes, origin
 
 
 def mesh_random_width_pyramid_stairs_terrain(
@@ -129,6 +194,65 @@ def mesh_straight_gap_terrain(
         vertices=np.array(vertices, dtype=np.float64), faces=np.array(faces, dtype=np.int64), process=True
     )
     return [mesh], np.array([cx, cy, 0.0])
+
+
+def mesh_hurdle_terrain(
+    difficulty: float, cfg: locolab_mesh_terrains_cfg.MeshHurdleTerrainCfg
+) -> tuple[list[trimesh.Trimesh], np.ndarray]:
+    """Generate a rectangular hurdle terrain with exact metric dimensions.
+
+    The terrain is a flat plane with a raised perimeter and a raised square ring
+    around the center platform.  Boxes are used directly so hurdle dimensions are
+    not quantized by height-field horizontal or vertical scales.
+    """
+    width_min, width_max = cfg.hurdle_width_range
+    height_min, height_max = cfg.hurdle_height_range
+    platform_min, platform_max = cfg.platform_width_range
+
+    if width_min <= 0.0 or width_min > width_max:
+        raise ValueError(f"Invalid hurdle_width_range: {cfg.hurdle_width_range}.")
+    if height_min < 0.0 or height_min > height_max:
+        raise ValueError(f"Invalid hurdle_height_range: {cfg.hurdle_height_range}.")
+    if platform_min <= 0.0 or platform_min > platform_max:
+        raise ValueError(f"Invalid platform_width_range: {cfg.platform_width_range}.")
+
+    hurdle_width = width_max + difficulty * (width_min - width_max)
+    hurdle_height = height_min + difficulty * (height_max - height_min)
+    platform_width = np.random.uniform(platform_min, platform_max)
+    if platform_width + 2.0 * hurdle_width > min(cfg.size):
+        raise ValueError(
+            "The center platform and hurdle ring must fit inside the terrain: "
+            f"platform_width={platform_width}, hurdle_width={hurdle_width}, size={cfg.size}."
+        )
+
+    cx, cy = 0.5 * cfg.size[0], 0.5 * cfg.size[1]
+    meshes = [make_plane(cfg.size, height=0.0, center_zero=False)]
+    if hurdle_height == 0.0:
+        return meshes, np.array([cx, cy, 0.0])
+
+    def add_box(length: float, width: float, x: float, y: float) -> None:
+        meshes.append(
+            trimesh.creation.box(
+                (length, width, hurdle_height),
+                trimesh.transformations.translation_matrix((x, y, 0.5 * hurdle_height)),
+            )
+        )
+
+    # Raised terrain boundary.  The original HF layout occupies half a hurdle
+    # width at each edge, while retaining the full requested terrain size.
+    edge = 0.5 * hurdle_width
+    add_box(edge, cfg.size[1], 0.5 * edge, cy)
+    add_box(edge, cfg.size[1], cfg.size[0] - 0.5 * edge, cy)
+    add_box(cfg.size[0] - 2.0 * edge, edge, cx, 0.5 * edge)
+    add_box(cfg.size[0] - 2.0 * edge, edge, cx, cfg.size[1] - 0.5 * edge)
+
+    # Four exact-width boxes form the ring around the center platform.
+    outer = platform_width + 2.0 * hurdle_width
+    add_box(hurdle_width, outer, cx - 0.5 * platform_width - 0.5 * hurdle_width, cy)
+    add_box(hurdle_width, outer, cx + 0.5 * platform_width + 0.5 * hurdle_width, cy)
+    add_box(platform_width, hurdle_width, cx, cy - 0.5 * platform_width - 0.5 * hurdle_width)
+    add_box(platform_width, hurdle_width, cx, cy + 0.5 * platform_width + 0.5 * hurdle_width)
+    return meshes, np.array([cx, cy, 0.0])
 
 
 def mesh_straight_stairs_terrain(

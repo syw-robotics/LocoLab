@@ -179,3 +179,38 @@ class HfHurdleTerrainCfg(HfRoughTerrainCfg):
 
     platform_width_range: tuple[float, float] = MISSING
     """The width of the square flat platform at the center of the terrain."""
+
+
+@configclass
+class HfPyramidStairsTerrainCfg(HfRoughTerrainCfg):
+    """Configuration for a pyramid stairs height field terrain."""
+
+    function = locolab_hf_terrains.pyramid_stairs_terrain
+
+    step_height_range: tuple[float, float] = MISSING
+    """The minimum and maximum height of the steps (in m)."""
+
+    step_width: float = MISSING
+    """The width of the steps (in m)."""
+
+    platform_width: float = 1.0
+    """The width of the square platform at the center of the terrain. Defaults to 1.0."""
+
+    inverted: bool = False
+    """Whether the pyramid stairs is inverted. Defaults to False.
+
+    If True, the terrain is inverted such that the platform is at the bottom and the stairs are upwards.
+    """
+
+
+@configclass
+class HfInvertedPyramidStairsTerrainCfg(HfPyramidStairsTerrainCfg):
+    """Configuration for an inverted pyramid stairs height field terrain.
+
+    Note:
+        This is a subclass of :class:`HfPyramidStairsTerrainCfg` with :obj:`inverted` set to True.
+        We make it as a separate class to make it easier to distinguish between the two and match
+        the naming convention of the other terrains.
+    """
+
+    inverted: bool = True

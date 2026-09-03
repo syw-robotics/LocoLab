@@ -1,19 +1,22 @@
 from .locolab_hf_terrains_cfg import (
     HfDiscreteObstaclesTerrainCfg,
-    HfFlatRoughTerrainCfg,
-    HfInvertedPyramidSlopedRoughTerrainCfg,
-    HfPyramidSlopedRoughTerrainCfg,
-    HfGapTerrainCfg,
     HfDoubleGapTerrainCfg,
-    HfStraightGapTerrainCfg,
+    HfFlatRoughTerrainCfg,
+    HfGapTerrainCfg,
     HfHurdleTerrainCfg,
+    HfInvertedPyramidSlopedRoughTerrainCfg,
+    HfInvertedPyramidStairsTerrainCfg,
+    HfPyramidSlopedRoughTerrainCfg,
+    HfPyramidStairsTerrainCfg,
     HfRoughTerrainCfg,
+    HfStraightGapTerrainCfg,
     RoughnessParamsCfg,
 )
-
 from .locolab_mesh_terrains_cfg import (
+    MeshHurdleTerrainCfg,
+    MeshInvertedStraightStairsTerrainCfg,
     MeshRandomWidthPyramidStairsTerrainCfg,
+    MeshRepeatedBoxesTerrainCfg,
     MeshStraightGapTerrainCfg,
     MeshStraightStairsTerrainCfg,
-    MeshInvertedStraightStairsTerrainCfg,
 )
