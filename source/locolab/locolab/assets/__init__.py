@@ -14,6 +14,7 @@
 """Package containing asset and sensor configurations."""
 from .unitree import (
     UNITREE_B2_CFG,
+    UNITREE_B2Z1_CFG,
     UNITREE_G1_29DOF_BEYONDMIMIC_PELVIS_BASE_CFG,
     UNITREE_G1_29DOF_BEYONDMIMIC_TORSO_BASE_CFG,
     UNITREE_GO2_CFG,

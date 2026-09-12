@@ -193,6 +193,13 @@ UNITREE_B2Z1_CFG = UnitreeArticulationCfg(
     # Here we prefer URDF over USD for the convenience of modifying collision shapes
     spawn=UnitreeUrdfFileCfg(
         asset_path=f"{UNITREE_MODEL_DIR}/B2/urdf/b2_description/urdf/b2z1_description.urdf",
+        replace_cylinders_with_capsules=True,
+    ).replace(
+        articulation_props=sim_utils.ArticulationRootPropertiesCfg(
+            enabled_self_collisions=True,
+            solver_position_iteration_count=4,
+            solver_velocity_iteration_count=2,
+        ),
     ),
     init_state=ArticulationCfg.InitialStateCfg(
         pos=(0.0, 0.0, 0.60),
@@ -202,13 +209,12 @@ UNITREE_B2Z1_CFG = UnitreeArticulationCfg(
             "F[L,R]_thigh_joint": 0.8,
             "R[L,R]_thigh_joint": 1.0,
             ".*_calf_joint": -1.5,
-            "z1_joint1": 0.0,
-            "z1_joint2": 0.5,
-            "z1_joint3": -0.8,
-            "z1_joint4": 0.0,
-            "z1_joint5": 0.0,
-            "z1_joint6": 0.0,
-            "z1_joint_gripper": 0.0,
+            "joint1": 0.0,
+            "joint2": 0.5,
+            "joint3": -0.8,
+            "joint4": 0.0,
+            "joint5": 0.0,
+            "joint6": 0.0,
         },
         joint_vel={".*": 0.0},
     ),
@@ -232,11 +238,11 @@ UNITREE_B2Z1_CFG = UnitreeArticulationCfg(
         ),
         "Z1Implicit_Arm": ImplicitActuatorCfg(
             joint_names_expr=[
-                "z1_joint1",
-                "z1_joint3",
-                "z1_joint4",
-                "z1_joint5",
-                "z1_joint6",
+                "joint1",
+                "joint3",
+                "joint4",
+                "joint5",
+                "joint6",
             ],
             effort_limit_sim=30.0,
             velocity_limit_sim=6.0,
@@ -245,7 +251,7 @@ UNITREE_B2Z1_CFG = UnitreeArticulationCfg(
             friction=0.01,
         ),
         "Z1Implicit_Shoulder": DelayedImplicitActuatorCfg(
-            joint_names_expr=["z1_joint2"],
+            joint_names_expr=["joint2"],
             effort_limit_sim=45.0,
             velocity_limit_sim=6.0,
             stiffness=120.0,
@@ -259,8 +265,8 @@ UNITREE_B2Z1_CFG = UnitreeArticulationCfg(
         "FL_hip_joint", "FL_thigh_joint", "FL_calf_joint",
         "RR_hip_joint", "RR_thigh_joint", "RR_calf_joint",
         "RL_hip_joint", "RL_thigh_joint", "RL_calf_joint",
-        "z1_joint1", "z1_joint2", "z1_joint3",
-        "z1_joint4", "z1_joint5", "z1_joint6",
+        "joint1", "joint2", "joint3",
+        "joint4", "joint5", "joint6",
     ],
     # fmt: on
 )
