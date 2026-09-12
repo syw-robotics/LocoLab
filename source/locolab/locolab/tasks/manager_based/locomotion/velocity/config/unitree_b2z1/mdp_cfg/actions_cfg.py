@@ -15,7 +15,7 @@ from . import JOINT_NAMES, PRESERVE_ORDER
 
 @configclass
 class ActionsCfg:
-    """Action specifications for the MDP."""
+    """Action specifications for the B2Z1 quad-manipulation MDP."""
 
     joint_pos = mdp.JointPositionActionCfg(
         asset_name="robot",

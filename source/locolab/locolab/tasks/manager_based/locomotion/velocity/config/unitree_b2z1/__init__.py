@@ -15,11 +15,11 @@ from locolab.utils.gym_registration import register_manager_based_rl_env
 
 # ===== Flat terrain =====
 register_manager_based_rl_env(
-    task_id="Velocity-Flat-B2Z1-WBC",
-    env_cfg_module=f"{__name__}.legged_manip_flat_env_cfg",
-    env_cfg_name="B2Z1WBCFlatEnvCfg",
+    task_id="Velocity-Flat-B2Z1-EEPosition",
+    env_cfg_module=f"{__name__}.base_velocity_arm_position_flat_env_cfg",
+    env_cfg_name="B2Z1FlatEEPositionEnvCfg",
+    play_env_cfg_name="B2Z1FlatEEPositionEnvCfg_PLAY",
     agent_cfg_entry_points={
-        "rsl_rl_cfg_entry_point": f"{agents.__name__}.rsl_rl_ppo_cfg:B2FlatPPORunnerCfg",
-        "z_rl_cfg_entry_point": f"{agents.__name__}.z_rl_ppo_cfg:B2FlatPPORunnerCfg",
+        "z_rl_cfg_entry_point": f"{agents.__name__}.z_rl_ppo_cfg:B2Z1FlatEEPositionPPORunnerCfg",
     },
 )

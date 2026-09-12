@@ -22,13 +22,13 @@ from locolab.utils.terrains import TerrainImporterCfg
 ##
 # Pre-defined configs
 ##
-from locolab.tasks.manager_based.locomotion.velocity.config.unitree_b2.mdp_cfg import (  # isort: skip
+from locolab.tasks.manager_based.locomotion.velocity.config.unitree_b2z1.mdp_cfg import (  # isort: skip
     ActionsCfg,
-    CommandsCfg,
+    VelocityEEPositionCmdCfg,
     EventCfg,
-    FlatRewardsCfg,
-    PrivObsCfg,
-    PropObsCfg,
+    FlatRewardsArmEePosCfg,
+    PrivObsArmEePosCfg,
+    PropObsArmEePosCfg,
     FlatTerminationsCfg,
     CONTACT_SENSOR_LINK_NAMES,
 )
@@ -40,11 +40,11 @@ from locolab.utils.terrains.terrains_cfg import FLAT_ROUGH_TERRAINS_CFG  # isort
 # MDP definition
 ##
 @configclass
-class B2FlatObservationsCfg:
-    """Configuration for B2 on flat terrain observations"""
+class B2Z1FlatEEPositionObservationsCfg:
+    """Observations for B2Z1 flat environment with arm EE position commands."""
 
-    policy: PropObsCfg = PropObsCfg()
-    critic: PrivObsCfg = PrivObsCfg().replace(height_scan=None)
+    policy: PropObsArmEePosCfg = PropObsArmEePosCfg()
+    critic: PrivObsArmEePosCfg = PrivObsArmEePosCfg().replace(height_scan=None)
 
     policy.history_length = 5
 
@@ -53,8 +53,8 @@ class B2FlatObservationsCfg:
 # Scene definition
 ##
 @configclass
-class B2Z1WBCFlatSceneCfg(InteractiveSceneCfg):
-    """Configuration for B2Z1 on flat terrain scene"""
+class B2Z1FlatSceneCfg(InteractiveSceneCfg):
+    """Configuration for B2Z1 flat environment on flat terrain scene."""
 
     # =====  terrain  =====
     terrain: TerrainImporterCfg = TerrainImporterCfg(
@@ -87,17 +87,14 @@ class B2Z1WBCFlatSceneCfg(InteractiveSceneCfg):
 # Environment configuration
 ##
 @configclass
-class B2FlatEnvCfg(ManagerBasedRLEnvCfg):
-    """Configuration for the B2 flat environment."""
+class B2Z1FlatEnvCfg(ManagerBasedRLEnvCfg):
+    """Shared flat environment configuration."""
 
     # Scene settings
-    scene: B2Z1WBCFlatSceneCfg = B2Z1WBCFlatSceneCfg(num_envs=4096, env_spacing=2.5)
+    scene: B2Z1FlatSceneCfg = B2Z1FlatSceneCfg(num_envs=4096, env_spacing=2.5)
     # Basic settings
-    observations: B2FlatObservationsCfg = B2FlatObservationsCfg()
     actions: ActionsCfg = ActionsCfg()
-    commands: CommandsCfg = CommandsCfg()
     # MDP settings
-    rewards: FlatRewardsCfg = FlatRewardsCfg()
     terminations: FlatTerminationsCfg = FlatTerminationsCfg()
     events: EventCfg = EventCfg()
 
@@ -117,12 +114,21 @@ class B2FlatEnvCfg(ManagerBasedRLEnvCfg):
 
 
 @configclass
-class B2FlatEnvCfg_PLAY(B2FlatEnvCfg):
+class B2Z1FlatEEPositionEnvCfg(B2Z1FlatEnvCfg):
+    """Flat environment with base velocity and arm EE position commands."""
+
+    observations: B2Z1FlatEEPositionObservationsCfg = B2Z1FlatEEPositionObservationsCfg()
+    commands: VelocityEEPositionCmdCfg = VelocityEEPositionCmdCfg()
+    rewards: FlatRewardsArmEePosCfg = FlatRewardsArmEePosCfg()
+
+
+
+@configclass
+class B2Z1FlatEEPositionEnvCfg_PLAY(B2Z1FlatEEPositionEnvCfg):
     def __post_init__(self) -> None:
-        # post init of parent
         super().__post_init__()
 
-        # make a smaller scene for play
         self.scene.num_envs = 10
         self.scene.env_spacing = 2.5
         self.commands.base_velocity.debug_vis = True
+        self.commands.ee_position.debug_vis = True

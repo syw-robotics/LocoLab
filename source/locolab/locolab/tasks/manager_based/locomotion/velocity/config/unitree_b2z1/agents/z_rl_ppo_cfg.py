@@ -16,11 +16,11 @@ from z_rl.adaptor.isaaclab import (
 
 
 @configclass
-class B2Z1WBCPPOBaseRunnerCfg(ZRlOnPolicyRunnerCfg):
+class B2Z1QuadManipPPOBaseRunnerCfg(ZRlOnPolicyRunnerCfg):
     num_steps_per_env = 24
     max_iterations = 5000
     save_interval = 500
-    experiment_name = "b2z1_wbc"
+    experiment_name = "b2z1"
     obs_groups = {"actor": ["policy"], "critic": ["critic"]}
     algorithm = ZRlPpoAlgorithmCfg(
         num_learning_epochs=5,
@@ -40,18 +40,36 @@ class B2Z1WBCPPOBaseRunnerCfg(ZRlOnPolicyRunnerCfg):
 
 
 @configclass
-class B2Z1WBCPPORunnerCfg(B2Z1WBCPPOBaseRunnerCfg):
+class B2Z1FlatEEPositionPPORunnerCfg(B2Z1QuadManipPPOBaseRunnerCfg):
+    experiment_name = "b2z1_base_velocity_arm_position"
     actor = ZRlMLPModelCfg(
         hidden_dims=[512, 256, 128],
         activation="elu",
         obs_normalization=False,
         distribution_cfg=ZRlMLPModelCfg.GaussianDistributionCfg(init_std=1.0),
-        init_weights=0.01,  # Use orthogonal init, which helps symmetry learning
+        init_weights=0.01,
     )
     critic = ZRlMLPModelCfg(
         hidden_dims=[512, 256, 128],
         activation="elu",
         obs_normalization=False,
-        init_weights=0.01,  # Use orthogonal init, which helps symmetry learning
+        init_weights=0.01,
     )
 
+
+@configclass
+class B2Z1FlatEEPosePPORunnerCfg(B2Z1QuadManipPPOBaseRunnerCfg):
+    experiment_name = "b2z1_base_velocity_arm_pose"
+    actor = ZRlMLPModelCfg(
+        hidden_dims=[512, 256, 128],
+        activation="elu",
+        obs_normalization=False,
+        distribution_cfg=ZRlMLPModelCfg.GaussianDistributionCfg(init_std=1.0),
+        init_weights=0.01,
+    )
+    critic = ZRlMLPModelCfg(
+        hidden_dims=[512, 256, 128],
+        activation="elu",
+        obs_normalization=False,
+        init_weights=0.01,
+    )

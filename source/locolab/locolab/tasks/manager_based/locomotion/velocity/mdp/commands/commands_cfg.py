@@ -13,8 +13,12 @@ from isaaclab.managers import CommandTermCfg
 from isaaclab.markers import VisualizationMarkersCfg
 from isaaclab.utils import configclass
 
+import isaaclab.sim as sim_utils
+from isaaclab.markers.config import FRAME_MARKER_CFG
+
 from locolab.utils.markers import GREEN_ARROW_X_MARKER_CFG, RED_ARROW_X_MARKER_CFG
 
+from .arm_ee_command import SampledArmEePoseCommand
 from .velocity_command import UniformVelocityCommand
 
 
@@ -110,3 +114,134 @@ class UniformVelocityCommandCfg(CommandTermCfg):
 
     # Marker z offset
     vel_visualizer_offset_z: float = 0.5
+
+
+@configclass
+class SampledArmEEPoseCommandCfg(CommandTermCfg):
+    """Configuration for sampling arm end-effector pose commands from a dataset.
+
+    Dataset poses are defined in the robot base frame. In the default ``yaw_aligned``
+    anchor mode, sampled Cartesian poses are interpolated in the command frame while the
+    world target is reconstructed every step from a yaw-aligned anchor center. Policy
+    observations receive the command in the current base frame, while reward terms should
+    read the world-frame command via :attr:`SampledArmEePoseCommand.command_w`.
+    """
+
+    class_type: type = SampledArmEePoseCommand
+
+    asset_name: str = MISSING
+    """Name of the asset in the environment for which the commands are generated."""
+
+    body_name: str = MISSING
+    """Name of the end-effector body link in the asset."""
+
+    pose_dataset_path: str = MISSING
+    """Path to the ``.npz`` dataset of valid end-effector poses in the robot base frame.
+
+    Supported layouts:
+
+    * ``arm_joint_q_and_ee_pose``: shape ``(N, n_arm + 7)``, each row ``[arm_q..., x, y, z, qw, qx, qy, qz]``.
+    * ``ee_pose`` (legacy): shape ``(N, 7)``, each row ``[qw, qx, qy, qz, x, y, z]``.
+
+    Poses are consumed directly in the command frame; no conversion of the dataset is required.
+    """
+
+    anchor_mode: str = "yaw_aligned"
+    """Command anchoring mode. ``yaw_aligned`` follows the robot in XY and uses a terrain-fixed
+    anchor height, applying only yaw when mapping command-frame poses to the world frame.
+    ``world`` anchors the sampled pose with the full root pose at resample time."""
+
+    anchor_z_world: float = 0.0
+    """Terrain-fixed world-frame height used by the yaw-aligned anchor center.
+
+    When the pose dataset stores full base-frame end-effector positions, set this to the
+    robot's nominal standing base height. Leave :attr:`anchor_center_offset_b` at zero in
+    that case to avoid double-counting shoulder offsets.
+    """
+
+    anchor_center_offset_b: tuple[float, float, float] = (0.0, 0.0, 0.0)
+    """Optional yaw-frame offset added to the yaw-aligned anchor center.
+
+    Use only when command-frame poses are already expressed relative to a custom anchor
+    point. For full base-frame dataset poses, keep this at ``(0, 0, 0)``.
+    """
+
+    make_quat_unique: bool = True
+    """Whether to enforce a positive real part on sampled quaternions. Defaults to True."""
+
+    track_orientation: bool = True
+    """Whether the command tracks full pose ``(7,)`` or position only ``(3,)``.
+
+    If ``False``, only position is sampled, interpolated, published, and logged in metrics.
+    """
+
+    metrics_update_interval: int = 500
+    """Number of control steps between metric updates. Defaults to 500."""
+
+    interpolation_time_range: tuple[float, float] = (1.5, 1.5)
+    """Per-trajectory interpolation duration sampled uniformly from this range when a new target is drawn."""
+
+    interpolation_modes: tuple[str, ...] = ("sphere", "cartesian")
+    """Candidate position interpolation modes. One mode is sampled per trajectory at resample time."""
+
+    sphere_center_offset_b: tuple[float, float, float] = (0.2, 0.0, 0.8)
+    """Sphere interpolation center in the command frame.
+
+    Used only by spherical position interpolation. Independent from the yaw-aligned
+    anchor center used for world-frame reconstruction.
+    """
+
+    interp_path_num_points: int = 6
+    """Number of samples used to visualize the interpolation path in debug mode."""
+
+    goal_ee_visualizer_cfg: VisualizationMarkersCfg = FRAME_MARKER_CFG.replace(
+        prim_path="/Visuals/Command/arm_ee_goal_pose"
+    )
+    """Goal EE frame marker when :attr:`track_orientation` is enabled."""
+
+    current_ee_visualizer_cfg: VisualizationMarkersCfg = FRAME_MARKER_CFG.replace(
+        prim_path="/Visuals/Command/arm_ee_current_pose"
+    )
+    """Current EE frame marker when :attr:`track_orientation` is enabled."""
+
+    goal_pos_visualizer_cfg: VisualizationMarkersCfg = VisualizationMarkersCfg(
+        prim_path="/Visuals/Command/arm_ee_goal_pos",
+        markers={
+            "sphere": sim_utils.SphereCfg(
+                radius=0.03,
+                visual_material=sim_utils.PreviewSurfaceCfg(diffuse_color=(0.2, 0.9, 0.2)),
+            ),
+        },
+    )
+    """Goal position sphere marker when :attr:`track_orientation` is disabled."""
+
+    current_pos_visualizer_cfg: VisualizationMarkersCfg = VisualizationMarkersCfg(
+        prim_path="/Visuals/Command/arm_ee_current_pos",
+        markers={
+            "sphere": sim_utils.SphereCfg(
+                radius=0.03,
+                visual_material=sim_utils.PreviewSurfaceCfg(diffuse_color=(1.0, 0.2, 0.2)),
+            ),
+        },
+    )
+    """Current EE position sphere marker when :attr:`track_orientation` is disabled."""
+
+    interp_path_visualizer_cfg: VisualizationMarkersCfg = VisualizationMarkersCfg(
+        prim_path="/Visuals/Command/arm_ee_interp_path",
+        markers={
+            "point": sim_utils.SphereCfg(
+                radius=0.015,
+                visual_material=sim_utils.PreviewSurfaceCfg(diffuse_color=(1.0, 0.65, 0.1)),
+            ),
+        },
+    )
+    """Position interpolation path markers shown in debug mode."""
+
+    goal_ee_visualizer_cfg.markers["frame"].scale = (0.12, 0.12, 0.12)
+    goal_ee_visualizer_cfg.markers["connecting_line"].visual_material = sim_utils.PreviewSurfaceCfg(
+        diffuse_color=(0.2, 0.9, 0.2)
+    )
+    current_ee_visualizer_cfg.markers["frame"].scale = (0.1, 0.1, 0.1)
+    current_ee_visualizer_cfg.markers["connecting_line"].visual_material = sim_utils.PreviewSurfaceCfg(
+        diffuse_color=(1.0, 0.2, 0.2)
+    )

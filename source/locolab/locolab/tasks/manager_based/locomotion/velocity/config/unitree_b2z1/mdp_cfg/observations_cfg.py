@@ -18,10 +18,9 @@ from . import JOINT_NAMES, PRESERVE_ORDER
 
 
 @configclass
-class PropObsCfg(ObsGroup):
-    """Proprioceptive observations group."""
+class PropObsArmEePosCfg(ObsGroup):
+    """Proprioceptive observations for the arm EE position command variant."""
 
-    # observation terms (order preserved)
     base_ang_vel = ObsTerm(
         func=mdp.base_ang_vel,
         scale=0.25,
@@ -36,7 +35,10 @@ class PropObsCfg(ObsGroup):
     velocity_commands = ObsTerm(
         func=mdp.generated_commands,
         params={"command_name": "base_velocity"},
-        clip=(-10.0, 10.0),
+    )
+    arm_ee_commands = ObsTerm(
+        func=mdp.generated_commands,
+        params={"command_name": "ee_position"},
     )
     joint_pos = ObsTerm(
         func=mdp.joint_pos_rel,
@@ -62,18 +64,29 @@ class PropObsCfg(ObsGroup):
 
 
 @configclass
-class PrivObsCfg(ObsGroup):
-    """Privileged observations group."""
+class PropObsArmEePoseCfg(PropObsArmEePosCfg):
+    """Proprioceptive observations for the arm EE pose command variant."""
 
-    # observation terms (order preserved)
-    # put base_lin_vel at front for convenience
+    arm_ee_commands = ObsTerm(
+        func=mdp.generated_commands,
+        params={"command_name": "ee_pose"},
+    )
+
+
+@configclass
+class PrivObsArmEePosCfg(ObsGroup):
+    """Privileged observations for the arm EE position command variant."""
+
     base_lin_vel = ObsTerm(func=mdp.base_lin_vel, clip=(-10.0, 10.0))
     base_ang_vel = ObsTerm(func=mdp.base_ang_vel, scale=0.25, clip=(-10.0, 10.0))
     projected_gravity = ObsTerm(func=mdp.projected_gravity, clip=(-1.0, 1.0))
     velocity_commands = ObsTerm(
         func=mdp.generated_commands,
         params={"command_name": "base_velocity"},
-        clip=(-10.0, 10.0),
+    )
+    arm_ee_commands = ObsTerm(
+        func=mdp.generated_commands,
+        params={"command_name": "ee_position"},
     )
     joint_pos = ObsTerm(
         func=mdp.joint_pos_rel,
@@ -112,12 +125,17 @@ class PrivObsCfg(ObsGroup):
         params={"sensor_cfg": SceneEntityCfg("contact_forces", body_names=".*_foot")},
     )
     gait_phase = ObsTerm(func=mdp.gait_phase, params={"period": 1.0})
-    #  feet_height = ObsTerm(
-    #      func=mdp.feet_height,
-    #      params={"feet_names": ["FL_foot", "FR_foot", "RL_foot", "RR_foot"]},
-    #      clip=(-10.0, 10.0),
-    #  )
 
     def __post_init__(self):
         self.enable_corruption = False
         self.concatenate_terms = True
+
+
+@configclass
+class PrivObsArmEePoseCfg(PrivObsArmEePosCfg):
+    """Privileged observations for the arm EE pose command variant."""
+
+    arm_ee_commands = ObsTerm(
+        func=mdp.generated_commands,
+        params={"command_name": "ee_pose"},
+    )

@@ -12,15 +12,14 @@ from isaaclab.utils import configclass
 
 import locolab.tasks.manager_based.locomotion.velocity.mdp as mdp
 
-from . import BASE_LINK_NAME, FOOT_LINK_NAMES, JOINT_NAMES, OTHER_BODY_LINK_NAMES
+from . import BASE_LINK_NAME, FOOT_LINK_NAMES, GRIPPER_LINK_NAMES, JOINT_NAMES, OTHER_BODY_LINK_NAMES
 
 
 @configclass
 class EventCfg:
-    """Configuration for events."""
+    """Configuration for B2Z1 domain randomization and reset events."""
 
-    # ===== startup ===== (6 events)
-    # 1.
+    # ===== startup =====
     randomize_feet_material = EventTerm(
         func=mdp.randomize_rigid_body_material,
         mode="startup",
@@ -30,23 +29,21 @@ class EventCfg:
             "dynamic_friction_range": (0.2, 1.2),
             "restitution_range": (0.0, 0.5),
             "num_buckets": 64,
-            "make_consistent": (
-                True
-            ),  # Ensure dynamic friction is less than or equal to static friction. This obeys the physics constraint on friction values.
+            "make_consistent": True,
         },
     )
-    # 2.
+
     randomize_base_mass = EventTerm(
         func=mdp.randomize_rigid_body_mass,
         mode="startup",
         params={
             "asset_cfg": SceneEntityCfg("robot", body_names=BASE_LINK_NAME),
-            "mass_distribution_params": (-2.0, 20.0),
+            "mass_distribution_params": (-1.0, 8.0),
             "operation": "add",
             "recompute_inertia": True,
         },
     )
-    # 3.
+
     randomize_other_bodies_mass = EventTerm(
         func=mdp.randomize_rigid_body_mass,
         mode="startup",
@@ -57,7 +54,18 @@ class EventCfg:
             "recompute_inertia": True,
         },
     )
-    # 4.
+
+    randomize_gripper_mass = EventTerm(
+        func=mdp.randomize_rigid_body_mass,
+        mode="startup",
+        params={
+            "asset_cfg": SceneEntityCfg("robot", body_names=GRIPPER_LINK_NAMES),
+            "mass_distribution_params": (-0.8, 2.0),
+            "operation": "add",
+            "recompute_inertia": True,
+        },
+    )
+
     randomize_base_com = EventTerm(
         func=mdp.randomize_rigid_body_com,
         mode="startup",
@@ -66,7 +74,7 @@ class EventCfg:
             "com_range": {"x": (-0.10, 0.20), "y": (-0.08, 0.08), "z": (-0.08, 0.12)},
         },
     )
-    # 5.
+
     randomize_actuator_gains = EventTerm(
         func=mdp.randomize_actuator_gains,
         mode="startup",
@@ -78,33 +86,8 @@ class EventCfg:
             "distribution": "uniform",
         },
     )
-    # 6.
-    # this term has bug!!!
-    #  randomize_joint_offsets = EventTerm(
-    #      func=mdp.randomize_joint_offsets,
-    #      mode="startup",
-    #      params={
-    #          "asset_cfg": SceneEntityCfg("robot", joint_names=JOINT_NAMES),
-    #          "offsets_distribution_params": (-0.02, 0.02),
-    #          "operation": "add",
-    #          "distribution": "gaussian",
-    #      },
-    #  )
-    # 7.
-    #  randomize_joint_parameters = EventTerm(
-    #      func=mdp.randomize_joint_parameters,
-    #      mode="startup",
-    #      params={
-    #          "asset_cfg": SceneEntityCfg("robot", joint_names=JOINT_NAMES),
-    #          "friction_distribution_params": (0.0, 0.1),
-    #          "armature_distribution_params": (0.0, 0.01),
-    #          "operation": "add",
-    #          "distribution": "uniform",
-    #      },
-    #  )
 
-    # ===== reset ===== (2 events)
-    # 1.
+    # ===== reset =====
     reset_joints = EventTerm(
         func=mdp.reset_joints_by_scale,
         mode="reset",
@@ -113,7 +96,7 @@ class EventCfg:
             "velocity_range": (0.0, 0.0),
         },
     )
-    # 2.
+
     reset_base = EventTerm(
         func=mdp.reset_root_state_uniform,
         mode="reset",
@@ -137,8 +120,7 @@ class EventCfg:
         },
     )
 
-    # ===== interval ===== (1 events)
-    # 1.
+    # ===== interval =====
     push_robot_by_setting_velocity = EventTerm(
         func=mdp.push_by_setting_velocity,
         mode="interval",
