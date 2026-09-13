@@ -19,6 +19,7 @@ from isaaclab.markers.config import FRAME_MARKER_CFG
 from locolab.utils.markers import GREEN_ARROW_X_MARKER_CFG, RED_ARROW_X_MARKER_CFG
 
 from .arm_ee_command import SampledArmEePoseCommand
+from .arm_ee_traj_command import SampledArmEeTrajCommand
 from .velocity_command import UniformVelocityCommand
 
 
@@ -120,11 +121,11 @@ class UniformVelocityCommandCfg(CommandTermCfg):
 class SampledArmEEPoseCommandCfg(CommandTermCfg):
     """Configuration for sampling arm end-effector pose commands from a dataset.
 
-    Dataset poses are defined in the robot base frame. In the default ``yaw_aligned``
-    anchor mode, sampled Cartesian poses are interpolated in the command frame while the
-    world target is reconstructed every step from a yaw-aligned anchor center. Policy
-    observations receive the command in the current base frame, while reward terms should
-    read the world-frame command via :attr:`SampledArmEePoseCommand.command_w`.
+    Dataset poses are defined in the robot base frame. Sampled Cartesian poses are
+    interpolated in the yaw-aligned command frame while the world target is reconstructed
+    every step from a yaw-aligned anchor center. Policy observations receive the command
+    in the current base frame, while reward terms should read the world-frame command via
+    :attr:`SampledArmEePoseCommand.command_w`.
     """
 
     class_type: type = SampledArmEePoseCommand
@@ -146,11 +147,6 @@ class SampledArmEEPoseCommandCfg(CommandTermCfg):
     Poses are consumed directly in the command frame; no conversion of the dataset is required.
     """
 
-    anchor_mode: str = "yaw_aligned"
-    """Command anchoring mode. ``yaw_aligned`` follows the robot in XY and uses a terrain-fixed
-    anchor height, applying only yaw when mapping command-frame poses to the world frame.
-    ``world`` anchors the sampled pose with the full root pose at resample time."""
-
     anchor_z_world: float = 0.0
     """Terrain-fixed world-frame height used by the yaw-aligned anchor center.
 
@@ -169,7 +165,7 @@ class SampledArmEEPoseCommandCfg(CommandTermCfg):
     make_quat_unique: bool = True
     """Whether to enforce a positive real part on sampled quaternions. Defaults to True."""
 
-    track_orientation: bool = True
+    track_orientation: bool = False
     """Whether the command tracks full pose ``(7,)`` or position only ``(3,)``.
 
     If ``False``, only position is sampled, interpolated, published, and logged in metrics.
@@ -183,6 +179,28 @@ class SampledArmEEPoseCommandCfg(CommandTermCfg):
 
     interpolation_modes: tuple[str, ...] = ("sphere", "cartesian")
     """Candidate position interpolation modes. One mode is sampled per trajectory at resample time."""
+
+    interpolation_mode_probs: tuple[float, ...] | None = None
+    """Sampling weights aligned with :attr:`interpolation_modes`.
+
+    ``None`` samples modes uniformly. Otherwise the tuple length must match
+    :attr:`interpolation_modes`, entries must be non-negative, and they are
+    normalized to a probability distribution.
+    """
+
+    workspace_expand_height_range: tuple[float, float] = (0.0, 0.0)
+    """Virtual base-height residual added to the yaw-aligned command, in meters.
+
+    Sampled once per resample and applied as ``p.z += Δh`` after the pitch map.
+    ``(0, 0)`` disables height expansion.
+    """
+
+    workspace_expand_pitch_range: tuple[float, float] = (0.0, 0.0)
+    """Virtual base-pitch residual in radians, applied as ``p ← R_y(θ) p``.
+
+    Expands forward/height coupling without changing command-frame y.
+    ``(0, 0)`` disables pitch expansion.
+    """
 
     sphere_center_offset_b: tuple[float, float, float] = (0.2, 0.0, 0.8)
     """Sphere interpolation center in the command frame.
@@ -236,6 +254,122 @@ class SampledArmEEPoseCommandCfg(CommandTermCfg):
         },
     )
     """Position interpolation path markers shown in debug mode."""
+
+    goal_ee_visualizer_cfg.markers["frame"].scale = (0.12, 0.12, 0.12)
+    goal_ee_visualizer_cfg.markers["connecting_line"].visual_material = sim_utils.PreviewSurfaceCfg(
+        diffuse_color=(0.2, 0.9, 0.2)
+    )
+    current_ee_visualizer_cfg.markers["frame"].scale = (0.1, 0.1, 0.1)
+    current_ee_visualizer_cfg.markers["connecting_line"].visual_material = sim_utils.PreviewSurfaceCfg(
+        diffuse_color=(1.0, 0.2, 0.2)
+    )
+
+
+@configclass
+class SampledArmEETrajCommandCfg(CommandTermCfg):
+    """Configuration for replaying precomputed arm EE trajectories.
+
+    Dataset trajectories are defined in the robot base frame as ``ee_pose`` with shape
+    ``(N, T, 7)`` and layout ``[x, y, z, qw, qx, qy, qz]``. Playback interpolates only
+    between adjacent waypoints of the sampled trajectory. The world target is reconstructed
+    every step from a yaw-aligned anchor center, matching :class:`SampledArmEEPoseCommandCfg`.
+    """
+
+    class_type: type = SampledArmEeTrajCommand
+
+    asset_name: str = MISSING
+    """Name of the asset in the environment for which the commands are generated."""
+
+    body_name: str = MISSING
+    """Name of the end-effector body link in the asset."""
+
+    traj_dataset_path: str = MISSING
+    """Path to the ``.npz`` dataset of valid end-effector trajectories in the robot base frame.
+
+    Required key:
+
+    * ``ee_pose``: shape ``(N, T, 7)``, each waypoint ``[x, y, z, qw, qx, qy, qz]``.
+
+    Optional keys such as ``q`` / ``qdot`` are ignored at command time.
+    """
+
+    anchor_z_world: float = 0.0
+    """Terrain-fixed world-frame height used by the yaw-aligned anchor center."""
+
+    anchor_center_offset_b: tuple[float, float, float] = (0.0, 0.0, 0.0)
+    """Optional yaw-frame offset added to the yaw-aligned anchor center."""
+
+    make_quat_unique: bool = True
+    """Whether to enforce a positive real part on trajectory quaternions. Defaults to True."""
+
+    track_orientation: bool = True
+    """Whether the command tracks full pose ``(7,)`` or position only ``(3,)``."""
+
+    metrics_update_interval: int = 500
+    """Number of control steps between metric updates. Defaults to 500."""
+
+    playback_time_range: tuple[float, float] = (1.5, 3.0)
+    """Duration used to play one trajectory from the first waypoint to the last.
+
+    After playback finishes, the command holds the final waypoint until the next resample.
+    """
+
+    workspace_expand_height_range: tuple[float, float] = (0.0, 0.0)
+    """Virtual base-height residual added to the yaw-aligned command, in meters.
+
+    Sampled once per trajectory and applied as ``p.z += Δh`` after the pitch map.
+    ``(0, 0)`` disables height expansion.
+    """
+
+    workspace_expand_pitch_range: tuple[float, float] = (0.0, 0.0)
+    """Virtual base-pitch residual in radians, applied as ``p ← R_y(θ) p``.
+
+    Expands forward/height coupling without changing command-frame y.
+    ``(0, 0)`` disables pitch expansion.
+    """
+
+    goal_ee_visualizer_cfg: VisualizationMarkersCfg = FRAME_MARKER_CFG.replace(
+        prim_path="/Visuals/Command/arm_ee_goal_pose"
+    )
+    """Goal EE frame marker when :attr:`track_orientation` is enabled."""
+
+    current_ee_visualizer_cfg: VisualizationMarkersCfg = FRAME_MARKER_CFG.replace(
+        prim_path="/Visuals/Command/arm_ee_current_pose"
+    )
+    """Current EE frame marker when :attr:`track_orientation` is enabled."""
+
+    goal_pos_visualizer_cfg: VisualizationMarkersCfg = VisualizationMarkersCfg(
+        prim_path="/Visuals/Command/arm_ee_goal_pos",
+        markers={
+            "sphere": sim_utils.SphereCfg(
+                radius=0.03,
+                visual_material=sim_utils.PreviewSurfaceCfg(diffuse_color=(0.2, 0.9, 0.2)),
+            ),
+        },
+    )
+    """Goal position sphere marker when :attr:`track_orientation` is disabled."""
+
+    current_pos_visualizer_cfg: VisualizationMarkersCfg = VisualizationMarkersCfg(
+        prim_path="/Visuals/Command/arm_ee_current_pos",
+        markers={
+            "sphere": sim_utils.SphereCfg(
+                radius=0.03,
+                visual_material=sim_utils.PreviewSurfaceCfg(diffuse_color=(1.0, 0.2, 0.2)),
+            ),
+        },
+    )
+    """Current EE position sphere marker when :attr:`track_orientation` is disabled."""
+
+    traj_path_visualizer_cfg: VisualizationMarkersCfg = VisualizationMarkersCfg(
+        prim_path="/Visuals/Command/arm_ee_traj_path",
+        markers={
+            "point": sim_utils.SphereCfg(
+                radius=0.015,
+                visual_material=sim_utils.PreviewSurfaceCfg(diffuse_color=(1.0, 0.65, 0.1)),
+            ),
+        },
+    )
+    """Active trajectory waypoint markers shown in debug mode."""
 
     goal_ee_visualizer_cfg.markers["frame"].scale = (0.12, 0.12, 0.12)
     goal_ee_visualizer_cfg.markers["connecting_line"].visual_material = sim_utils.PreviewSurfaceCfg(

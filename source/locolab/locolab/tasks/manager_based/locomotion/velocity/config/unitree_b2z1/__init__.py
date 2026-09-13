@@ -23,3 +23,13 @@ register_manager_based_rl_env(
         "z_rl_cfg_entry_point": f"{agents.__name__}.z_rl_ppo_cfg:B2Z1FlatEEPositionPPORunnerCfg",
     },
 )
+
+register_manager_based_rl_env(
+    task_id="Velocity-Flat-B2Z1-EETraj",
+    env_cfg_module=f"{__name__}.base_velocity_arm_traj_flat_env_cfg",
+    env_cfg_name="B2Z1FlatEETrajEnvCfg",
+    play_env_cfg_name="B2Z1FlatEETrajEnvCfg_PLAY",
+    agent_cfg_entry_points={
+        "z_rl_cfg_entry_point": f"{agents.__name__}.z_rl_ppo_cfg:B2Z1FlatEETrajPPORunnerCfg",
+    },
+)

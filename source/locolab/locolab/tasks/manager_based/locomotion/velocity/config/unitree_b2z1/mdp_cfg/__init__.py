@@ -37,6 +37,8 @@ JOINT_NAMES = LEG_JOINT_NAMES + ARM_JOINT_NAMES
 
 # npz key "arm_joint_q_and_ee_pose", shape (N, n_arm + 7): [arm_q..., x, y, z, qw, qx, qy, qz] in base_link
 DEFAULT_ARM_EE_POSE_DATASET = "/home/syw/.gitrepos/pyroki_to/data/b2_z1_arm_joint_q_and_ee_pose.npz"
+# npz key "ee_pose", shape (N, T, 7): [x, y, z, qw, qx, qy, qz] in base_link
+DEFAULT_ARM_EE_TRAJ_DATASET = "/home/syw/.gitrepos/pyroki_to/data/b2_z1_arm_ws_ee_traj.npz"
 
 # Nominal flat-terrain base height in the environment world frame [m].
 NOMINAL_BASE_HEIGHT_Z = 0.46
@@ -44,7 +46,7 @@ NOMINAL_BASE_HEIGHT_Z = 0.46
 from .actions_cfg import ActionsCfg
 from .commands_cfg import (
     VelocityEEPositionCmdCfg,
-    VelocityEEPoseCmdCfg,
+    VelocityEETrajPositionCmdCfg,
 )
 from .curriculumns_cfg import RoughCurriculumsCfg
 from .events_cfg import EventCfg
@@ -60,7 +62,7 @@ from .terminations_cfg import FlatTerminationsCfg, RoughTerminationsCfg
 __all__ = [
     "ActionsCfg",
     "VelocityEEPositionCmdCfg",
-    "VelocityEEPoseCmdCfg",
+    "VelocityEETrajPositionCmdCfg",
     "EventCfg",
     "RoughCurriculumsCfg",
     "PropObsArmEePosCfg",

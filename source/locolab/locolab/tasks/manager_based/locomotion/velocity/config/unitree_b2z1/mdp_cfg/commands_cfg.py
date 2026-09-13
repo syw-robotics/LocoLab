@@ -12,7 +12,7 @@ from isaaclab.utils import configclass
 
 import locolab.tasks.manager_based.locomotion.velocity.mdp as mdp
 
-from . import ARM_EE_LINK_NAME, DEFAULT_ARM_EE_POSE_DATASET, NOMINAL_BASE_HEIGHT_Z
+from . import ARM_EE_LINK_NAME, DEFAULT_ARM_EE_POSE_DATASET, DEFAULT_ARM_EE_TRAJ_DATASET, NOMINAL_BASE_HEIGHT_Z
 
 
 @configclass
@@ -55,27 +55,32 @@ class VelocityEEPositionCmdCfg(BaseVelocityCommandsCfg):
         pose_dataset_path=DEFAULT_ARM_EE_POSE_DATASET,
         resampling_time_range=(5.0, 10.0),
         interpolation_time_range=(2.0, 4.0),
-        anchor_mode="yaw_aligned",
         anchor_z_world=NOMINAL_BASE_HEIGHT_Z,
         anchor_center_offset_b=(0.0, 0.0, 0.0),
         interpolation_modes=("cartesian", "sphere"),
+        interpolation_mode_probs=(0.3, 0.7),
+        workspace_expand_height_range=(-0.08, 0.05),
+        workspace_expand_pitch_range=(-0.15, 0.15),
         track_orientation=False,
         debug_vis=False,
     )
 
 
-@configclass
-class VelocityEEPoseCmdCfg(BaseVelocityCommandsCfg):
-    """Velocity + arm EE pose command (position + orientation)."""
 
-    ee_pose = mdp.SampledArmEEPoseCommandCfg(
+@configclass
+class VelocityEETrajPositionCmdCfg(BaseVelocityCommandsCfg):
+    """Velocity + replayed arm EE trajectory, published as a 3D position command."""
+
+    ee_position = mdp.SampledArmEETrajCommandCfg(
         asset_name="robot",
         body_name=ARM_EE_LINK_NAME,
-        pose_dataset_path=DEFAULT_ARM_EE_POSE_DATASET,
+        traj_dataset_path=DEFAULT_ARM_EE_TRAJ_DATASET,
         resampling_time_range=(5.0, 10.0),
-        interpolation_time_range=(2.0, 4.0),
-        anchor_mode="world",
-        interpolation_modes=("cartesian", "sphere"),
-        track_orientation=True,
+        playback_time_range=(2.0, 4.0),
+        anchor_z_world=NOMINAL_BASE_HEIGHT_Z,
+        anchor_center_offset_b=(0.0, 0.0, 0.0),
+        workspace_expand_height_range=(-0.05, 0.08),
+        workspace_expand_pitch_range=(-0.15, 0.15),
+        track_orientation=False,
         debug_vis=False,
     )

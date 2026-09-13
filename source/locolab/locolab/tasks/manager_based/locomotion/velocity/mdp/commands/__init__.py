@@ -8,4 +8,4 @@
 
 """Commands Configurations for the velocity MDP."""
 
-from .commands_cfg import SampledArmEEPoseCommandCfg, UniformVelocityCommandCfg
+from .commands_cfg import SampledArmEEPoseCommandCfg, SampledArmEETrajCommandCfg, UniformVelocityCommandCfg

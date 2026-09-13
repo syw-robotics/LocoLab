@@ -45,14 +45,14 @@ class B2Z1FlatEEPositionPPORunnerCfg(B2Z1QuadManipPPOBaseRunnerCfg):
     actor = ZRlMLPModelCfg(
         hidden_dims=[512, 256, 128],
         activation="elu",
-        obs_normalization=False,
+        obs_normalization=True,
         distribution_cfg=ZRlMLPModelCfg.GaussianDistributionCfg(init_std=1.0),
         init_weights=0.01,
     )
     critic = ZRlMLPModelCfg(
         hidden_dims=[512, 256, 128],
         activation="elu",
-        obs_normalization=False,
+        obs_normalization=True,
         init_weights=0.01,
     )
 
@@ -63,13 +63,31 @@ class B2Z1FlatEEPosePPORunnerCfg(B2Z1QuadManipPPOBaseRunnerCfg):
     actor = ZRlMLPModelCfg(
         hidden_dims=[512, 256, 128],
         activation="elu",
-        obs_normalization=False,
+        obs_normalization=True,
         distribution_cfg=ZRlMLPModelCfg.GaussianDistributionCfg(init_std=1.0),
         init_weights=0.01,
     )
     critic = ZRlMLPModelCfg(
         hidden_dims=[512, 256, 128],
         activation="elu",
-        obs_normalization=False,
+        obs_normalization=True,
+        init_weights=0.01,
+    )
+
+
+@configclass
+class B2Z1FlatEETrajPPORunnerCfg(B2Z1QuadManipPPOBaseRunnerCfg):
+    experiment_name = "b2z1_base_velocity_arm_traj"
+    actor = ZRlMLPModelCfg(
+        hidden_dims=[512, 256, 128],
+        activation="elu",
+        obs_normalization=True,
+        distribution_cfg=ZRlMLPModelCfg.GaussianDistributionCfg(init_std=1.0),
+        init_weights=0.01,
+    )
+    critic = ZRlMLPModelCfg(
+        hidden_dims=[512, 256, 128],
+        activation="elu",
+        obs_normalization=True,
         init_weights=0.01,
     )

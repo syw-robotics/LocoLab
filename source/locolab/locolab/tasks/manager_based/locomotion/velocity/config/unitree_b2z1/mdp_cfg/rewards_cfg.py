@@ -31,18 +31,28 @@ class FlatRewardsArmEePosCfg:
     """Reward terms for flat terrain."""
 
     # ===== task-specific rewards =====
+    # -- velocity tracking --
     track_lin_vel_xy_exp = RewTerm(
-        func=mdp.track_lin_vel_xy_exp, weight=1.5, params={"command_name": "base_velocity", "std": math.sqrt(0.25)}
+        func=mdp.track_lin_vel_xy_yaw_frame_exp, weight=2.0, params={"command_name": "base_velocity", "std": math.sqrt(0.25)}
     )
     track_ang_vel_z_exp = RewTerm(
-        func=mdp.track_ang_vel_z_exp, weight=1.0, params={"command_name": "base_velocity", "std": math.sqrt(0.25)}
+        func=mdp.track_ang_vel_z_world_exp, weight=1.0, params={"command_name": "base_velocity", "std": math.sqrt(0.25)}
     )
+    # -- ee position tracking --
     track_ee_position_command_exp = RewTerm(
         func=mdp.track_position_command_exp,
         weight=2.0,
         params={
             "command_name": "ee_position",
-            "std": math.sqrt(0.25),
+            "std": math.sqrt(0.1),
+            "asset_cfg": SceneEntityCfg("robot", body_names=ARM_EE_LINK_NAME),
+        },
+    )
+    position_command_error_l2 = RewTerm(
+        func=mdp.position_command_error_l2,
+        weight=-0.5,
+        params={
+            "command_name": "ee_position",
             "asset_cfg": SceneEntityCfg("robot", body_names=ARM_EE_LINK_NAME),
         },
     )
@@ -50,8 +60,8 @@ class FlatRewardsArmEePosCfg:
     # ===== penalty rewards =====
     # -- base --
     lin_vel_z_l2 = RewTerm(func=mdp.lin_vel_z_l2, weight=-2.0)
-    ang_vel_xy_l2 = RewTerm(func=mdp.ang_vel_xy_l2, weight=-0.05)
-    # flat_orientation_l2 = RewTerm(func=mdp.flat_orientation_l2, weight=-10.0)
+    ang_vel_xy_l2 = RewTerm(func=mdp.ang_vel_xy_l2, weight=-0.1)
+    flat_orientation_l2 = RewTerm(func=mdp.flat_orientation_l2, weight=-5.0)
     base_height_l2 = RewTerm(
         func=mdp.base_height_l2,
         weight=-10.0,
@@ -68,12 +78,7 @@ class FlatRewardsArmEePosCfg:
     )
     joint_arm_acc_l2 = RewTerm(
         func=mdp.joint_acc_l2,
-        weight=-2.0e-6,
-        params={"asset_cfg": SceneEntityCfg("robot", joint_names=ARM_JOINT_NAMES)},
-    )
-    joint_arm_vel_l2 = RewTerm(
-        func=mdp.joint_vel_l2,
-        weight=-2.5e-4,
+        weight=-1.0e-6,
         params={"asset_cfg": SceneEntityCfg("robot", joint_names=ARM_JOINT_NAMES)},
     )
     joint_torques_l2 = RewTerm(
@@ -85,7 +90,7 @@ class FlatRewardsArmEePosCfg:
         func=mdp.joint_power_l1, weight=-2.0e-5, params={"asset_cfg": SceneEntityCfg("robot", joint_names=JOINT_NAMES)}
     )
     joint_pos_limits = RewTerm(
-        func=mdp.joint_pos_limits, weight=-10.0, params={"asset_cfg": SceneEntityCfg("robot", joint_names=JOINT_NAMES)}
+        func=mdp.joint_pos_limits, weight=-5.0, params={"asset_cfg": SceneEntityCfg("robot", joint_names=JOINT_NAMES)}
     )
     # -- stand still --
     stand_still = RewTerm(
@@ -96,13 +101,13 @@ class FlatRewardsArmEePosCfg:
         },
     )
     # -- action --
-    action_rate_l2 = RewTerm(func=mdp.action_rate_l2, weight=-0.01)
+    action_rate_l2 = RewTerm(func=mdp.action_rate_l2, weight=-0.05)
     action_smoothness_l2 = RewTerm(func=mdp.action_smoothness_l2, weight=-0.01)
 
     # -- collision --
     undesired_contacts = RewTerm(
         func=mdp.undesired_contacts,
-        weight=-5.0,
+        weight=-1.0,
         params={
             "sensor_cfg": SceneEntityCfg("contact_forces", body_names=UNDESIRED_CONTACT_LINK_NAMES),
             "threshold": 1.0,

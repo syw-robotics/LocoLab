@@ -13,6 +13,7 @@ from typing import TYPE_CHECKING
 import torch
 
 from isaaclab.managers import SceneEntityCfg
+from isaaclab.utils.math import subtract_frame_transforms
 
 if TYPE_CHECKING:
     from isaaclab.assets import Articulation
@@ -21,6 +22,30 @@ if TYPE_CHECKING:
 
 
 # =====  body  =====
+def root_frame_body_pose(
+    env: ManagerBasedRLEnv,
+    asset_cfg: SceneEntityCfg = SceneEntityCfg("robot"),
+    include_orientation: bool = True,
+) -> torch.Tensor:
+    """Body pose expressed in the current robot root / base frame.
+
+    Matches EE command observations, which publish the world target in the current base frame.
+    Returns ``(num_envs, 7)`` as ``[x, y, z, qw, qx, qy, qz]`` when ``include_orientation`` is
+    true, otherwise ``(num_envs, 3)`` position only.
+    """
+    asset: Articulation = env.scene[asset_cfg.name]
+    body_id = asset_cfg.body_ids[0]
+    pos_b, quat_b = subtract_frame_transforms(
+        asset.data.root_pos_w,
+        asset.data.root_quat_w,
+        asset.data.body_pos_w[:, body_id],
+        asset.data.body_quat_w[:, body_id],
+    )
+    if include_orientation:
+        return torch.cat([pos_b, quat_b], dim=-1)
+    return pos_b
+
+
 def body_mass(env: ManagerBasedRLEnv, asset_cfg: SceneEntityCfg = SceneEntityCfg("robot")) -> torch.Tensor:
     """The mass of the specified bodies."""
     # extract the used quantities (to enable type-hinting)

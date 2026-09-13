@@ -14,7 +14,7 @@ from isaaclab.utils.noise import AdditiveUniformNoiseCfg as Unoise
 
 import locolab.tasks.manager_based.locomotion.velocity.mdp as mdp
 
-from . import JOINT_NAMES, PRESERVE_ORDER
+from . import ARM_EE_LINK_NAME, JOINT_NAMES, PRESERVE_ORDER
 
 
 @configclass
@@ -88,6 +88,13 @@ class PrivObsArmEePosCfg(ObsGroup):
         func=mdp.generated_commands,
         params={"command_name": "ee_position"},
     )
+    arm_ee_state = ObsTerm(
+        func=mdp.root_frame_body_pose,
+        params={
+            "asset_cfg": SceneEntityCfg("robot", body_names=ARM_EE_LINK_NAME),
+            "include_orientation": False,
+        },
+    )
     joint_pos = ObsTerm(
         func=mdp.joint_pos_rel,
         params={"asset_cfg": SceneEntityCfg("robot", joint_names=JOINT_NAMES, preserve_order=PRESERVE_ORDER)},
@@ -138,4 +145,11 @@ class PrivObsArmEePoseCfg(PrivObsArmEePosCfg):
     arm_ee_commands = ObsTerm(
         func=mdp.generated_commands,
         params={"command_name": "ee_pose"},
+    )
+    arm_ee_state = ObsTerm(
+        func=mdp.root_frame_body_pose,
+        params={
+            "asset_cfg": SceneEntityCfg("robot", body_names=ARM_EE_LINK_NAME),
+            "include_orientation": True,
+        },
     )
