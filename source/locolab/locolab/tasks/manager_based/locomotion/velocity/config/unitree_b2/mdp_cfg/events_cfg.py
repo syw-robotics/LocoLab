@@ -41,7 +41,7 @@ class EventCfg:
         mode="startup",
         params={
             "asset_cfg": SceneEntityCfg("robot", body_names=BASE_LINK_NAME),
-            "mass_distribution_params": (-2.0, 20.0),
+            "mass_distribution_params": (-2.0, 25.0),
             "operation": "add",
             "recompute_inertia": True,
         },
@@ -79,29 +79,17 @@ class EventCfg:
         },
     )
     # 6.
-    # this term has bug!!!
-    #  randomize_joint_offsets = EventTerm(
-    #      func=mdp.randomize_joint_offsets,
-    #      mode="startup",
-    #      params={
-    #          "asset_cfg": SceneEntityCfg("robot", joint_names=JOINT_NAMES),
-    #          "offsets_distribution_params": (-0.02, 0.02),
-    #          "operation": "add",
-    #          "distribution": "gaussian",
-    #      },
-    #  )
-    # 7.
-    #  randomize_joint_parameters = EventTerm(
-    #      func=mdp.randomize_joint_parameters,
-    #      mode="startup",
-    #      params={
-    #          "asset_cfg": SceneEntityCfg("robot", joint_names=JOINT_NAMES),
-    #          "friction_distribution_params": (0.0, 0.1),
-    #          "armature_distribution_params": (0.0, 0.01),
-    #          "operation": "add",
-    #          "distribution": "uniform",
-    #      },
-    #  )
+    randomize_joint_parameters = EventTerm(
+        func=mdp.randomize_joint_parameters,
+        mode="startup",
+        params={
+            "asset_cfg": SceneEntityCfg("robot", joint_names=JOINT_NAMES),
+            "friction_distribution_params": (0.5, 2.0),
+            "armature_distribution_params": (0.5, 2.0),
+            "operation": "scale",
+            "distribution": "uniform",
+        },
+    )
 
     # ===== reset ===== (2 events)
     # 1.

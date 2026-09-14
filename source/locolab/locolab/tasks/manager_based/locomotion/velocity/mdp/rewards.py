@@ -380,19 +380,16 @@ def _command_is_moving(
 
 def stand_still(
     env: ManagerBasedRLEnv,
+    command_name: str,
     asset_cfg: SceneEntityCfg = SceneEntityCfg("robot"),
-    velocity_threshold: float = 0.2,
 ) -> torch.Tensor:
     """Penalize joint position error from default on the articulation."""
-    # extract the used quantities (to enable type-hinting)
     asset: Articulation = env.scene[asset_cfg.name]
-    command_vel_xy = torch.linalg.norm(env.command_manager.get_command("base_velocity")[:, :2], dim=1)
-    body_vel_xy = torch.linalg.norm(asset.data.root_lin_vel_b[:, :2], dim=1)
-    return torch.where(
-        torch.logical_or(command_vel_xy > 0.0, body_vel_xy > velocity_threshold),
-        0.0,
-        torch.linalg.norm((asset.data.joint_pos[:, asset_cfg.joint_ids] - asset.data.default_joint_pos[:, asset_cfg.joint_ids]), dim=1)
+    joint_deviation = torch.linalg.norm(
+        asset.data.joint_pos[:, asset_cfg.joint_ids] - asset.data.default_joint_pos[:, asset_cfg.joint_ids],
+        dim=1,
     )
+    return torch.where(_command_is_moving(env, command_name), 0.0, joint_deviation)
 
 
 def stand_still_contacts(

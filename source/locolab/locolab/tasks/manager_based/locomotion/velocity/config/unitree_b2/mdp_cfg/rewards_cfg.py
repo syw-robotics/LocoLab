@@ -69,6 +69,7 @@ class FlatRewardsCfg:
         func=mdp.stand_still,
         weight=-1.0,
         params={
+            "command_name": "base_velocity",
             "asset_cfg": SceneEntityCfg("robot", joint_names=JOINT_NAMES),
         },
     )
@@ -111,7 +112,7 @@ class FlatRewardsCfg:
         weight=0.5,
         params={
             "command_name": "base_velocity",
-            "threshold": 0.40,
+            "threshold": 0.5,
             "sensor_cfg": SceneEntityCfg("contact_forces", body_names=FOOT_LINK_NAMES),
         },
     )

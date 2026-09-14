@@ -12,6 +12,7 @@ from z_rl.adaptor.isaaclab import (
     ZRlMLPModelCfg,
     ZRlOnPolicyRunnerCfg,
     ZRlPpoAlgorithmCfg,
+    ZRlSymmetryCfg,
 )
 
 
@@ -33,9 +34,16 @@ class B2RoughPPOBaseRunnerCfg(ZRlOnPolicyRunnerCfg):
         learning_rate=1.0e-3,
         max_grad_norm=1.0,
         optimizer="adamw",
+        # use_muon=True,  # using muon seems to accelerate training a bit
         use_clipped_value_loss=True,
         schedule="adaptive",
         desired_kl=0.01,
+        symmetry_augmentation=True,
+        symmetry_cfg=ZRlSymmetryCfg(
+            use_mirror_loss=False,
+            log_mirror_loss=True,
+            mirror_loss_log_interval=100,
+        ),
     )
 
 
@@ -44,14 +52,14 @@ class B2RoughPPORunnerCfg(B2RoughPPOBaseRunnerCfg):
     actor = ZRlMLPModelCfg(
         hidden_dims=[512, 256, 128],
         activation="elu",
-        obs_normalization=False,
+        obs_normalization=True,
         distribution_cfg=ZRlMLPModelCfg.GaussianDistributionCfg(init_std=1.0),
         init_weights=0.01,  # Use orthogonal init, which helps symmetry learning
     )
     critic = ZRlMLPModelCfg(
         hidden_dims=[512, 256, 128],
         activation="elu",
-        obs_normalization=False,
+        obs_normalization=True,
         init_weights=0.01,  # Use orthogonal init, which helps symmetry learning
     )
 

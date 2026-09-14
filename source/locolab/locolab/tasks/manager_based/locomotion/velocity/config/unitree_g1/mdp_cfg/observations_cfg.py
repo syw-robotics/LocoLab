@@ -18,6 +18,12 @@ from locolab.utils.symmetry import SymmetricObservationTermCfg as SymmObsTerm
 from . import FOOT_LINK_NAMES, JOINT_NAMES, PRESERVE_ORDER
 
 
+#
+# We apply empirical normalization in z_rl for obs auto-scaling.
+#
+# Symmetry is applied by default, since humanoid robot has left-right symmetry.
+#
+
 @configclass
 class PropObsCfg(ObsGroup):
     """Proprioceptive observations group."""

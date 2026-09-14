@@ -11,7 +11,7 @@ FOOT_LINK_NAMES = ".*_foot"
 HIP_JOINT_NAMES = [".*_hip_joint"]
 UNDESIRED_CONTACT_LINK_NAMES = ["(?!.*_foot).*"]
 OTHER_BODY_LINK_NAMES = [".*_hip", ".*_thigh", ".*_calf"]
-CONTACT_SENSOR_LINK_NAMES = "(base_link|.*_(foot|calf))"
+FLAT_CONTACT_SENSOR_LINK_NAMES = ".*_(foot|calf)"
 
 PRESERVE_ORDER = True
 
@@ -24,21 +24,24 @@ JOINT_NAMES = [
 ]
 # fmt: on
 
-from .actions_cfg import ActionsCfg
+from .actions_cfg import ActionsCfg, ActionsCfg_W_Symmetry
 from .commands_cfg import CommandsCfg
 from .curriculumns_cfg import RoughCurriculumsCfg
 from .events_cfg import EventCfg
-from .observations_cfg import PrivObsCfg, PropObsCfg
+from .observations_cfg import PrivObsCfg, PrivObsCfg_W_Symmetry, PropObsCfg, PropObsCfg_W_Symmetry
 from .rewards_cfg import FlatRewardsCfg
 from .terminations_cfg import FlatTerminationsCfg, RoughTerminationsCfg
 
 __all__ = [
     "ActionsCfg",
+    "ActionsCfg_W_Symmetry",
     "CommandsCfg",
     "EventCfg",
     "RoughCurriculumsCfg",
     "PropObsCfg",
+    "PropObsCfg_W_Symmetry",
     "PrivObsCfg",
+    "PrivObsCfg_W_Symmetry",
     "FlatRewardsCfg",
     "FlatTerminationsCfg",
     "RoughTerminationsCfg",

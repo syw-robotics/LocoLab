@@ -24,13 +24,16 @@ from locolab.utils.terrains import TerrainImporterCfg
 ##
 from locolab.tasks.manager_based.locomotion.velocity.config.unitree_b2.mdp_cfg import (  # isort: skip
     ActionsCfg,
+    ActionsCfg_W_Symmetry,
     CommandsCfg,
     EventCfg,
     FlatRewardsCfg,
     PrivObsCfg,
+    PrivObsCfg_W_Symmetry,
     PropObsCfg,
+    PropObsCfg_W_Symmetry,
     FlatTerminationsCfg,
-    CONTACT_SENSOR_LINK_NAMES,
+    FLAT_CONTACT_SENSOR_LINK_NAMES,
 )
 from locolab.assets import UNITREE_B2_CFG  # isort: skip
 from locolab.utils.terrains.terrains_cfg import FLAT_ROUGH_TERRAINS_CFG  # isort: skip
@@ -43,8 +46,11 @@ from locolab.utils.terrains.terrains_cfg import FLAT_ROUGH_TERRAINS_CFG  # isort
 class B2FlatObservationsCfg:
     """Configuration for B2 on flat terrain observations"""
 
-    policy: PropObsCfg = PropObsCfg()
-    critic: PrivObsCfg = PrivObsCfg().replace(height_scan=None)
+    # policy: PropObsCfg = PropObsCfg()
+    # critic: PrivObsCfg = PrivObsCfg().replace(height_scan=None)
+
+    policy: PropObsCfg_W_Symmetry = PropObsCfg_W_Symmetry()
+    critic: PrivObsCfg_W_Symmetry = PrivObsCfg_W_Symmetry().replace(height_scan=None)
 
     policy.history_length = 5
 
@@ -76,7 +82,7 @@ class B2FlatSceneCfg(InteractiveSceneCfg):
 
     # =====  sensors  =====
     contact_forces: ContactSensorCfg = ContactSensorCfg(
-        prim_path=f"{{ENV_REGEX_NS}}/Robot/{CONTACT_SENSOR_LINK_NAMES}", history_length=3, track_air_time=True
+        prim_path=f"{{ENV_REGEX_NS}}/Robot/{FLAT_CONTACT_SENSOR_LINK_NAMES}", history_length=3, track_air_time=True
     )
 
     # =====  lights  =====
@@ -94,7 +100,7 @@ class B2FlatEnvCfg(ManagerBasedRLEnvCfg):
     scene: B2FlatSceneCfg = B2FlatSceneCfg(num_envs=4096, env_spacing=2.5)
     # Basic settings
     observations: B2FlatObservationsCfg = B2FlatObservationsCfg()
-    actions: ActionsCfg = ActionsCfg()
+    actions: ActionsCfg_W_Symmetry = ActionsCfg_W_Symmetry()
     commands: CommandsCfg = CommandsCfg()
     # MDP settings
     rewards: FlatRewardsCfg = FlatRewardsCfg()
@@ -110,10 +116,13 @@ class B2FlatEnvCfg(ManagerBasedRLEnvCfg):
         self.sim.dt = 0.005
         self.sim.render_interval = self.decimation
         self.sim.physics_material = self.scene.terrain.physics_material
-        self.sim.physx.gpu_max_rigid_patch_count = 10 * 2**15
+        # self.sim.physx.gpu_max_rigid_patch_count = 10 * 2**15
+        self.sim.physx.gpu_max_rigid_patch_count = 2**16
         # update sensor update periods
         # we tick all the sensors based on the smallest update period (physics update period)
         self.scene.contact_forces.update_period = self.sim.dt
+        # disable self collisions for flat terrain
+        self.scene.robot.spawn.articulation_props.enabled_self_collisions = False
 
 
 @configclass

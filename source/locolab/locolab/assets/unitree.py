@@ -88,6 +88,32 @@ class UnitreeUrdfFileCfg(sim_utils.UrdfFileCfg):
 
 """ Configuration for the Unitree robots."""
 
+
+GO2_JOINT_SYMMETRY_MAPPING = complete_symmetry_mapping(
+    {
+        "FR_hip_joint": (-1.0, "FL_hip_joint"),
+        "RR_hip_joint": (-1.0, "RL_hip_joint"),
+        "FR_thigh_joint": (1.0, "FL_thigh_joint"),
+        "RR_thigh_joint": (1.0, "RL_thigh_joint"),
+        "FR_calf_joint": (1.0, "FL_calf_joint"),
+        "RR_calf_joint": (1.0, "RL_calf_joint"),
+    }
+)
+
+GO2_SPATIAL_SYMMETRY_MAPPING = complete_symmetry_mapping(
+    {
+        "FR_hip": "FL_hip",
+        "RR_hip": "RL_hip",
+        "FR_thigh": "FL_thigh",
+        "RR_thigh": "RL_thigh",
+        "FR_calf": "FL_calf",
+        "RR_calf": "RL_calf",
+        "FR_foot": "FL_foot",
+        "RR_foot": "RL_foot",
+        "base": "base",
+    }
+)
+
 UNITREE_GO2_CFG = UnitreeArticulationCfg(
     # Here we prefer URDF over USD for the convenience of modifying collision shapes
     spawn=UnitreeUrdfFileCfg(
@@ -128,6 +154,8 @@ UNITREE_GO2_CFG = UnitreeArticulationCfg(
             #  friction=0.01,
         ),
     },
+    joint_symmetry_mapping=GO2_JOINT_SYMMETRY_MAPPING,
+    spatial_symmetry_mapping=GO2_SPATIAL_SYMMETRY_MAPPING,
     # fmt: off
     joint_sdk_names=[
         "FR_hip_joint", "FR_thigh_joint", "FR_calf_joint",
@@ -137,13 +165,44 @@ UNITREE_GO2_CFG = UnitreeArticulationCfg(
     ],
     # fmt: on
 )
-"""Configuration for the Unitree G2 Quadrupedal robot."""
+"""Configuration for the Unitree GO2 Quadrupedal robot."""
 
+
+B2_JOINT_SYMMETRY_MAPPING = complete_symmetry_mapping(
+    {
+        "FR_hip_joint": (-1.0, "FL_hip_joint"),
+        "RR_hip_joint": (-1.0, "RL_hip_joint"),
+        "FR_thigh_joint": (1.0, "FL_thigh_joint"),
+        "RR_thigh_joint": (1.0, "RL_thigh_joint"),
+        "FR_calf_joint": (1.0, "FL_calf_joint"),
+        "RR_calf_joint": (1.0, "RL_calf_joint"),
+    }
+)
+
+B2_SPATIAL_SYMMETRY_MAPPING = complete_symmetry_mapping(
+    {
+        "FR_hip": "FL_hip",
+        "RR_hip": "RL_hip",
+        "FR_thigh": "FL_thigh",
+        "RR_thigh": "RL_thigh",
+        "FR_calf": "FL_calf",
+        "RR_calf": "RL_calf",
+        "FR_foot": "FL_foot",
+        "RR_foot": "RL_foot",
+        "base_link": "base_link",
+    }
+)
 
 UNITREE_B2_CFG = UnitreeArticulationCfg(
     # Here we prefer URDF over USD for the convenience of modifying collision shapes
     spawn=UnitreeUrdfFileCfg(
         asset_path=f"{UNITREE_MODEL_DIR}/B2/urdf/b2_description/urdf/b2_description.urdf",
+    ).replace(
+        articulation_props=sim_utils.ArticulationRootPropertiesCfg(
+            enabled_self_collisions=True,
+            solver_position_iteration_count=4,
+            solver_velocity_iteration_count=2,
+        ),
     ),
     init_state=ArticulationCfg.InitialStateCfg(
         pos=(0.0, 0.0, 0.58),
@@ -177,6 +236,8 @@ UNITREE_B2_CFG = UnitreeArticulationCfg(
             armature=0.01,
         ),
     },
+    joint_symmetry_mapping=B2_JOINT_SYMMETRY_MAPPING,
+    spatial_symmetry_mapping=B2_SPATIAL_SYMMETRY_MAPPING,
     # fmt: off
     joint_sdk_names=[
         "FR_hip_joint", "FR_thigh_joint", "FR_calf_joint",
@@ -270,6 +331,7 @@ UNITREE_B2Z1_CFG = UnitreeArticulationCfg(
     ],
     # fmt: on
 )
+
 
 G1_JOINT_SYMMETRY_MAPPING = complete_symmetry_mapping(
     {

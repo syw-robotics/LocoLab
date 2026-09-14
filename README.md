@@ -129,10 +129,11 @@ Different types of tasks are organized in different sub-directories, such that t
 
 ## 📝 TODO
 - [x] **Symmetry Config Definition**: Alongside with which in Z RL
+- [x] **Muon Optimizer Support**: Alongside with which in Z RL
 - [ ] **G1**: Add Velocity-Flat-AMP-G1 and Velocity-Rough-G1
-- [x] **B2**: Added Velocity-Flat-B2
+- [ ] **Go2**: Refine Velocity-Rough-Go2
 - [ ] **B2**: Add Velocity-Rough-B2
-- [ ] **Go2**: Debug and refine Velocity-Rough-Go2-ZRL-BarlowTwins and Velocity-Rough-Go2-ZRL-DreamWaQ
+- [ ] **B2Z1**: B2Z1 tasks
 - [ ] **Active Adaptation Port**: Migrate LocoLab tasks to (AA)[https://github.com/Agent-3154/active-adaptation]
 - [ ] **Terrain**: Test MeshRandomWidthPyramidStairsTerrain
 

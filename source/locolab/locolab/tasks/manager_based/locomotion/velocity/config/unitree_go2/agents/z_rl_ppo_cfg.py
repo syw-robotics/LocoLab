@@ -16,6 +16,7 @@ from z_rl.adaptor.isaaclab import (
     ZRlOnPolicyRunnerCfg,
     ZRlPpoAlgorithmCfg,
     ZRlRNNModelCfg,
+    ZRlSymmetryCfg,
 )
 
 
@@ -37,9 +38,16 @@ class Go2RoughPPOBaseRunnerCfg(ZRlOnPolicyRunnerCfg):
         learning_rate=1.0e-3,
         max_grad_norm=1.0,
         optimizer="adamw",
+        # use_muon=True,  # using muon seems to accelerate training a bit
         use_clipped_value_loss=True,
         schedule="adaptive",
         desired_kl=0.01,
+        symmetry_augmentation=True,
+        symmetry_cfg=ZRlSymmetryCfg(
+            use_mirror_loss=False,
+            log_mirror_loss=True,
+            mirror_loss_log_interval=100,
+        ),
     )
 
 
@@ -48,13 +56,13 @@ class Go2RoughPPORunnerCfg(Go2RoughPPOBaseRunnerCfg):
     actor = ZRlMLPModelCfg(
         hidden_dims=[512, 256, 128],
         activation="elu",
-        obs_normalization=False,
+        obs_normalization=True,
         distribution_cfg=ZRlMLPModelCfg.GaussianDistributionCfg(init_std=1.0),
     )
     critic = ZRlMLPModelCfg(
         hidden_dims=[512, 256, 128],
         activation="elu",
-        obs_normalization=False,
+        obs_normalization=True,
     )
 
 
@@ -62,7 +70,7 @@ class Go2RoughPPORunnerCfg(Go2RoughPPOBaseRunnerCfg):
 class Go2RoughMoEPPORunnerCfg(Go2RoughPPOBaseRunnerCfg):
     actor = ZRlMoEModelCfg(
         activation="elu",
-        obs_normalization=False,
+        obs_normalization=True,
         distribution_cfg=ZRlMLPModelCfg.GaussianDistributionCfg(init_std=1.0),
         num_experts=4,
         expert_hidden_dims=[256, 128],
@@ -70,7 +78,7 @@ class Go2RoughMoEPPORunnerCfg(Go2RoughPPOBaseRunnerCfg):
     )
     critic = ZRlMoEModelCfg(
         activation="elu",
-        obs_normalization=False,
+        obs_normalization=True,
         num_experts=4,
         expert_hidden_dims=[256, 128],
         gate_hidden_dims=[256, 128],
@@ -82,7 +90,7 @@ class Go2RoughRNNPPORunnerCfg(Go2RoughPPOBaseRunnerCfg):
     actor = ZRlRNNModelCfg(
         hidden_dims=[256, 128],
         activation="elu",
-        obs_normalization=False,
+        obs_normalization=True,
         distribution_cfg=ZRlMLPModelCfg.GaussianDistributionCfg(init_std=1.0),
         rnn_type="lstm",
         rnn_hidden_dim=128,
@@ -91,7 +99,7 @@ class Go2RoughRNNPPORunnerCfg(Go2RoughPPOBaseRunnerCfg):
     critic = ZRlRNNModelCfg(
         hidden_dims=[256, 128],
         activation="elu",
-        obs_normalization=False,
+        obs_normalization=True,
         rnn_type="lstm",
         rnn_hidden_dim=128,
         rnn_num_layers=1,
@@ -103,7 +111,7 @@ class Go2RoughEncoderEstimationPPORunnerCfg(Go2RoughPPOBaseRunnerCfg):
     actor = ZRlEncoderMLPModelCfg(
         hidden_dims=[256, 128],
         activation="elu",
-        obs_normalization=False,
+        obs_normalization=True,
         distribution_cfg=ZRlMLPModelCfg.GaussianDistributionCfg(init_std=1.0),
         latent_dim=64,
         encoder_hidden_dims=[256, 128],
@@ -113,7 +121,7 @@ class Go2RoughEncoderEstimationPPORunnerCfg(Go2RoughPPOBaseRunnerCfg):
     critic = ZRlMLPModelCfg(
         hidden_dims=[512, 256, 128],
         activation="elu",
-        obs_normalization=False,
+        obs_normalization=True,
     )
     algorithm = ZRlEncoderEstimationPpoAlgorithmCfg(
         num_learning_epochs=5,
