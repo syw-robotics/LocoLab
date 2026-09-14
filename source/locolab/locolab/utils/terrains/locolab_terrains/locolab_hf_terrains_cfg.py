@@ -28,7 +28,13 @@ class RoughnessParamsCfg:
     """
 
     roughness_type: Literal["difficulty", "random", "fixed"] = "fixed"
-    """The roughness intensity mode. Random mode samples from 0.2, 0.4, 0.6, 0.8 and 1.0."""
+    """The roughness intensity mode.
+
+    Random mode samples uniformly from :attr:`random_strengths`.
+    """
+
+    random_strengths: tuple[float, ...] = (0.2, 0.4, 0.6, 0.8, 1.0)
+    """Discrete roughness strengths sampled when :attr:`roughness_type` is ``"random"``."""
 
 
 @configclass

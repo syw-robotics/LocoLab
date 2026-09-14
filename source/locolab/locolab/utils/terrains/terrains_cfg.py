@@ -27,11 +27,12 @@ FLAT_ROUGH_TERRAINS_CFG = TerrainGeneratorCfg(
     sub_terrains={
         "flat_rough": locolab_terrain_gen.HfFlatRoughTerrainCfg(
             proportion=1.0,
-            noise_range=(-0.06, 0.06),
+            noise_range=(-0.08, 0.08),
             noise_step=0.01,
             downsampled_scale=0.1,
             roughness_type="random",
-            apply_roughness=0.8,
+            random_strengths=(0.25, 0.50, 0.75, 1.0),  # samples uniformly from these strengths
+            apply_roughness=0.9,  # probability of applying roughness to a generated sub-terrain
         ),
     },
 )
