@@ -38,7 +38,7 @@ class Go2RoughPPOBaseRunnerCfg(ZRlOnPolicyRunnerCfg):
         learning_rate=1.0e-3,
         max_grad_norm=1.0,
         optimizer="adamw",
-        # use_muon=True,  # using muon seems to accelerate training a bit
+        # use_muon=True,  # using muon seems to accelerate learning convergence
         use_clipped_value_loss=True,
         schedule="adaptive",
         desired_kl=0.01,

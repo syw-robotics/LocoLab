@@ -35,6 +35,7 @@ class G1RoughPPOBaseRunnerCfg(ZRlOnPolicyRunnerCfg):
         learning_rate=1.0e-3,
         max_grad_norm=1.0,
         optimizer="adamw",
+        #  use_muon=True,  # using muon seems to accelerate learning convergence
         use_clipped_value_loss=True,
         schedule="adaptive",
         desired_kl=0.01,
@@ -70,5 +71,5 @@ class G1FlatPPORunnerCfg(G1RoughPPORunnerCfg):
     def __post_init__(self):
         super().__post_init__()
 
-        self.max_iterations = 8000
+        self.max_iterations = 6000
         self.experiment_name = "g1_flat"
