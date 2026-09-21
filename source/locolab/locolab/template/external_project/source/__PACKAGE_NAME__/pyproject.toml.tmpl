@@ -1,0 +1,17 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "__PACKAGE_NAME__"
+version = "0.0.1"
+description = "LocoLab external project."
+requires-python = ">=3.10"
+dependencies = ["locolab"]
+
+[project.entry-points."locolab.tasks"]
+__PACKAGE_NAME__ = "__PACKAGE_NAME__.tasks"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["__PACKAGE_NAME__*"]

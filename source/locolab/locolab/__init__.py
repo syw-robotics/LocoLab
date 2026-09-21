@@ -6,12 +6,9 @@
 # All rights reserved.
 # Modifications are licensed under BSD-3-Clause.
 
-"""
-Python module serving as a project/extension template.
-"""
+"""LocoLab: locomotion environments and utilities on Isaac Lab.
 
-# Register Gym environments.
-from .tasks import *
-
-# Register UI extensions. (not implemented)
-# from .ui_extension_example import *
+Import ``locolab.tasks`` to register Gym environments and installed
+``locolab.tasks`` plugins. The package root stays passive so tools such as
+``python -m locolab.template`` do not load Isaac Sim.
+"""

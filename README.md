@@ -79,11 +79,11 @@ We introduce **LocoLab**, a RL locomotion **env benchmark** with sim2real robust
 
 - **Helpful scripts:**
 
-    <!-- - Listing the available tasks: -->
-    <!--  -->
-    <!--     ```bash -->
-    <!--     python scripts/list_envs.py -->
-    <!--     ``` -->
+    - Listing registered tasks (includes installed external projects):
+
+        ```bash
+        python scripts/list_envs.py
+        ```
 
     - Running a task with a random agent for testing:
 
@@ -99,6 +99,42 @@ We introduce **LocoLab**, a RL locomotion **env benchmark** with sim2real robust
 - **Preset terrains:**
 
     LocoLab provides additional preset terrain types beyond IsaacLab's defaults, including custom height-field and mesh terrains. See the [terrain README](source/locolab/locolab/utils/terrains/locolab_terrains/README.md).
+
+
+## Create an external project
+
+LocoLab sits on Isaac Lab the same way your own project can sit on LocoLab:
+
+```text
+Isaac Lab  ->  LocoLab  ->  your external project
+```
+
+Generate a standalone, pip-installable task package **outside** this repository:
+
+```bash
+python -m locolab.template
+# or
+python scripts/new_project.py
+```
+
+The generator asks for a parent directory, project folder name, Python package name, config/task name, and RL library (`z_rl`, `rsl_rl`, or `both`). These names are independent: `Go2ParkourLab` can install as `go2_parkour` and register `Velocity-Flat-MyGo2`. Avoid config names like `go2` that collide with LocoLab built-ins.
+
+Then install the generated package with the same Python interpreter that has LocoLab:
+
+```bash
+python -m pip install -e <generated-project>/source/<package-name>
+```
+
+Installed projects register Gym tasks through the `locolab.tasks` entry point.
+Train and play from the generated repository (same interpreter that has LocoLab):
+
+```bash
+python scripts/list_envs.py
+python scripts/z_rl/train.py --task=Velocity-Flat-<ConfigName>
+python scripts/z_rl/play.py --task=Velocity-Flat-<ConfigName>
+```
+
+The generated `env_cfg.py` is a placeholder: it registers with Gym so `list_envs` works, but you must fill in scene and MDP terms before training.
 
 
 ## 📂 Task Organization
@@ -133,7 +169,7 @@ Different types of tasks are organized in different sub-directories, such that t
 - [ ] **G1**: Add Velocity-Flat-AMP-G1 and Velocity-Rough-G1
 - [ ] **Go2**: Refine Velocity-Rough-Go2
 - [ ] **B2**: Add Velocity-Rough-B2
-- [ ] **B2Z1**: B2Z1 tasks
+- [x] **B2Z1**: Moved to external project `B2Z1-LocoLab`
 - [ ] **Active Adaptation Port**: Migrate LocoLab tasks to (AA)[https://github.com/Agent-3154/active-adaptation]
 - [ ] **Terrain**: Test MeshRandomWidthPyramidStairsTerrain; Update HfStraightGapTerrainCfg (configurable gap num and settings)
 

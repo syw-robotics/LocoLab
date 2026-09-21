@@ -9,9 +9,10 @@
 """Installation script for the 'locolab' python package."""
 
 import os
+from pathlib import Path
 
 import toml
-from setuptools import setup
+from setuptools import find_packages, setup
 
 # Obtain the extension data from the extension.toml file
 EXTENSION_PATH = os.path.dirname(os.path.realpath(__file__))
@@ -23,10 +24,20 @@ INSTALL_REQUIRES = [
     "psutil",
 ]
 
+
+def _template_package_data() -> list[str]:
+    """Non-Python files copied into generated external projects."""
+    template_pkg = Path(EXTENSION_PATH) / "locolab" / "template"
+    root = template_pkg / "external_project"
+    if not root.is_dir():
+        return []
+    return [str(path.relative_to(template_pkg)) for path in root.rglob("*") if path.is_file()]
+
+
 # Installation operation
 setup(
     name="locolab",
-    packages=["locolab"],
+    packages=find_packages(),
     author=EXTENSION_TOML_DATA["package"]["author"],
     maintainer=EXTENSION_TOML_DATA["package"]["maintainer"],
     url=EXTENSION_TOML_DATA["package"]["repository"],
@@ -36,7 +47,13 @@ setup(
     install_requires=INSTALL_REQUIRES,
     license="Apache License 2.0",
     include_package_data=True,
+    package_data={"locolab.template": _template_package_data()},
     python_requires=">=3.10",
+    entry_points={
+        "locolab.tasks": [
+            "locolab = locolab.tasks",
+        ],
+    },
     classifiers=[
         "Natural Language :: English",
         "Programming Language :: Python :: 3.10",
