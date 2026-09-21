@@ -13,12 +13,13 @@ from typing import TYPE_CHECKING
 import torch
 
 from isaaclab.managers import ManagerTermBase, RewardTermCfg, SceneEntityCfg
-from isaaclab.utils.math import combine_frame_transforms, quat_apply_inverse, quat_error_magnitude, yaw_quat
+from isaaclab.utils.math import quat_apply_inverse, yaw_quat
 
 if TYPE_CHECKING:
     from isaaclab.assets import Articulation, RigidObject
     from isaaclab.envs import ManagerBasedRLEnv
     from isaaclab.sensors import ContactSensor, RayCaster
+    from locolab.assets.sensors.volume_points import VolumePoints
 
 
 # -------------------- Velocity Tracking Rewards -------------------- #
@@ -71,109 +72,6 @@ def track_ang_vel_z_world_exp(
     asset = env.scene[asset_cfg.name]
     ang_vel_error = torch.square(env.command_manager.get_command(command_name)[:, 2] - asset.data.root_ang_vel_w[:, 2])
     return torch.exp(-ang_vel_error / std**2)
-
-
-# -------------------- End-Effector Tracking Rewards -------------------- #
-
-
-def _get_world_frame_ee_command(
-    env: ManagerBasedRLEnv,
-    command_name: str,
-    asset: RigidObject,
-) -> tuple[torch.Tensor, torch.Tensor | None]:
-    """Return the desired EE pose in the environment world frame.
-
-    World-anchored command terms expose :attr:`command_w`. Legacy base-frame commands are
-    transformed into the world frame using the current root pose.
-    """
-    command_term = env.command_manager.get_term(command_name)
-    if hasattr(command_term, "command_w"):
-        command_w = command_term.command_w
-        if command_w.shape[1] >= 7:
-            return command_w[:, :3], command_w[:, 3:7]
-        return command_w[:, :3], None
-
-    command_b = env.command_manager.get_command(command_name)
-    if command_b.shape[1] >= 7:
-        des_pos_w, des_quat_w = combine_frame_transforms(
-            asset.data.root_pos_w,
-            asset.data.root_quat_w,
-            command_b[:, :3],
-            command_b[:, 3:7],
-        )
-        return des_pos_w, des_quat_w
-
-    des_pos_w, _ = combine_frame_transforms(
-        asset.data.root_pos_w,
-        asset.data.root_quat_w,
-        command_b[:, :3],
-    )
-    return des_pos_w, None
-
-
-def track_position_command_exp(
-    env: ManagerBasedRLEnv,
-    std: float,
-    command_name: str,
-    asset_cfg: SceneEntityCfg = SceneEntityCfg("robot"),
-) -> torch.Tensor:
-    """Reward tracking of end-effector position commands using an exponential kernel."""
-    asset: RigidObject = env.scene[asset_cfg.name]
-    des_pos_w, _ = _get_world_frame_ee_command(env, command_name, asset)
-    curr_pos_w = asset.data.body_pos_w[:, asset_cfg.body_ids[0]]  # type: ignore[index]
-    pos_error = torch.sum(torch.square(curr_pos_w - des_pos_w), dim=1)
-    return torch.exp(-pos_error / std**2)
-
-
-def track_position_command_tanh(
-    env: ManagerBasedRLEnv, std: float, command_name: str, asset_cfg: SceneEntityCfg
-) -> torch.Tensor:
-    """Reward tracking of the position using the tanh kernel.
-
-    The function computes the position error between the desired position (from the command) and the
-    current position of the asset's body (in world frame) and maps it with a tanh kernel.
-    """
-    asset: RigidObject = env.scene[asset_cfg.name]
-    des_pos_w, _ = _get_world_frame_ee_command(env, command_name, asset)
-    curr_pos_w = asset.data.body_pos_w[:, asset_cfg.body_ids[0]]  # type: ignore
-    distance = torch.norm(curr_pos_w - des_pos_w, dim=1)
-    return 1 - torch.tanh(distance / std)
-
-
-def position_command_error_l2(
-    env: ManagerBasedRLEnv,
-    command_name: str,
-    asset_cfg: SceneEntityCfg = SceneEntityCfg("robot"),
-) -> torch.Tensor:
-    """Penalize tracking of the position error using L2-norm.
-
-    The function computes the position error between the desired position (from the command) and the
-    current position of the asset's body (in world frame). The position error is computed as the L2-norm
-    of the difference between the desired and current positions.
-    """
-    asset: RigidObject = env.scene[asset_cfg.name]
-    des_pos_w, _ = _get_world_frame_ee_command(env, command_name, asset)
-    curr_pos_w = asset.data.body_pos_w[:, asset_cfg.body_ids[0]]  # type: ignore[index]
-    return torch.norm(curr_pos_w - des_pos_w, dim=1)
-
-
-def orientation_command_error(
-    env: ManagerBasedRLEnv,
-    command_name: str,
-    asset_cfg: SceneEntityCfg = SceneEntityCfg("robot"),
-) -> torch.Tensor:
-    """Penalize tracking orientation error using shortest path.
-
-    The function computes the orientation error between the desired orientation (from the command) and the
-    current orientation of the asset's body (in world frame). The orientation error is computed as the shortest
-    path between the desired and current orientations.
-    """
-    asset: RigidObject = env.scene[asset_cfg.name]
-    _, des_quat_w = _get_world_frame_ee_command(env, command_name, asset)
-    if des_quat_w is None:
-        raise ValueError(f"Command '{command_name}' does not provide orientation.")
-    curr_quat_w = asset.data.body_quat_w[:, asset_cfg.body_ids[0]]  # type: ignore[index]
-    return quat_error_magnitude(curr_quat_w, des_quat_w)
 
 
 # -------------------- Stability Rewards -------------------- #
@@ -627,6 +525,19 @@ def undesired_contacts(env: ManagerBasedRLEnv, threshold: float, sensor_cfg: Sce
     net_contact_forces = contact_sensor.data.net_forces_w_history
     is_contact = torch.max(torch.norm(net_contact_forces[:, :, sensor_cfg.body_ids], dim=-1), dim=1)[0] > threshold
     return torch.sum(is_contact, dim=1)
+
+
+def volume_points_penetration(
+    env: ManagerBasedRLEnv, sensor_cfg: SceneEntityCfg, tolerance: float = 0.0
+) -> torch.Tensor:
+    """Penalize volume points penetrating into virtual obstacles (e.g., gap edges)."""
+    volume_sensor: VolumePoints = env.scene.sensors[sensor_cfg.name]
+    penetration = volume_sensor.data.penetration_offset.flatten(1, 2)  # (N, B*P, 3)
+    penetration_depth = torch.norm(penetration, dim=-1)  # (N, B*P)
+    in_obstacle = (penetration_depth > tolerance).float()
+    points_vel = volume_sensor.data.points_vel_w.flatten(1, 2)  # (N, B*P, 3)
+    points_vel_norm = torch.norm(points_vel, dim=-1)
+    return torch.sum(in_obstacle * (points_vel_norm + 1e-6) * penetration_depth, dim=-1)
 
 
 def is_alive(env: ManagerBasedRLEnv) -> torch.Tensor:
