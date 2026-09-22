@@ -13,9 +13,10 @@
 
 """Package containing task implementations for various robotic environments."""
 
-import os
+from __future__ import annotations
 
-import toml
+import sys
+
 from isaaclab_tasks.utils import import_packages
 
 ##
@@ -27,3 +28,18 @@ from isaaclab_tasks.utils import import_packages
 _BLACKLIST_PKGS = ["utils"]
 # Import all configs in this package
 import_packages(__name__, _BLACKLIST_PKGS)
+
+
+def _import_task_plugins() -> None:
+    """Load Gym tasks from installed packages that declare ``locolab.tasks`` entry points."""
+    from importlib.metadata import entry_points
+
+    for ep in entry_points(group="locolab.tasks"):
+        module_name = ep.value.split(":", 1)[0]
+        # Skip this package (already imported above) and anything already loaded.
+        if module_name == __name__ or module_name in sys.modules:
+            continue
+        ep.load()
+
+
+_import_task_plugins()

@@ -26,6 +26,7 @@ from .terrain_importer import TerrainImporter
 
 if TYPE_CHECKING:
     from .terrain_generator_cfg import TerrainGeneratorCfg
+    from .virtual_obstacle import VirtualObstacleCfg
 
 
 @configclass
@@ -36,6 +37,15 @@ class TerrainImporterCfg(_TerrainImporterCfg):
     """The class to use for the terrain importer.
 
     Defaults to :class:`locolab.utils.terrains.terrain_importer.TerrainImporter`.
+    """
+
+    virtual_obstacles: dict[str, VirtualObstacleCfg] = {}
+    """Named virtual obstacles generated from the terrain mesh at import time.
+
+    Use :attr:`VirtualObstacleCfg.terrain_names` plus :attr:`VirtualObstacleCfg.default_mesh_xyz_range`
+    for a shared crop, or :attr:`VirtualObstacleCfg.terrain_mesh_xyz_ranges` when gap / stairs /
+    climb occupy different local regions. Keep :attr:`VirtualObstacleCfg.debug_vis` False in
+    training; generation is once, but drawing markers is not free.
     """
 
     collision_group: int = -1

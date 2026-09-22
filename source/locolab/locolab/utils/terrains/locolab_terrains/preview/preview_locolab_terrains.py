@@ -350,11 +350,20 @@ def is_height_field_cfg(cfg_cls: type) -> bool:
     return any(base.__name__ in {"HfTerrainBaseCfg", "_HfTerrainBaseCfg"} for base in cfg_cls.mro())
 
 
+def is_mesh_rough_cfg(cfg_cls: type) -> bool:
+    """Return whether a cfg class reuses height-field roughness sampling on a mesh."""
+    return any(base.__name__ == "MeshRoughTerrainCfg" for base in cfg_cls.mro())
+
+
 def build_cfg(cfg_cls: type, common_kwargs: dict, hf_kwargs: dict, case_kwargs: dict):
     """Merge common preview options with terrain-specific example parameters."""
     kwargs = dict(common_kwargs)
     if is_height_field_cfg(cfg_cls):
         kwargs.update(hf_kwargs)
+    elif is_mesh_rough_cfg(cfg_cls):
+        kwargs["horizontal_scale"] = hf_kwargs["horizontal_scale"]
+        kwargs["vertical_scale"] = hf_kwargs["vertical_scale"]
+        kwargs["slope_threshold"] = hf_kwargs["slope_threshold"]
     elif "border_width" in case_kwargs:
         raise RuntimeError(f"{cfg_cls.__name__} is not a height-field terrain but defines border_width.")
     kwargs.update(case_kwargs)

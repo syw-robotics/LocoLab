@@ -95,6 +95,10 @@ class TerrainGenerator:
     """A single trimesh.Trimesh object for all the generated sub-terrains."""
     terrain_meshes: list[trimesh.Trimesh]
     """List of trimesh.Trimesh objects for all the generated sub-terrains."""
+    terrain_mesh_origins: list[np.ndarray]
+    """List of sub-terrain origins in the same frame as ``terrain_meshes``."""
+    terrain_mesh_names: list[str]
+    """List of sub-terrain names matching ``terrain_meshes`` and ``terrain_mesh_origins``."""
     terrain_origins: np.ndarray
     """The origin of each sub-terrain. Shape is (num_rows, num_cols, 3)."""
     terrain_indices: np.ndarray
@@ -128,6 +132,7 @@ class TerrainGenerator:
         from isaaclab.terrains.height_field import (
             HfTerrainBaseCfg,  # prevent circular import
         )
+        from locolab.utils.terrains.locolab_terrains.locolab_mesh_terrains_cfg import MeshRoughTerrainCfg
 
         for sub_cfg in self.cfg.sub_terrains.values():
             # size of all terrains
@@ -137,6 +142,10 @@ class TerrainGenerator:
                 sub_cfg.horizontal_scale = self.cfg.horizontal_scale
                 sub_cfg.vertical_scale = self.cfg.vertical_scale
                 sub_cfg.slope_threshold = self.cfg.slope_threshold
+            elif isinstance(sub_cfg, MeshRoughTerrainCfg):
+                # Same roughness sampling scales as HF; stair/box XY stays metric.
+                sub_cfg.horizontal_scale = self.cfg.horizontal_scale
+                sub_cfg.vertical_scale = self.cfg.vertical_scale
 
         # throw a warning if the cache is enabled but the seed is not set
         if self.cfg.use_cache and self.cfg.seed is None:
@@ -160,6 +169,8 @@ class TerrainGenerator:
         self.flat_patches = {}
         # create a list of all sub-terrains
         self.terrain_meshes = list()
+        self.terrain_mesh_origins = list()
+        self.terrain_mesh_names = list()  # sub-terrain name for each mesh
         self.terrain_origins = np.zeros((self.cfg.num_rows, self.cfg.num_cols, 3))
         self.terrain_indices = np.zeros((self.cfg.num_rows, self.cfg.num_cols), dtype=np.int32)
 
@@ -354,6 +365,9 @@ class TerrainGenerator:
         mesh.apply_transform(transform)
         # add mesh to the list
         self.terrain_meshes.append(mesh)
+        self.terrain_mesh_origins.append(origin + transform[:3, -1])
+        sub_terrain_name = list(self.cfg.sub_terrains.keys())[sub_terrain_index]
+        self.terrain_mesh_names.append(sub_terrain_name)
         # add origin to the list
         self.terrain_origins[row, col] = origin + transform[:3, -1]
         # add terrain index to the list

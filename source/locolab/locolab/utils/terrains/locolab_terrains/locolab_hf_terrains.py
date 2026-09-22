@@ -7,7 +7,7 @@ import numpy as np
 from isaaclab.terrains.height_field.utils import height_field_to_mesh
 
 from . import locolab_hf_terrains_cfg
-from .utils import _maybe_apply_roughness
+from .utils import _finalize_height_field
 
 
 @height_field_to_mesh
@@ -16,7 +16,7 @@ def flat_rough_terrain(difficulty: float, cfg: locolab_hf_terrains_cfg.HfFlatRou
     width_pixels = int(cfg.size[0] / cfg.horizontal_scale)
     length_pixels = int(cfg.size[1] / cfg.horizontal_scale)
     hf_raw = np.zeros((width_pixels, length_pixels), dtype=np.int16)
-    return _maybe_apply_roughness(cfg, hf_raw, difficulty)
+    return _finalize_height_field(cfg, hf_raw, difficulty)
 
 
 @height_field_to_mesh
@@ -80,7 +80,7 @@ def pyramid_sloped_rough_terrain(difficulty: float, cfg: locolab_hf_terrains_cfg
     z_pf = hf_raw[x_pf, y_pf]
     hf_raw = np.clip(hf_raw, min(0, z_pf), max(0, z_pf))
 
-    hf_raw = _maybe_apply_roughness(cfg, hf_raw, difficulty)
+    hf_raw = _finalize_height_field(cfg, hf_raw, difficulty)
 
     # round off the heights to the nearest vertical step
     return np.rint(hf_raw).astype(np.int16)
@@ -146,7 +146,7 @@ def discrete_obstacles_terrain(
     y2 = (length_pixels + platform_width) // 2
     hf_raw[x1:x2, y1:y2] = 0
 
-    hf_raw = _maybe_apply_roughness(cfg, hf_raw, difficulty)
+    hf_raw = _finalize_height_field(cfg, hf_raw, difficulty)
 
     return np.rint(hf_raw).astype(np.int16)
 
@@ -210,7 +210,7 @@ def gap_terrain(
     hf_raw[x11:x22, y22:] = 0
     hf_raw[x22:, :] = 0
 
-    hf_raw = _maybe_apply_roughness(cfg, hf_raw, difficulty)
+    hf_raw = _finalize_height_field(cfg, hf_raw, difficulty)
 
     # round off the heights to the nearest vertical step
     return np.rint(hf_raw).astype(np.int16)
@@ -292,7 +292,7 @@ def double_gap_terrain(
 
     hf_raw[x1:x2, y1:y2] = platform_height_pixels
 
-    hf_raw = _maybe_apply_roughness(cfg, hf_raw, difficulty)
+    hf_raw = _finalize_height_field(cfg, hf_raw, difficulty)
 
     # round off the heights to the nearest vertical step
     return np.rint(hf_raw).astype(np.int16)
@@ -302,63 +302,203 @@ def double_gap_terrain(
 def straight_gap_terrain(
     difficulty: float, cfg: locolab_hf_terrains_cfg.HfStraightGapTerrainCfg
 ) -> np.ndarray:
-    """Generate straight gap terrain, gap only in x direction."""
-    # 0------x_3         x_1-----x_2          x_4---end
-    # --------- gap_size ----------- gap_size --------
-    #          ----------           ----------
+    """Generate a y-limited corridor with independently placed islands along x.
+
+    Roughness is added only on painted tops (landings, center, islands), not the pit.
+    """
+    # landing | gap | island | ... | gap | center | gap | ... | island | gap | landing
+    num_gaps = cfg.num_gaps_per_side_range
+    if isinstance(num_gaps, int):
+        num_min = num_max = num_gaps
+    elif len(num_gaps) == 1:
+        num_min = num_max = int(num_gaps[0])
+    elif len(num_gaps) == 2:
+        num_min, num_max = int(num_gaps[0]), int(num_gaps[1])
+    else:
+        raise ValueError(f"Invalid num_gaps_per_side_range: {cfg.num_gaps_per_side_range}.")
+    if num_min < 1 or num_min > num_max:
+        raise ValueError(f"Invalid num_gaps_per_side_range: {cfg.num_gaps_per_side_range}.")
+    num_gaps = int(np.random.randint(num_min, num_max + 1))
+
     gap_width = (cfg.gap_width_range[1] - cfg.gap_width_range[0]) * difficulty + cfg.gap_width_range[0]
-    gap_width_pixels = int(gap_width / cfg.horizontal_scale)
+    gap_width_pixels = max(int(gap_width / cfg.horizontal_scale), 1)
     width_pixels = int(cfg.size[0] / cfg.horizontal_scale)
     length_pixels = int(cfg.size[1] / cfg.horizontal_scale)
-    gap_offset = (cfg.gap_offset_range[1] - cfg.gap_offset_range[0]) * np.random.random() + cfg.gap_offset_range[0]
-    gap_offset_pixels = int(gap_offset / cfg.horizontal_scale)
 
+    island_w_min, island_w_max = cfg.island_width_range
+    if island_w_min <= 0.0 or island_w_min > island_w_max:
+        raise ValueError(f"Invalid island_width_range: {cfg.island_width_range}.")
+    offset_min, offset_max = cfg.island_y_offset_range
+    if offset_min > offset_max:
+        raise ValueError(f"Invalid island_y_offset_range: {cfg.island_y_offset_range}.")
+    height_min, height_max = cfg.island_height_offset_range
+    if height_min > height_max:
+        raise ValueError(f"Invalid island_height_offset_range: {cfg.island_height_offset_range}.")
+
+    num_islands = num_gaps - 1
+
+    # sample islands
+    def _sample_islands() -> list[tuple[int, float, float, float]]:
+        # (x-width in pixels, y-width in meters, y-offset in meters, height in meters), inner first.
+        return [
+            (
+                max(int(np.random.uniform(island_w_min, island_w_max) / cfg.horizontal_scale), 1),
+                float(np.random.uniform(island_w_min, island_w_max)),
+                float(np.random.uniform(offset_min, offset_max)),
+                float(np.random.uniform(height_min, height_max)),
+            )
+            for _ in range(num_islands)
+        ]
+
+    left_islands = _sample_islands() if num_islands > 0 else []
+    right_islands = _sample_islands() if num_islands > 0 else []
+
+    def _sample_edge_landing_x_pixels() -> int:
+        return max(int(0.5 * np.random.uniform(island_w_min, island_w_max) / cfg.horizontal_scale), 1)
+
+    platform_width = (cfg.platform_width_range[1] - cfg.platform_width_range[0]) * np.random.random() + cfg.platform_width_range[0]
     center_x_pixels = 0.5 * cfg.size[0] / cfg.horizontal_scale
     center_y_pixels = 0.5 * cfg.size[1] / cfg.horizontal_scale
-    x1 = int(center_x_pixels - gap_offset_pixels)
-    x2 = int(center_x_pixels + gap_offset_pixels)
-    x3 = x1 - gap_width_pixels
-    x4 = x2 + gap_width_pixels
-    if x3 < 0 or x4 > width_pixels:
-        raise ValueError(
-            "The straight-gap offset and width must keep both gaps inside the terrain: "
-            f"x3={x3}, x4={x4}, width_pixels={width_pixels}. "
-            "Reduce gap_offset_range or gap_width_range."
-        )
+    half_platform_x_pixels = max(int(0.5 * platform_width / cfg.horizontal_scale), 1)
+    inner_left = max(int(center_x_pixels - half_platform_x_pixels), 0)
+    inner_right = min(int(center_x_pixels + half_platform_x_pixels), width_pixels)
+    if inner_right <= inner_left:
+        mid = int(center_x_pixels)
+        inner_left = max(mid - 1, 0)
+        inner_right = min(mid + 1, width_pixels)
 
-    platform_width = (
-        cfg.platform_width_range[1]
-        if difficulty < cfg.easy_difficulty_threshold  #
-        else (cfg.platform_width_range[1] - cfg.platform_width_range[0]) * np.random.random()
-        + cfg.platform_width_range[0]
+    # fit islands to the gap
+    def _fit_side(
+        budget: int,
+        side_gaps: int,
+        side_gap_width: int,
+        islands: list[tuple[int, float, float, float]],
+    ) -> tuple[int, int, list[tuple[int, float, float, float]]]:
+        # Keep the sampled layout if it fits. Otherwise drop gaps, then cap gap and island x-widths.
+        budget = max(int(budget), 0)
+        side_gap_width = max(int(side_gap_width), 1)
+        islands = list(islands)
+        side_gaps = max(int(side_gaps), 0)
+        if budget < 1 or side_gaps < 1:
+            return 0, 0, []
+        # 1px gap + 1px island is the smallest layout that still has `side_gaps` pits.
+        while side_gaps > 1 and side_gaps + (side_gaps - 1) > budget:
+            side_gaps -= 1
+            islands = islands[: side_gaps - 1]
+        islands = islands[: max(side_gaps - 1, 0)]
+        side_gap_width = min(side_gap_width, max((budget - len(islands)) // side_gaps, 1))
+        # Shrink island x-widths from the outside so they occupy the leftover budget.
+        remain = max(budget - side_gaps * side_gap_width, 0)
+        if remain <= 0 or not islands:
+            islands = []
+        else:
+            widths = [max(int(width), 1) for width, *_ in islands]
+            overflow = sum(widths) - remain
+            if overflow > 0:
+                for i in range(len(widths) - 1, -1, -1):
+                    take = min(overflow, widths[i])
+                    widths[i] -= take
+                    overflow -= take
+                    if overflow <= 0:
+                        break
+            islands = [
+                (width, y_width, y_offset, height)
+                for width, (_, y_width, y_offset, height) in zip(widths, islands)
+                if width > 0
+            ]
+        return side_gaps, side_gap_width, islands
+
+    left_n, left_gap, left_islands = _fit_side(
+        max(inner_left - _sample_edge_landing_x_pixels(), 0), num_gaps, gap_width_pixels, left_islands
     )
-    half_platform_width_pixels = int(0.5 * platform_width / cfg.horizontal_scale)
-    y1 = int(center_y_pixels - half_platform_width_pixels)
-    y2 = int(center_y_pixels + half_platform_width_pixels)
+    right_n, right_gap, right_islands = _fit_side(
+        max(width_pixels - inner_right - _sample_edge_landing_x_pixels(), 0),
+        num_gaps,
+        gap_width_pixels,
+        right_islands,
+    )
+    outer_left = inner_left - (left_n * left_gap + sum(width for width, *_ in left_islands))
+    outer_right = inner_right + (right_n * right_gap + sum(width for width, *_ in right_islands))
 
-    # height for x1-x2 platform
-    platform_height = (
-        cfg.platform_height_range[1] - cfg.platform_height_range[0]
-    ) * np.random.random() + cfg.platform_height_range[0]
-    platform_height_pixels = int(platform_height / cfg.vertical_scale)
-
-    # gap depth
     if cfg.gap_depth_type == "difficulty":
         gap_depth = (cfg.gap_depth_range[1] - cfg.gap_depth_range[0]) * difficulty + cfg.gap_depth_range[0]
     elif cfg.gap_depth_type == "random":
         gap_depth = np.random.uniform(cfg.gap_depth_range[0], cfg.gap_depth_range[1])
     else:
-        raise ValueError(f"cfg.gap_depth_type' must be 'difficulty' or 'random'. Current value is `{cfg.gap_depth_type}`.")
+        raise ValueError(
+            f"cfg.gap_depth_type must be 'difficulty' or 'random'. Current value is `{cfg.gap_depth_type}`."
+        )
     gap_depth_pixels = int(gap_depth / cfg.vertical_scale)
 
-    hf_raw = np.zeros((width_pixels, length_pixels))
-    hf_raw[:, :] = -gap_depth_pixels
-    hf_raw[:x3, y1:y2] = 0
-    hf_raw[x1:x2, y1:y2] = platform_height_pixels
-    hf_raw[x4:, y1:y2] = 0
+    hf_raw = np.full((width_pixels, length_pixels), -gap_depth_pixels, dtype=np.float64)
+    walkable = np.zeros((width_pixels, length_pixels), dtype=bool)
 
-    hf_raw = _maybe_apply_roughness(cfg, hf_raw, difficulty)
+    # paint the height field
+    def _paint(x1: int, x2: int, y_offset_m: float, y_width_m: float, height: float) -> None:
+        offset_pixels = int(y_offset_m / cfg.horizontal_scale)
+        half_y_pixels = max(int(0.5 * y_width_m / cfg.horizontal_scale), 1)
+        y1 = int(center_y_pixels + offset_pixels - half_y_pixels)
+        y2 = int(center_y_pixels + offset_pixels + half_y_pixels)
+        y1 = max(y1, 0)
+        y2 = min(y2, length_pixels)
+        if x2 > x1 and y2 > y1:
+            hf_raw[x1:x2, y1:y2] = height
+            walkable[x1:x2, y1:y2] = True
+
+    left_landing_y = float(np.random.uniform(island_w_min, island_w_max))
+    right_landing_y = float(np.random.uniform(island_w_min, island_w_max))
+    center_y_width = float(np.random.uniform(island_w_min, island_w_max))
+    _paint(0, outer_left, 0.0, left_landing_y, 0.0)
+    _paint(inner_left, inner_right, 0.0, center_y_width, 0.0)
+    _paint(outer_right, width_pixels, 0.0, right_landing_y, 0.0)
+    for inner, sign, gap_pixels, islands in (
+        (inner_left, -1, left_gap, left_islands),
+        (inner_right, 1, right_gap, right_islands),
+    ):
+        cursor = inner
+        for x_width_pixels, y_width_m, y_offset_m, height_m in islands:
+            cursor += sign * gap_pixels
+            island_start = cursor
+            cursor += sign * x_width_pixels
+            lo, hi = (cursor, island_start) if sign < 0 else (island_start, cursor)
+            _paint(lo, hi, y_offset_m, y_width_m, int(height_m / cfg.vertical_scale))
+
+    hf_raw = _finalize_height_field(cfg, hf_raw, difficulty, mask=walkable)
     return np.rint(hf_raw).astype(np.int16)
+
+
+@height_field_to_mesh
+def straight_climb_terrain(
+    difficulty: float, cfg: locolab_hf_terrains_cfg.HfStraightClimbTerrainCfg
+) -> np.ndarray:
+    """Generate two climb walls along x with a sampled span in y."""
+    wall_height = (cfg.wall_height_range[1] - cfg.wall_height_range[0]) * difficulty + cfg.wall_height_range[0]
+    wall_height_pixels = int(wall_height / cfg.vertical_scale)
+    width_pixels = int(cfg.size[0] / cfg.horizontal_scale)
+    length_pixels = int(cfg.size[1] / cfg.horizontal_scale)
+
+    center_x = width_pixels // 2
+    offset_pixels = int(np.random.uniform(1.0, 2.0) / cfg.horizontal_scale)
+    wall_width_pixels = max(int(np.random.uniform(*cfg.wall_width_range) / cfg.horizontal_scale), 1)
+    right_x1 = np.clip(center_x + offset_pixels, 0, width_pixels)
+    right_x2 = np.clip(center_x + offset_pixels + wall_width_pixels, 0, width_pixels)
+    left_x2 = np.clip(center_x - offset_pixels, 0, width_pixels)
+    left_x1 = np.clip(center_x - offset_pixels - wall_width_pixels, 0, width_pixels)
+
+    center_y = length_pixels // 2
+    half_length_pixels = max(int(0.5 * np.random.uniform(*cfg.wall_length_range) / cfg.horizontal_scale), 1)
+    y1 = max(center_y - half_length_pixels, 0)
+    y2 = min(center_y + half_length_pixels, length_pixels)
+
+    hf_raw = np.zeros((width_pixels, length_pixels), dtype=np.float64)
+    if right_x2 > right_x1 and y2 > y1:
+        hf_raw[right_x1:right_x2, y1:y2] = wall_height_pixels
+    if left_x2 > left_x1 and y2 > y1:
+        hf_raw[left_x1:left_x2, y1:y2] = wall_height_pixels
+
+    hf_raw = _finalize_height_field(cfg, hf_raw, difficulty)
+    return np.rint(hf_raw).astype(np.int16)
+
 
 @height_field_to_mesh
 def hurdle_terrain(
@@ -408,7 +548,7 @@ def hurdle_terrain(
     hf_raw[x1:x2, y11:y1] = hurdle_height_pixels
     hf_raw[x1:x2, y2:y22] = hurdle_height_pixels
 
-    hf_raw = _maybe_apply_roughness(cfg, hf_raw, difficulty)
+    hf_raw = _finalize_height_field(cfg, hf_raw, difficulty)
 
     # round off the heights to the nearest vertical step
     return np.rint(hf_raw).astype(np.int16)
@@ -416,43 +556,69 @@ def hurdle_terrain(
 
 @height_field_to_mesh
 def pyramid_stairs_terrain(difficulty: float, cfg: locolab_hf_terrains_cfg.HfPyramidStairsTerrainCfg) -> np.ndarray:
+    return _pyramid_stairs_height_field(difficulty, cfg, cfg.step_width)
+
+
+@height_field_to_mesh
+def random_width_pyramid_stairs_terrain(
+    difficulty: float, cfg: locolab_hf_terrains_cfg.HfRandomWidthPyramidStairsTerrainCfg
+) -> np.ndarray:
+    """Generate pyramid stairs with a discretely sampled step width."""
+    return _pyramid_stairs_height_field(difficulty, cfg, _sample_step_width(cfg))
+
+
+def _sample_step_width(cfg: locolab_hf_terrains_cfg.HfRandomWidthPyramidStairsTerrainCfg) -> float:
+    width_min, width_max = cfg.step_width_range
+    if width_min <= 0.0 or width_min > width_max:
+        raise ValueError(f"Invalid step_width_range: {cfg.step_width_range}.")
+    if cfg.step_width_step <= 0.0:
+        raise ValueError(f"step_width_step must be positive, got {cfg.step_width_step}.")
+    num_increments = int(np.floor((width_max - width_min) / cfg.step_width_step + 1e-9))
+    width_index = int(np.random.randint(num_increments + 1))
+    return width_min + width_index * cfg.step_width_step
+
+
+def _pyramid_stairs_height_field(difficulty: float, cfg, step_width: float) -> np.ndarray:
     # resolve terrain configuration
     step_height = cfg.step_height_range[0] + difficulty * (cfg.step_height_range[1] - cfg.step_height_range[0])
     if cfg.inverted:
         step_height *= -1
     # switch parameters to discrete units
-    # -- terrain
     width_pixels = int(cfg.size[0] / cfg.horizontal_scale)
     length_pixels = int(cfg.size[1] / cfg.horizontal_scale)
-    # -- stairs
-    step_width = int(cfg.step_width / cfg.horizontal_scale)
+    step_width_pixels = max(int(step_width / cfg.horizontal_scale), 1)
     step_height = int(step_height / cfg.vertical_scale)
-    # -- platform
     platform_width = int(cfg.platform_width / cfg.horizontal_scale)
 
-    # create a terrain with a flat platform at the center
+    # Keep the center at least ``platform_width``. Fit as many equal treads as possible
+    # and leave the leftover as a flat outer border, matching the mesh pyramid stairs.
+    if step_width_pixels > 0:
+        num_steps = min(
+            (width_pixels - platform_width) // (2 * step_width_pixels),
+            (length_pixels - platform_width) // (2 * step_width_pixels),
+        )
+    else:
+        num_steps = 0
+    num_steps = max(int(num_steps), 0)
+
+    remain_x = width_pixels - platform_width - 2 * num_steps * step_width_pixels
+    remain_y = length_pixels - platform_width - 2 * num_steps * step_width_pixels
+    start_x = max(remain_x // 2, 0)
+    start_y = max(remain_y // 2, 0)
+    stop_x = width_pixels - remain_x + start_x
+    stop_y = length_pixels - remain_y + start_y
+
     hf_raw = np.zeros((width_pixels, length_pixels))
-    # add the steps
     current_step_height = 0
-    start_x, start_y = 0, 0
-    stop_x, stop_y = width_pixels, length_pixels
-    while (stop_x - start_x) > platform_width and (stop_y - start_y) > platform_width:
-        # increment position
-        # -- x
-        start_x += step_width
-        stop_x -= step_width
-        # -- y
-        start_y += step_width
-        stop_y -= step_width
-        # increment height
+    for _ in range(num_steps):
+        start_x += step_width_pixels
+        stop_x -= step_width_pixels
+        start_y += step_width_pixels
+        stop_y -= step_width_pixels
+        if stop_x <= start_x or stop_y <= start_y:
+            break
         current_step_height += step_height
-        # add the step
         hf_raw[start_x:stop_x, start_y:stop_y] = current_step_height
 
-    # Apply optional roughness after constructing the stair profile.  This keeps the
-    # stair geometry intact while adding the same configurable surface noise used by
-    # the other LocoLab height-field terrains.
-    hf_raw = _maybe_apply_roughness(cfg, hf_raw, difficulty)
-
-    # round off the heights to the nearest vertical step
+    hf_raw = _finalize_height_field(cfg, hf_raw, difficulty)
     return np.rint(hf_raw).astype(np.int16)

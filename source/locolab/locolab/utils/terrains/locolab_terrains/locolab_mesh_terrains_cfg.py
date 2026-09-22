@@ -9,6 +9,29 @@ from isaaclab.terrains import SubTerrainBaseCfg
 from isaaclab.utils import configclass
 
 from . import locolab_mesh_terrains
+from .locolab_hf_terrains_cfg import PoleParamsCfg, RoughnessParamsCfg
+
+
+@configclass
+class MeshRoughTerrainCfg(RoughnessParamsCfg, PoleParamsCfg, SubTerrainBaseCfg):
+    """Mesh terrain with optional Perlin roughness and obstacle poles.
+
+    Roughness and poles use the same parameters as :class:`HfRoughTerrainCfg`.
+    The generator fills :attr:`horizontal_scale` and :attr:`vertical_scale` from
+    :class:`~locolab.utils.terrains.terrain_generator_cfg.TerrainGeneratorCfg`.
+    They control noise sampling and tread tessellation density, not box sizes.
+    Stair/box footprints stay metric; only vertex z is displaced. Poles are
+    cylinders or square prisms that sit on the local mesh surface.
+    """
+
+    apply_roughness: float = 0.0
+    """Probability of applying roughness to a generated sub-terrain. Must be within [0, 1]."""
+
+    horizontal_scale: float = 0.1
+    """Sampling resolution of the roughness field along x and y (in m)."""
+
+    vertical_scale: float = 0.005
+    """Sampling resolution of the roughness field along z (in m)."""
 
 
 @configclass
@@ -32,8 +55,44 @@ class MeshRepeatedBoxesTerrainCfg(SubTerrainBaseCfg):
 
 
 @configclass
-class MeshRandomWidthPyramidStairsTerrainCfg(SubTerrainBaseCfg):
-    """Configuration for pyramid stairs with a discretely sampled step width."""
+class MeshPyramidStairsTerrainCfg(MeshRoughTerrainCfg):
+    """Isaac Lab pyramid stairs generated as metric meshes, with optional roughness."""
+
+    function = locolab_mesh_terrains.mesh_pyramid_stairs_terrain
+
+    step_height_range: tuple[float, float] = MISSING
+    """The minimum and maximum step height (in m). Scales with difficulty."""
+
+    step_width: float = MISSING
+    """The width of each step (in m). Not quantized by height-field scales."""
+
+    platform_width: float = 1.0
+    """The width of the square platform at the center of the terrain (in m)."""
+
+    border_width: float = 0.0
+    """The width of the flat border around the terrain (in m)."""
+
+    holes: bool = False
+    """Whether to leave holes outside the pyramid stairs."""
+
+    inverted: bool = False
+    """Whether to generate inverted pyramid stairs."""
+
+
+@configclass
+class MeshInvertedPyramidStairsTerrainCfg(MeshPyramidStairsTerrainCfg):
+    """Inverted pyramid stairs generated as metric meshes, with optional roughness."""
+
+    inverted: bool = True
+
+
+@configclass
+class MeshRandomWidthPyramidStairsTerrainCfg(MeshRoughTerrainCfg):
+    """Pyramid stairs with a discretely sampled step width and optional roughness.
+
+    Step width is created as metric mesh boxes. Roughness is added afterwards as
+    a 2.5D displacement so the configured tread size is not quantized.
+    """
 
     function = locolab_mesh_terrains.mesh_random_width_pyramid_stairs_terrain
 
@@ -100,11 +159,26 @@ class MeshHurdleTerrainCfg(SubTerrainBaseCfg):
 
     function = locolab_mesh_terrains.mesh_hurdle_terrain
 
+    num_hurdles_per_side_range: int | tuple[int, ...] = (1, 1)
+    """Concentric hurdle rings around the center platform.
+
+    An int or ``(n,)`` pins that count. A pair ``(min, max)`` is sampled uniformly
+    (inclusive). The innermost ring stays flush with the platform. If outer rings
+    do not fit, their spacing is reduced and then the rings are dropped.
+    """
+
     hurdle_width_range: tuple[float, float] = MISSING
     """The minimum and maximum hurdle width in meters."""
 
     hurdle_height_range: tuple[float, float] = MISSING
     """The minimum and maximum hurdle height in meters."""
+
+    spacing_range: tuple[float, float] = (0.4, 1.2)
+    """Flat distance between consecutive hurdle rings, in meters.
+
+    Sampled independently for each gap between rings. Unused when the sampled
+    ring count is 1.
+    """
 
     platform_width_range: tuple[float, float] = MISSING
     """The minimum and maximum width of the center square platform in meters."""
@@ -133,9 +207,6 @@ class MeshStraightStairsTerrainCfg(SubTerrainBaseCfg):
 
     platform_width_range: tuple[float, float] = MISSING
     """The minimum and maximum width of the platform (in m)."""
-
-    easy_difficulty_threshold: float = 0.2
-    """Difficulty threshold below which stair length is maximized."""
 
 
 @configclass

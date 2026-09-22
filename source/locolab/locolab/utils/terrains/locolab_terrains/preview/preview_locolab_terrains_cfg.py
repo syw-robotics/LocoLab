@@ -4,7 +4,7 @@ These values are intentionally separate from training configs.  They should
 make each terrain visually recognizable at the default preview difficulty.
 """
 
-ABSTRACT_CFG_NAMES = {"HfRoughTerrainCfg"}
+ABSTRACT_CFG_NAMES = {"HfRoughTerrainCfg", "MeshRoughTerrainCfg"}
 """Terrain cfg classes exported by the package but not meant to be previewed directly."""
 
 
@@ -23,6 +23,8 @@ PREVIEW_CASES: dict[str, dict] = {
         "noise_step": 0.01,
         "apply_roughness": 1.0,
         "roughness_type": "difficulty",
+        "apply_poles": 1.0,
+        "num_poles_range": (3, 5),
         "border_width": 0.1,
     },
     "HfInvertedPyramidSlopedRoughTerrainCfg": {
@@ -57,11 +59,20 @@ PREVIEW_CASES: dict[str, dict] = {
         "border_width": 0.1,
     },
     "HfStraightGapTerrainCfg": {
+        "num_gaps_per_side_range": (2, 2),
         "gap_width_range": (0.2, 0.8),
         "gap_depth_range": (1.0, 3.0),
-        "gap_offset_range": (0.5, 0.8),
         "platform_width_range": (3.0, 4.0),
-        "platform_height_range": (-0.1, 0.1),
+        "island_width_range": (0.6, 1.2),
+        "island_y_offset_range": (-1.0, 1.0),
+        "island_height_offset_range": (-0.1, 0.1),
+        "platform_width_range": (3.0, 4.0),
+        "border_width": 0.1,
+    },
+    "HfStraightClimbTerrainCfg": {
+        "wall_height_range": (0.25, 0.70),
+        "wall_width_range": (0.8, 1.2),
+        "wall_length_range": (4.0, 8.0),
         "border_width": 0.1,
     },
     "HfHurdleTerrainCfg": {
@@ -81,10 +92,46 @@ PREVIEW_CASES: dict[str, dict] = {
         "platform_width": 3.0,
         "inverted": True,
     },
+    "HfRandomWidthPyramidStairsTerrainCfg": {
+        "step_height_range": (0.05, 0.22),
+        "step_width_range": (0.25, 0.35),
+        "step_width_step": 0.05,
+        "platform_width": 3.0,
+    },
+    "HfInvertedRandomWidthPyramidStairsTerrainCfg": {
+        "step_height_range": (0.05, 0.22),
+        "step_width_range": (0.25, 0.35),
+        "step_width_step": 0.05,
+        "platform_width": 3.0,
+        "inverted": True,
+    },
+    "MeshPyramidStairsTerrainCfg": {
+        "step_height_range": (0.05, 0.22),
+        "step_width": 0.30,
+        "platform_width": 3.0,
+        "noise_range": (-0.04, 0.04),
+        "noise_step": 0.01,
+        "downsampled_scale": 0.2,
+        "apply_roughness": 1.0,
+        "roughness_type": "fixed",
+    },
+    "MeshInvertedPyramidStairsTerrainCfg": {
+        "step_height_range": (0.05, 0.22),
+        "step_width": 0.30,
+        "platform_width": 3.0,
+        "inverted": True,
+        "noise_range": (-0.04, 0.04),
+        "noise_step": 0.01,
+        "downsampled_scale": 0.2,
+        "apply_roughness": 1.0,
+        "roughness_type": "fixed",
+    },
     "MeshHurdleTerrainCfg": {
+        "num_hurdles_per_side_range": (2, 3),
         "hurdle_width_range": (0.2, 0.5),
         "hurdle_height_range": (0.05, 0.25),
-        "platform_width_range": (3.0, 4.0),
+        "spacing_range": (0.4, 1.0),
+        "platform_width_range": (2.0, 3.0),
     },
     "MeshStraightGapTerrainCfg": {
         "gap_width_range": (0.2, 0.8),
@@ -121,6 +168,11 @@ PREVIEW_CASES: dict[str, dict] = {
         "step_width_range": (0.25, 0.35),
         "step_width_step": 0.05,
         "platform_width": 3.0,
+        "noise_range": (-0.04, 0.04),
+        "noise_step": 0.01,
+        "downsampled_scale": 0.2,
+        "apply_roughness": 1.0,
+        "roughness_type": "fixed",
     },
 }
 """Concrete preview kwargs keyed by exported terrain cfg class name."""
