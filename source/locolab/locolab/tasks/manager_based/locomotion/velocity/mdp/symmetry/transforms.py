@@ -54,6 +54,15 @@ def body_scalar(*, env, term_cfg, **_) -> MirrorTransform:
     return _spatial_name_transform(body_names, asset.cfg.spatial_symmetry_mapping, name="body observation")
 
 
+def named_body_scalar(*, env, term_cfg, **_) -> MirrorTransform:
+    """Swap scalar observations listed by ``feet_names`` or ``body_names``."""
+    names = term_cfg.params.get("feet_names", term_cfg.params.get("body_names"))
+    if not names:
+        raise ValueError("Named body symmetry requires a 'feet_names' or 'body_names' parameter.")
+    asset = env.scene["robot"]
+    return _spatial_name_transform(tuple(names), asset.cfg.spatial_symmetry_mapping, name="named body observation")
+
+
 def height_scan_y(*, env, term_cfg, **_) -> MirrorTransform:
     """Mirror flattened height-scan samples across the sensor's local y-axis."""
     sensor_cfg = term_cfg.params.get("sensor_cfg")

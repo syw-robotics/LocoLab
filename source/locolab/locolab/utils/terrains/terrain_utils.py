@@ -37,9 +37,9 @@ def normalize_terrain_groups(terrain_groups: Sequence[Any] | dict[str, Any] | No
 
     * ``[{"terrain_names": [...], "pose_range": {...}, "velocity_range": {...}}, ...]``
     * ``{"x_forward": {"terrain_names": [...], "pose_range": {...}}, ...}``
-    * a list of objects with ``terrain_names`` / ``pose_range`` / ``velocity_range`` attributes
 
-    Later groups override earlier groups when the same sub-terrain is listed twice.
+    A dict that itself contains ``terrain_names`` is treated as one group. Later groups override
+    earlier groups when the same sub-terrain is listed twice.
     """
     if not terrain_groups:
         return []
@@ -55,14 +55,11 @@ def normalize_terrain_groups(terrain_groups: Sequence[Any] | dict[str, Any] | No
     for group in items:
         if group is None:
             continue
-        if isinstance(group, dict):
-            names = group.get("terrain_names")
-            pose_range = group.get("pose_range")
-            velocity_range = group.get("velocity_range")
-        else:
-            names = getattr(group, "terrain_names", None)
-            pose_range = getattr(group, "pose_range", None)
-            velocity_range = getattr(group, "velocity_range", None)
+        if not isinstance(group, dict):
+            raise TypeError("Each terrain reset group must be a dict with a 'terrain_names' list.")
+        names = group.get("terrain_names")
+        pose_range = group.get("pose_range")
+        velocity_range = group.get("velocity_range")
         if not names:
             raise ValueError("Each terrain reset group must provide a non-empty 'terrain_names' list.")
         normalized.append(

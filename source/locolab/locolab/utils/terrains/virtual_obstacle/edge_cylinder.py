@@ -49,6 +49,8 @@ class EdgeCylinder(VirtualObstacleBase):
             - x, y, z coordinates of the edge start point
             - x, y, z coordinates of the edge end point
         """
+        mesh = mesh.copy()
+        mesh.merge_vertices()
         angles = mesh.face_adjacency_angles
         # convert max_angle in degrees to radians
         threshold = np.deg2rad(self.angle_threshold)

@@ -171,7 +171,6 @@ Different types of tasks are organized in different sub-directories, such that t
 - [ ] **B2**: Add Velocity-Rough-B2
 - [x] **B2Z1**: Moved to external project `B2Z1-LocoLab`
 - [ ] **Active Adaptation Port**: Migrate LocoLab tasks to (AA)[https://github.com/Agent-3154/active-adaptation]
-- [ ] **Terrain**: Test MeshRandomWidthPyramidStairsTerrain; Update HfStraightGapTerrainCfg (configurable gap num and settings)
 
 
 <!-- ### Set up IDE (Optional)

@@ -104,7 +104,7 @@ class HfPyramidSlopedRoughTerrainCfg(HfRoughTerrainCfg):
     slope_range: tuple[float, float] = MISSING
     """The minimum and maximum slope."""
 
-    platform_width: float = 1.0
+    center_platform_width: float = 1.0
     """The width of the square platform at the center of the terrain."""
 
     inverted: bool = False
@@ -133,7 +133,7 @@ class HfDiscreteObstaclesTerrainCfg(HfRoughTerrainCfg):
     num_obstacles: int = MISSING
     """The number of rectangular obstacles to generate."""
 
-    platform_width: float = 1.0
+    center_platform_width: float = 1.0
     """The width of the square flat platform at the center of the terrain."""
 
 
@@ -151,7 +151,7 @@ class HfGapTerrainCfg(HfRoughTerrainCfg):
 
     gap_depth_type: Literal["difficulty", "random"] = "difficulty"
 
-    platform_width_range: tuple[float, float] = MISSING
+    center_platform_width_range: tuple[float, float] = MISSING
     """The width of the square flat platform at the center of the terrain."""
 
     platform_height_range: tuple[float, float] = MISSING
@@ -176,7 +176,7 @@ class HfDoubleGapTerrainCfg(HfRoughTerrainCfg):
     gap_in_between_width_range: tuple[float, float] = MISSING
     """ The flat terrain width between two gaps in meters"""
 
-    platform_width_range: tuple[float, float] = MISSING
+    center_platform_width_range: tuple[float, float] = MISSING
     """The width of the square flat platform at the center of the terrain."""
 
     platform_height_range: tuple[float, float] = MISSING
@@ -191,6 +191,12 @@ class HfStraightGapTerrainCfg(HfRoughTerrainCfg):
     sizes independently from :attr:`island_width_range`. Layout for two gaps per side::
 
         landing | gap | island | gap | center | gap | island | gap | landing
+
+    Sampled lengths are not the collision size. Gap width, platform width, island
+    x-width, y spans, and lateral offsets are truncated with ``int()`` to an integer
+    number of :attr:`horizontal_scale` cells; the realized length is that cell count
+    times :attr:`horizontal_scale`. Gap depth is truncated the same way onto
+    :attr:`vertical_scale`.
     """
 
     function = locolab_hf_terrains.straight_gap_terrain
@@ -204,7 +210,12 @@ class HfStraightGapTerrainCfg(HfRoughTerrainCfg):
     """
 
     gap_width_range: tuple[float, float] = MISSING
-    """The minimum and maximum gap width in meters. Scales with difficulty."""
+    """The minimum and maximum gap width in meters. Scales with difficulty.
+
+    Height-field sampling truncates this width with ``int(width / horizontal_scale)``
+    and keeps at least one cell. The realized width is that cell count times
+    :attr:`horizontal_scale`.
+    """
 
     gap_depth_range: tuple[float, float] = MISSING
     """The minimum and maximum gap depth in meters."""
@@ -212,7 +223,7 @@ class HfStraightGapTerrainCfg(HfRoughTerrainCfg):
     gap_depth_type: Literal["difficulty", "random"] = "difficulty"
     """How gap depth is sampled. Must be ``"difficulty"`` or ``"random"``."""
 
-    platform_width_range: tuple[float, float] = MISSING
+    center_platform_width_range: tuple[float, float] = MISSING
     """The center platform width along x, in meters."""
 
     island_width_range: tuple[float, float] = (0.5, 1.5)
@@ -270,7 +281,7 @@ class HfHurdleTerrainCfg(HfRoughTerrainCfg):
     hurdle_height_range: tuple[float, float] = MISSING
     """ The minimum and maximum size of the hurdle height in meters."""
 
-    platform_width_range: tuple[float, float] = MISSING
+    center_platform_width_range: tuple[float, float] = MISSING
     """The width of the square flat platform at the center of the terrain."""
 
 
@@ -280,13 +291,21 @@ class HfPyramidStairsTerrainCfg(HfRoughTerrainCfg):
 
     function = locolab_hf_terrains.pyramid_stairs_terrain
 
-    step_height_range: tuple[float, float] = MISSING
-    """The minimum and maximum height of the steps (in m)."""
+    stair_height_range: tuple[float, float] = MISSING
+    """The minimum and maximum stair height (in m)."""
 
-    step_width: float = MISSING
-    """The width of the steps (in m)."""
+    stair_width: float = MISSING
+    """The nominal tread width (in m).
 
-    platform_width: float = 1.0
+    Height-field sampling snaps this width, including :attr:`stair_width_noise_range`,
+    down to an integer number of :attr:`horizontal_scale` cells. The realized width
+    is that cell count times :attr:`horizontal_scale`, and it is at least one cell.
+    """
+
+    stair_width_noise_range: tuple[float, float] = (0.0, 0.0)
+    """Uniform noise added to :attr:`stair_width` for each sub-terrain (in m)."""
+
+    center_platform_width: float = 1.0
     """The width of the square platform at the center of the terrain. Defaults to 1.0.
 
     Leftover length after fitting equal treads stays as a flat outer border so the
@@ -309,41 +328,5 @@ class HfInvertedPyramidStairsTerrainCfg(HfPyramidStairsTerrainCfg):
         We make it as a separate class to make it easier to distinguish between the two and match
         the naming convention of the other terrains.
     """
-
-    inverted: bool = True
-
-
-@configclass
-class HfRandomWidthPyramidStairsTerrainCfg(HfRoughTerrainCfg):
-    """Pyramid stairs with a discretely sampled step width.
-
-    This is the height-field counterpart to :class:`MeshRandomWidthPyramidStairsTerrainCfg`.
-    """
-
-    function = locolab_hf_terrains.random_width_pyramid_stairs_terrain
-
-    step_height_range: tuple[float, float] = MISSING
-    """The minimum and maximum height of the steps (in m)."""
-
-    step_width_range: tuple[float, float] = MISSING
-    """The minimum and maximum step width (in m)."""
-
-    step_width_step: float = MISSING
-    """The sampling increment for step width (in m)."""
-
-    platform_width: float = 1.0
-    """The width of the square platform at the center of the terrain. Defaults to 1.0.
-
-    Leftover length after fitting equal treads stays as a flat outer border so the
-    center does not shrink below this size.
-    """
-
-    inverted: bool = False
-    """Whether the pyramid stairs is inverted. Defaults to False."""
-
-
-@configclass
-class HfInvertedRandomWidthPyramidStairsTerrainCfg(HfRandomWidthPyramidStairsTerrainCfg):
-    """Inverted pyramid stairs with a discretely sampled step width."""
 
     inverted: bool = True

@@ -15,7 +15,7 @@ from isaaclab.utils import configclass
 
 from locolab.utils.markers import GREEN_ARROW_X_MARKER_CFG, RED_ARROW_X_MARKER_CFG
 
-from .velocity_command import UniformVelocityCommand
+from .velocity_command import UniformVelocityCommand, UniformVelocityCommandByTerrain
 
 
 @configclass
@@ -110,3 +110,31 @@ class UniformVelocityCommandCfg(CommandTermCfg):
 
     # Marker z offset
     vel_visualizer_offset_z: float = 0.5
+
+
+@configclass
+class UniformVelocityCommandByTerrainCfg(UniformVelocityCommandCfg):
+    """Uniform velocity command with per-sub-terrain range overrides.
+
+    ``ranges`` applies to every sub-terrain that no group names. Each group overrides
+    only the axes it sets. Later groups win when the same sub-terrain is listed twice.
+    """
+
+    class_type: type = UniformVelocityCommandByTerrain
+
+    terrain_groups: dict | None = None
+    """Named sub-terrain groups. Omitted range keys inherit :attr:`ranges`.
+
+    Example::
+
+        {
+            "only_forward": {
+                "terrain_names": ["gap", "climb"],
+                "ranges": {
+                    "lin_vel_x": (-0.0, 1.0),
+                    "lin_vel_y": (-0.0, 0.0),
+                    "ang_vel_z": (-0.2, 0.2),
+                    "heading": (-0.5, 0.5)},
+            },
+        }
+    """

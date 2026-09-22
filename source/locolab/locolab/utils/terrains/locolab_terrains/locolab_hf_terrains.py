@@ -73,10 +73,10 @@ def pyramid_sloped_rough_terrain(difficulty: float, cfg: locolab_hf_terrains_cfg
     hf_raw = height_max * xx * yy
 
     # create a flat platform at the center of the terrain
-    platform_width = int(cfg.platform_width / cfg.horizontal_scale / 2)
+    center_platform_width = int(cfg.center_platform_width / cfg.horizontal_scale / 2)
     # get the height of the platform at the corner of the platform
-    x_pf = width_pixels // 2 - platform_width
-    y_pf = length_pixels // 2 - platform_width
+    x_pf = width_pixels // 2 - center_platform_width
+    y_pf = length_pixels // 2 - center_platform_width
     z_pf = hf_raw[x_pf, y_pf]
     hf_raw = np.clip(hf_raw, min(0, z_pf), max(0, z_pf))
 
@@ -102,7 +102,7 @@ def discrete_obstacles_terrain(
     obstacle_height = int(obstacle_height / cfg.vertical_scale)
     obstacle_width_min = int(cfg.obstacle_width_range[0] / cfg.horizontal_scale)
     obstacle_width_max = int(cfg.obstacle_width_range[1] / cfg.horizontal_scale)
-    platform_width = int(cfg.platform_width / cfg.horizontal_scale)
+    center_platform_width = int(cfg.center_platform_width / cfg.horizontal_scale)
 
     if obstacle_height <= 0:
         raise ValueError(f"Obstacle height must be positive. Got: {obstacle_height * cfg.vertical_scale}.")
@@ -139,11 +139,11 @@ def discrete_obstacles_terrain(
         hf_raw[x_start : x_start + width, y_start : y_start + length] = np.random.choice(height_range)
 
     # Keep the center platform free of discrete obstacles before adding surface roughness.
-    platform_width = min(platform_width, width_pixels, length_pixels)
-    x1 = (width_pixels - platform_width) // 2
-    x2 = (width_pixels + platform_width) // 2
-    y1 = (length_pixels - platform_width) // 2
-    y2 = (length_pixels + platform_width) // 2
+    center_platform_width = min(center_platform_width, width_pixels, length_pixels)
+    x1 = (width_pixels - center_platform_width) // 2
+    x2 = (width_pixels + center_platform_width) // 2
+    y1 = (length_pixels - center_platform_width) // 2
+    y2 = (length_pixels + center_platform_width) // 2
     hf_raw[x1:x2, y1:y2] = 0
 
     hf_raw = _finalize_height_field(cfg, hf_raw, difficulty)
@@ -171,8 +171,8 @@ def gap_terrain(
 
     center_x_pixels = 0.5 * cfg.size[0] / cfg.horizontal_scale
     center_y_pixels = 0.5 * cfg.size[1] / cfg.horizontal_scale
-    platform_width = (cfg.platform_width_range[1] - cfg.platform_width_range[0]) * np.random.random() + cfg.platform_width_range[0]
-    half_platform_width_pixels = int(0.5 * platform_width / cfg.horizontal_scale)
+    center_platform_width = (cfg.center_platform_width_range[1] - cfg.center_platform_width_range[0]) * np.random.random() + cfg.center_platform_width_range[0]
+    half_platform_width_pixels = int(0.5 * center_platform_width / cfg.horizontal_scale)
 
     # x direction
     x1 = int(center_x_pixels - half_platform_width_pixels)
@@ -236,8 +236,8 @@ def double_gap_terrain(
 
     center_x_pixels = 0.5 * cfg.size[0] / cfg.horizontal_scale
     center_y_pixels = 0.5 * cfg.size[1] / cfg.horizontal_scale
-    platform_width = (cfg.platform_width_range[1] - cfg.platform_width_range[0]) * np.random.random() + cfg.platform_width_range[0]
-    half_platform_width_pixels = int(0.5 * platform_width / cfg.horizontal_scale)
+    center_platform_width = (cfg.center_platform_width_range[1] - cfg.center_platform_width_range[0]) * np.random.random() + cfg.center_platform_width_range[0]
+    half_platform_width_pixels = int(0.5 * center_platform_width / cfg.horizontal_scale)
 
     gap_in_between_width = (cfg.gap_in_between_width_range[1] - cfg.gap_in_between_width_range[0]) * np.random.random() + cfg.gap_in_between_width_range[0]
     gap_in_between_width_pixels = int(gap_in_between_width / cfg.horizontal_scale)
@@ -304,7 +304,10 @@ def straight_gap_terrain(
 ) -> np.ndarray:
     """Generate a y-limited corridor with independently placed islands along x.
 
-    Roughness is added only on painted tops (landings, center, islands), not the pit.
+    Gap width, platform width, island x-width, y spans, and lateral offsets are
+    truncated to ``horizontal_scale`` cells. Gap depth is truncated to
+    ``vertical_scale``. Roughness is added only on painted tops (landings, center,
+    islands), not the pit.
     """
     # landing | gap | island | ... | gap | center | gap | ... | island | gap | landing
     num_gaps = cfg.num_gaps_per_side_range
@@ -356,10 +359,10 @@ def straight_gap_terrain(
     def _sample_edge_landing_x_pixels() -> int:
         return max(int(0.5 * np.random.uniform(island_w_min, island_w_max) / cfg.horizontal_scale), 1)
 
-    platform_width = (cfg.platform_width_range[1] - cfg.platform_width_range[0]) * np.random.random() + cfg.platform_width_range[0]
+    center_platform_width = (cfg.center_platform_width_range[1] - cfg.center_platform_width_range[0]) * np.random.random() + cfg.center_platform_width_range[0]
     center_x_pixels = 0.5 * cfg.size[0] / cfg.horizontal_scale
     center_y_pixels = 0.5 * cfg.size[1] / cfg.horizontal_scale
-    half_platform_x_pixels = max(int(0.5 * platform_width / cfg.horizontal_scale), 1)
+    half_platform_x_pixels = max(int(0.5 * center_platform_width / cfg.horizontal_scale), 1)
     inner_left = max(int(center_x_pixels - half_platform_x_pixels), 0)
     inner_right = min(int(center_x_pixels + half_platform_x_pixels), width_pixels)
     if inner_right <= inner_left:
@@ -521,8 +524,8 @@ def hurdle_terrain(
 
     center_x_pixels = 0.5 * cfg.size[0] / cfg.horizontal_scale
     center_y_pixels = 0.5 * cfg.size[1] / cfg.horizontal_scale
-    platform_width = (cfg.platform_width_range[1] - cfg.platform_width_range[0]) * np.random.random() + cfg.platform_width_range[0]
-    half_platform_width_pixels = int(0.5 * platform_width / cfg.horizontal_scale)
+    center_platform_width = (cfg.center_platform_width_range[1] - cfg.center_platform_width_range[0]) * np.random.random() + cfg.center_platform_width_range[0]
+    half_platform_width_pixels = int(0.5 * center_platform_width / cfg.horizontal_scale)
 
     # x direction
     x1 = int(center_x_pixels - half_platform_width_pixels)
@@ -556,53 +559,42 @@ def hurdle_terrain(
 
 @height_field_to_mesh
 def pyramid_stairs_terrain(difficulty: float, cfg: locolab_hf_terrains_cfg.HfPyramidStairsTerrainCfg) -> np.ndarray:
-    return _pyramid_stairs_height_field(difficulty, cfg, cfg.step_width)
+    """Generate pyramid stairs, snapping tread width to the height-field grid."""
+    noise_min, noise_max = cfg.stair_width_noise_range
+    if cfg.stair_width <= 0.0:
+        raise ValueError(f"stair_width must be positive, got {cfg.stair_width}.")
+    if noise_min > noise_max:
+        raise ValueError(f"Invalid stair_width_noise_range: {cfg.stair_width_noise_range}.")
+    stair_width = float(cfg.stair_width + np.random.uniform(noise_min, noise_max))
+    if stair_width <= 0.0:
+        raise ValueError(
+            f"Sampled stair width must be positive, got {stair_width} from "
+            f"{cfg.stair_width} + {cfg.stair_width_noise_range}."
+        )
 
-
-@height_field_to_mesh
-def random_width_pyramid_stairs_terrain(
-    difficulty: float, cfg: locolab_hf_terrains_cfg.HfRandomWidthPyramidStairsTerrainCfg
-) -> np.ndarray:
-    """Generate pyramid stairs with a discretely sampled step width."""
-    return _pyramid_stairs_height_field(difficulty, cfg, _sample_step_width(cfg))
-
-
-def _sample_step_width(cfg: locolab_hf_terrains_cfg.HfRandomWidthPyramidStairsTerrainCfg) -> float:
-    width_min, width_max = cfg.step_width_range
-    if width_min <= 0.0 or width_min > width_max:
-        raise ValueError(f"Invalid step_width_range: {cfg.step_width_range}.")
-    if cfg.step_width_step <= 0.0:
-        raise ValueError(f"step_width_step must be positive, got {cfg.step_width_step}.")
-    num_increments = int(np.floor((width_max - width_min) / cfg.step_width_step + 1e-9))
-    width_index = int(np.random.randint(num_increments + 1))
-    return width_min + width_index * cfg.step_width_step
-
-
-def _pyramid_stairs_height_field(difficulty: float, cfg, step_width: float) -> np.ndarray:
-    # resolve terrain configuration
-    step_height = cfg.step_height_range[0] + difficulty * (cfg.step_height_range[1] - cfg.step_height_range[0])
+    step_height = cfg.stair_height_range[0] + difficulty * (cfg.stair_height_range[1] - cfg.stair_height_range[0])
     if cfg.inverted:
         step_height *= -1
     # switch parameters to discrete units
     width_pixels = int(cfg.size[0] / cfg.horizontal_scale)
     length_pixels = int(cfg.size[1] / cfg.horizontal_scale)
-    step_width_pixels = max(int(step_width / cfg.horizontal_scale), 1)
+    step_width_pixels = max(int(stair_width / cfg.horizontal_scale), 1)
     step_height = int(step_height / cfg.vertical_scale)
-    platform_width = int(cfg.platform_width / cfg.horizontal_scale)
+    center_platform_width = int(cfg.center_platform_width / cfg.horizontal_scale)
 
-    # Keep the center at least ``platform_width``. Fit as many equal treads as possible
+    # Keep the center at least ``center_platform_width``. Fit as many equal treads as possible
     # and leave the leftover as a flat outer border, matching the mesh pyramid stairs.
     if step_width_pixels > 0:
         num_steps = min(
-            (width_pixels - platform_width) // (2 * step_width_pixels),
-            (length_pixels - platform_width) // (2 * step_width_pixels),
+            (width_pixels - center_platform_width) // (2 * step_width_pixels),
+            (length_pixels - center_platform_width) // (2 * step_width_pixels),
         )
     else:
         num_steps = 0
     num_steps = max(int(num_steps), 0)
 
-    remain_x = width_pixels - platform_width - 2 * num_steps * step_width_pixels
-    remain_y = length_pixels - platform_width - 2 * num_steps * step_width_pixels
+    remain_x = width_pixels - center_platform_width - 2 * num_steps * step_width_pixels
+    remain_y = length_pixels - center_platform_width - 2 * num_steps * step_width_pixels
     start_x = max(remain_x // 2, 0)
     start_y = max(remain_y // 2, 0)
     stop_x = width_pixels - remain_x + start_x
