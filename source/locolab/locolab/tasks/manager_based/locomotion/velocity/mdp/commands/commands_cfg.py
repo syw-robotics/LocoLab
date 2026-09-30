@@ -9,12 +9,17 @@
 
 from dataclasses import MISSING
 
+from isaaclab.envs.mdp.commands.commands_cfg import (
+    TerrainBasedPose2dCommandCfg as IsaacTerrainBasedPose2dCommandCfg,
+)
 from isaaclab.managers import CommandTermCfg
 from isaaclab.markers import VisualizationMarkersCfg
 from isaaclab.utils import configclass
 
 from locolab.utils.markers import GREEN_ARROW_X_MARKER_CFG, RED_ARROW_X_MARKER_CFG
 
+from .flat_patch_velocity_command import FlatPatchVelocityCommand
+from .pose_2d_command import TerrainBasedPose2dCommand
 from .velocity_command import UniformVelocityCommand, UniformVelocityCommandByTerrain
 
 
@@ -138,3 +143,55 @@ class UniformVelocityCommandByTerrainCfg(UniformVelocityCommandCfg):
             },
         }
     """
+
+
+@configclass
+class FlatPatchVelocityCommandCfg(CommandTermCfg):
+    """Velocity command that follows a sampled flat patch on the current sub-terrain.
+
+    The terrain generator must provide ``flat_patch_sampling`` under ``flat_patch_key``
+    for every sub-terrain and use terrain-based environment origins.
+    """
+
+    class_type: type = FlatPatchVelocityCommand
+
+    asset_name: str = MISSING
+    """Name of the robot asset."""
+
+    flat_patch_key: str = "target"
+    """Key of the terrain's flat patch samples."""
+
+    velocity_control_stiffness: float = 1.0
+    """Linear speed per meter of distance to the target."""
+
+    heading_control_stiffness: float = 1.0
+    """Yaw speed per radian of heading error."""
+
+    max_linear_velocity: float = 1.0
+    """Maximum planar speed in m/s."""
+
+    max_angular_velocity: float = 1.0
+    """Maximum absolute yaw speed in rad/s."""
+
+    target_distance_threshold: float = 0.2
+    """Stop when the planar distance to the target is at most this value, in meters."""
+
+    rel_standing_envs: float = 0.0
+    """Probability of sampling a standing command instead of moving to the target."""
+
+    metrics_update_interval: int = 200
+    """Number of control steps between metric updates."""
+
+
+@configclass
+class TerrainBasedPose2dCommandCfg(IsaacTerrainBasedPose2dCommandCfg):
+    """2D pose target sampled from ``flat_patch_key`` on the current sub-terrain.
+
+    The terrain generator must provide this flat-patch key for every sub-terrain.
+    The command is ``(relative_x, relative_y, relative_z, heading_error)``.
+    """
+
+    class_type: type = TerrainBasedPose2dCommand
+
+    flat_patch_key: str = "target"
+    """Key of the terrain's flat patch samples."""

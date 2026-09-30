@@ -8,4 +8,10 @@
 
 """Commands Configurations for the velocity MDP."""
 
-from .commands_cfg import UniformVelocityCommandByTerrainCfg, UniformVelocityCommandCfg
+from .commands_cfg import (
+    FlatPatchVelocityCommandCfg,
+    TerrainBasedPose2dCommandCfg,
+    UniformVelocityCommandByTerrainCfg,
+    UniformVelocityCommandCfg,
+)
+from .pose_2d_command import TerrainBasedPose2dCommand
