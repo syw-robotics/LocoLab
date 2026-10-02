@@ -187,10 +187,11 @@ class HfDoubleGapTerrainCfg(HfRoughTerrainCfg):
 class HfStraightGapTerrainCfg(HfRoughTerrainCfg):
     """Straight corridor along x with a gap sequence on each side.
 
-    The center platform width is sampled along x. Each island samples its x and y
-    sizes independently from :attr:`island_width_range`. Layout for two gaps per side::
+    Each side packs as many gaps as fit at the difficulty-scaled gap width.
+    Consecutive gaps are separated by an island. The center platform width is
+    sampled along x. A side with two gaps looks like::
 
-        landing | gap | island | gap | center | gap | island | gap | landing
+        landing | gap | island | gap | center
 
     Sampled lengths are not the collision size. Gap width, platform width, island
     x-width, y spans, and lateral offsets are truncated with ``int()`` to an integer
@@ -200,14 +201,6 @@ class HfStraightGapTerrainCfg(HfRoughTerrainCfg):
     """
 
     function = locolab_hf_terrains.straight_gap_terrain
-
-    num_gaps_per_side_range: int | tuple[int, ...] = (1, 2)
-    """Gaps on each side of the center.
-
-    An int or ``(n,)`` pins that count. A pair ``(min, max)`` is sampled uniformly
-    (inclusive). Total gaps = ``2 * sampled_count``. If a side does not fit, gaps
-    are dropped then gap and island x-widths are capped.
-    """
 
     gap_width_range: tuple[float, float] = MISSING
     """The minimum and maximum gap width in meters. Scales with difficulty.
@@ -229,7 +222,9 @@ class HfStraightGapTerrainCfg(HfRoughTerrainCfg):
     island_width_range: tuple[float, float] = (0.5, 1.5)
     """Island size in meters. Each island samples x and y independently from this range.
 
-    Landings and the center platform also sample their y-width from this range.
+    The minimum is a hard lower bound on each island's x-width. Height-field cells
+    round up so the painted width does not fall short of it. Landings and the
+    center platform also sample their y-width from this range.
     Each x-edge landing uses half of a sample from this range along x, so two
     neighboring gap tiles join into about one island width.
     """
@@ -238,13 +233,13 @@ class HfStraightGapTerrainCfg(HfRoughTerrainCfg):
     """Lateral offset of each island center relative to the corridor, in meters.
 
     Sampled independently per island. Positive is +y. Landings and the center
-    platform stay on the corridor. Unused when the sampled gap count is 1.
+    platform stay on the corridor. Unused when that side has only one gap.
     """
 
     island_height_offset_range: tuple[float, float] = (0.0, 0.0)
     """Height of each island relative to the landings and center, in meters.
 
-    Sampled independently per island. Unused when the sampled gap count is 1.
+    Sampled independently per island. Unused when that side has only one gap.
     """
 
 

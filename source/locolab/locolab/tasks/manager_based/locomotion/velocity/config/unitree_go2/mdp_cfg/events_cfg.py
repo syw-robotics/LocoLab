@@ -79,18 +79,6 @@ class EventCfg:
         },
     )
     # 6.
-    # this term has bug!!!
-    #  randomize_joint_offsets = EventTerm(
-    #      func=mdp.randomize_joint_offsets,
-    #      mode="startup",
-    #      params={
-    #          "asset_cfg": SceneEntityCfg("robot", joint_names=JOINT_NAMES),
-    #          "offsets_distribution_params": (-0.02, 0.02),
-    #          "operation": "add",
-    #          "distribution": "gaussian",
-    #      },
-    #  )
-    # 7.
     randomize_joint_parameters = EventTerm(
         func=mdp.randomize_joint_parameters,
         mode="startup",

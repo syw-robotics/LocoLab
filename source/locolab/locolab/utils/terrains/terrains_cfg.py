@@ -261,7 +261,6 @@ PARKOUR_TERRAINS_CFG = TerrainGeneratorCfg(
         # "gap": locolab_terrain_gen.HfStraightGapTerrainCfg(
         "gap": locolab_terrain_gen.MeshStraightGapTerrainCfg(
             proportion=0.05,
-            num_gaps_per_side_range=(1, 2),
             gap_width_range=(0.10, 0.80),
             gap_depth_range=(1.0, 2.5),
             gap_depth_type="random",
@@ -378,10 +377,9 @@ PARKOUR_TERRAINS_CFG = TerrainGeneratorCfg(
         ),
         "hurdle": locolab_terrain_gen.MeshHurdleTerrainCfg(
             proportion=0.05,
-            num_hurdles_per_side_range=(1, 2),
             hurdle_width_range=(0.1, 0.4),
             hurdle_height_range=(0.15, 0.45),
-            spacing_range=(1.0, 1.6),
+            spacing_range=(1.0, 1.5),
             center_platform_width_range=(1.5, 2.0),
         ),
     },

@@ -648,31 +648,38 @@ class DepthCorruptionNoiseModel(ImageNoiseModel):
             raise ValueError(f"Invalid stripe_value_range: {cfg.stripe_value_range}")
         if len(cfg.sparkle_value_choices) == 0:
             raise ValueError("sparkle corruption needs at least one replacement value.")
+        self._validate_float_range("salt_pepper_amount_range", cfg.salt_pepper_amount_range, minimum=0.0)
+        if cfg.salt_pepper_amount_range[1] > 1.0:
+            raise ValueError(f"Invalid salt_pepper_amount_range: {cfg.salt_pepper_amount_range}")
+        if len(cfg.salt_pepper_value_choices) == 0:
+            raise ValueError("salt-and-pepper corruption needs at least one replacement value.")
 
+        probability_by_mode = {
+            "full_frame_mask": cfg.full_frame_probability,
+            "random_depth_noise": cfg.strong_noise_probability,
+            "artifact_patch": cfg.strong_artifact_probability,
+            "random_stripe": cfg.stripe_probability,
+            "sparkle": cfg.sparkle_probability,
+            "salt_pepper": cfg.salt_pepper_probability,
+        }
+        missing_modes = [name for name in self.MODE_NAMES if name not in probability_by_mode]
+        if missing_modes:
+            raise ValueError(f"Missing depth corruption probabilities for: {', '.join(missing_modes)}")
         mode_probabilities = torch.tensor(
-            [
-                cfg.full_frame_probability,
-                cfg.strong_noise_probability,
-                cfg.strong_artifact_probability,
-                cfg.stripe_probability,
-                cfg.sparkle_probability,
-            ],
+            [probability_by_mode[name] for name in self.MODE_NAMES],
             dtype=torch.float32,
             device=device,
         )
         if (mode_probabilities < 0.0).any():
-            raise ValueError(
-                "Depth corruption mode probabilities must be non-negative: "
-                f"full_frame={cfg.full_frame_probability}, "
-                f"strong_noise={cfg.strong_noise_probability}, "
-                f"strong_artifact={cfg.strong_artifact_probability}, "
-                f"stripe={cfg.stripe_probability}, "
-                f"sparkle={cfg.sparkle_probability}."
-            )
+            rendered = ", ".join(f"{name}={probability_by_mode[name]}" for name in self.MODE_NAMES)
+            raise ValueError(f"Depth corruption mode probabilities must be non-negative: {rendered}.")
         probability_sum = mode_probabilities.sum()
         if probability_sum <= 0.0:
             raise ValueError("At least one depth corruption mode probability must be positive.")
         self.mode_probabilities = mode_probabilities / probability_sum
+        self._enabled_mode_indices = tuple(
+            index for index, name in enumerate(self.MODE_NAMES) if probability_by_mode[name] > 0.0
+        )
 
         self.remaining_steps = torch.zeros(num_envs, dtype=torch.long, device=device)
         self.enabled_env_mask = torch.zeros(num_envs, dtype=torch.bool, device=device)
@@ -686,9 +693,10 @@ class DepthCorruptionNoiseModel(ImageNoiseModel):
                 f"Depth corruption mask shape {mask.shape} does not match num_envs {self.enabled_env_mask.shape}."
             )
         self.enabled_env_mask[:] = mask.to(device=self.device, dtype=torch.bool)
-        self.remaining_steps[~self.enabled_env_mask] = 0
-        self.invalid_mask[~self.enabled_env_mask] = False
-        self.corruption_modes[~self.enabled_env_mask] = -1
+        enabled = self.enabled_env_mask
+        self.remaining_steps.copy_(torch.where(enabled, self.remaining_steps, 0))
+        self.invalid_mask.copy_(torch.where(enabled, self.invalid_mask, False))
+        self.corruption_modes.copy_(torch.where(enabled, self.corruption_modes, -1))
 
     def __call__(
         self,
@@ -712,8 +720,8 @@ class DepthCorruptionNoiseModel(ImageNoiseModel):
         starts = enabled & (remaining <= 0)
         starts &= torch.rand(len(env_ids), device=self.device) < cfg.start_probability
 
-        # Sample a full batch and select starts with ``where``. This avoids
-        # converting a GPU boolean/count into Python control flow every update.
+        # Burst state and painting stay on device. Modes with probability 0 are
+        # omitted on the host, so an idle step does not sync to test the mask.
         sampled_durations = torch.randint(
             cfg.duration_range[0], cfg.duration_range[1] + 1, (len(env_ids),), device=self.device, dtype=torch.long
         )
@@ -724,14 +732,13 @@ class DepthCorruptionNoiseModel(ImageNoiseModel):
 
         active = enabled & (remaining > 0)
         self.invalid_mask[env_ids] = active
-        if active.any():
-            data = data.clone()
-            self._apply_active_corruption(data, cfg, active, self.corruption_modes[env_ids])
+        self._apply_active_corruption(data, cfg, active, self.corruption_modes[env_ids])
 
         remaining = torch.clamp(remaining - 1, min=0)
-        remaining[~enabled] = 0
+        remaining = torch.where(enabled, remaining, 0)
         self.remaining_steps[env_ids] = remaining
-        self.corruption_modes[env_ids[remaining <= 0]] = -1
+        stored_modes = self.corruption_modes[env_ids]
+        self.corruption_modes[env_ids] = torch.where(remaining <= 0, -1, stored_modes)
         return data
 
     def _sample_corruption_modes(self, num_modes: int) -> torch.Tensor:
@@ -758,7 +765,14 @@ class DepthCorruptionNoiseModel(ImageNoiseModel):
         active: torch.Tensor,
         modes_by_env: torch.Tensor,
     ) -> None:
-        apply_active_depth_corruption(data, cfg, active, modes_by_env, self.full_frame_value_choices)
+        apply_active_depth_corruption(
+            data,
+            cfg,
+            active,
+            modes_by_env,
+            self.full_frame_value_choices,
+            self._enabled_mode_indices,
+        )
 
     @staticmethod
     def _validate_int_range(name: str, value: Sequence[int], minimum: int) -> None:

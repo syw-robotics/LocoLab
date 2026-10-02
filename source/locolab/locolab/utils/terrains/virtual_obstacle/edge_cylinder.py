@@ -39,45 +39,20 @@ class EdgeCylinder(VirtualObstacleBase):
         self.angle_threshold = cfg.angle_threshold
 
     def generate(self, mesh: trimesh.Trimesh, device="cpu") -> None:
-        """Detect sharp edges in the mesh and store the edge cylinder as virtual obstacle.
-
-        Args:
-            mesh: The trimesh object to analyze.
-
-        Returns:
-            A np array batch indicating the edges: (num_edges, 6)
-            - x, y, z coordinates of the edge start point
-            - x, y, z coordinates of the edge end point
-        """
+        """Detect upper-surface sharp edges and store them as cylinders."""
         mesh = mesh.copy()
         mesh.merge_vertices()
-        angles = mesh.face_adjacency_angles
-        # convert max_angle in degrees to radians
-        threshold = np.deg2rad(self.angle_threshold)
-        # pick only those adjacencies whose angle exceeds threshold
-        sharp_mask = angles > threshold
-        if not np.any(sharp_mask):
+        edge_coords = self._filter_edges_by_direction(self._upper_surface_edges(mesh))
+        if edge_coords.size == 0:
             edge_end_points = np.empty((0, 6), dtype=np.float32)
-            print("[WARNING] No sharp edges detected.")
         else:
-            # get the corresponding edges (vertex index pairs)
-            # face_adjacency_edges is (n_adj, 2) vertex indices for each adjacency
-            sharp_edges = mesh.face_adjacency_edges[sharp_mask]
-
-            # look up vertex coordinates
-            v = mesh.vertices
-            # build (num_edges, 6) array: [x0,y0,z0, x1,y1,z1]
-            # build the (num_edges, 6) array of sharp edge end‐point coordinates
-            edge_coords = np.hstack([v[sharp_edges[:, 0]], v[sharp_edges[:, 1]]])
-            edge_coords = self._filter_edges_by_direction(edge_coords)
-            edge_end_points = (
-                self.process_edges(edge_coords) if edge_coords.size > 0 else np.empty((0, 6), dtype=np.float32)
-            )
-
-            # Filter out edges near terrain boundary if terrain_size is configured
+            edge_end_points = self.process_edges(edge_coords)
             if self.cfg.terrain_size is not None and edge_end_points.size > 0:
                 edge_end_points = self._filter_boundary_edges(edge_end_points)
 
+        if edge_end_points.size == 0:
+            print("[WARNING] No sharp edges detected.")
+        else:
             print(f"Detected {edge_end_points.shape[0]} edges after processing.")
         self.device = device if isinstance(device, torch.device) else torch.device(device)
         self.edges_pyt = torch.tensor(edge_end_points, dtype=torch.float32, device=self.device)
@@ -129,6 +104,38 @@ class EdgeCylinder(VirtualObstacleBase):
         # Keep edges that are NOT near boundary
         filtered_edges = edge_end_points[~near_boundary]
         return filtered_edges
+
+    def _upper_surface_edges(self, mesh: trimesh.Trimesh) -> np.ndarray:
+        """Sharp upper-surface edges as ``(N, 6)`` endpoint coordinates.
+
+        The walkable face has ``normal.z`` above ``min_upward_normal_z``. The other
+        face lies below that plane, so the edge is a lip and not the foot of a wall.
+        """
+        adjacency = mesh.face_adjacency
+        if len(adjacency) == 0:
+            return np.empty((0, 6), dtype=np.float32)
+
+        keep = mesh.face_adjacency_angles > np.deg2rad(self.angle_threshold)
+        min_nz = self.cfg.min_upward_normal_z
+        if min_nz is not None:
+            pair = np.arange(len(adjacency))
+            face_nz = mesh.face_normals[:, 2][adjacency]
+            up_side = np.argmax(face_nz, axis=1)
+            up_face = adjacency[pair, up_side]
+            drop_face = adjacency[pair, 1 - up_side]
+            centers = mesh.triangles_center
+            signed_distance = np.einsum(
+                "ij,ij->i",
+                mesh.face_normals[up_face],
+                centers[drop_face] - centers[up_face],
+            )
+            keep &= (face_nz.max(axis=1) > min_nz) & (signed_distance < 0.0)
+        if not np.any(keep):
+            return np.empty((0, 6), dtype=np.float32)
+
+        edges = mesh.face_adjacency_edges[keep]
+        vertices = mesh.vertices
+        return np.hstack((vertices[edges[:, 0]], vertices[edges[:, 1]]))
 
     def _filter_edges_by_direction(self, edge_coords: np.ndarray) -> np.ndarray:
         """Filter raw sharp edges by direction before detector-specific edge processing."""
@@ -184,12 +191,16 @@ class EdgeCylinder(VirtualObstacleBase):
         )
         self._cylinder_visualizer.set_visibility(True)
 
-    def get_points_penetration_offset(self, points):
-        return (
-            self.cylinders.get_points_penetration_offset(points)
-            if hasattr(self, "cylinders") and self.cylinders is not None
-            else torch.zeros_like(points)
-        )
+    def get_points_penetration_offset(self, points, out=None):
+        if hasattr(self, "cylinders") and self.cylinders is not None:
+            return self.cylinders.get_points_penetration_offset(points, out=out)
+        if out is None:
+            return torch.zeros_like(points)
+        return out
+
+    def accumulate_selected_penetration(self, points, out, env_ids, num_bodies, num_points) -> None:
+        if hasattr(self, "cylinders") and self.cylinders is not None:
+            self.cylinders.accumulate_selected_penetration(points, out, env_ids, num_bodies, num_points)
 
     def process_edges(self, edge_coords: np.ndarray) -> np.ndarray:
         """Process the edge coordinates.
@@ -696,12 +707,16 @@ class RayEdgeCylinder(VirtualObstacleBase):
         self._cylinder_visualizer.set_visibility(True)
         self._points_visualizer.set_visibility(True)
 
-    def get_points_penetration_offset(self, points):
-        return (
-            self.cylinders.get_points_penetration_offset(points)
-            if hasattr(self, "cylinders") and self.cylinders is not None
-            else torch.zeros_like(points)
-        )
+    def get_points_penetration_offset(self, points, out=None):
+        if hasattr(self, "cylinders") and self.cylinders is not None:
+            return self.cylinders.get_points_penetration_offset(points, out=out)
+        if out is None:
+            return torch.zeros_like(points)
+        return out
+
+    def accumulate_selected_penetration(self, points, out, env_ids, num_bodies, num_points) -> None:
+        if hasattr(self, "cylinders") and self.cylinders is not None:
+            self.cylinders.accumulate_selected_penetration(points, out, env_ids, num_bodies, num_points)
 
 
 def process_camera_edges(i, depth_image, normal_image, cfg):

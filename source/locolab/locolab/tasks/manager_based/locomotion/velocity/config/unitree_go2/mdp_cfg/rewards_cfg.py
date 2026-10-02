@@ -119,7 +119,7 @@ class FlatRewardsCfg:
 
 @configclass
 class RoughRewardsCfg:
-    """Reward terms for flat terrain."""
+    """Reward terms for rough terrain."""
 
     # ===== task-specific rewards =====
     track_lin_vel_xy_exp = RewTerm(

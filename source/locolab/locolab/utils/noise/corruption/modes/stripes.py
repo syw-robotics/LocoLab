@@ -14,51 +14,45 @@ from typing import TYPE_CHECKING
 
 import torch
 
+from .common import masked_replace, row_col_grid
+
 if TYPE_CHECKING:
     from ..cfg import DepthCorruptionPatternCfg
 
 
 def apply_random_stripes(data: torch.Tensor, cfg: DepthCorruptionPatternCfg, active: torch.Tensor) -> None:
-    active_indices = torch.nonzero(active, as_tuple=False).squeeze(-1)
-    stripe_counts = torch.randint(
-        cfg.stripe_count_range[0],
-        cfg.stripe_count_range[1] + 1,
-        (active_indices.numel(),),
-        device=data.device,
-    )
-    height, width = data.shape[1:3]
-    rows = torch.arange(height, device=data.device, dtype=data.dtype).view(1, height, 1)
-    cols = torch.arange(width, device=data.device, dtype=data.dtype).view(1, 1, width)
+    """Paint up to ``stripe_count_range[1]`` bands.
 
-    for stripe_index in range(cfg.stripe_count_range[1]):
-        stripe_env_ids = active_indices[stripe_counts > stripe_index]
-        if stripe_env_ids.numel() == 0:
-            continue
-        count = stripe_env_ids.numel()
-        thickness = torch.randint(
-            cfg.stripe_thickness_range[0],
-            cfg.stripe_thickness_range[1] + 1,
-            (count,),
-            device=data.device,
-        )
-        angle_min, angle_max = cfg.stripe_angle_range_deg
-        angles = torch.empty(count, device=data.device, dtype=data.dtype).uniform_(angle_min, angle_max)
-        angles = torch.deg2rad(angles)
-        normal_x = angles.cos()
-        normal_y = angles.sin()
-        projection_min = torch.minimum(normal_x * (width - 1), torch.zeros_like(normal_x))
-        projection_min += torch.minimum(normal_y * (height - 1), torch.zeros_like(normal_y))
-        projection_max = torch.maximum(normal_x * (width - 1), torch.zeros_like(normal_x))
-        projection_max += torch.maximum(normal_y * (height - 1), torch.zeros_like(normal_y))
-        centers = projection_min + torch.rand(count, device=data.device, dtype=data.dtype) * (
-            projection_max - projection_min
-        )
-        projections = cols * normal_x.view(-1, 1, 1) + rows * normal_y.view(-1, 1, 1)
-        stripe_mask = ((projections - centers.view(-1, 1, 1)).abs() <= thickness.view(-1, 1, 1) / 2.0).unsqueeze(-1)
-        value_min, value_max = cfg.stripe_value_range
-        replacement = torch.empty(count, device=data.device, dtype=data.dtype).uniform_(value_min, value_max)
-        data[stripe_env_ids] = torch.where(
-            stripe_mask,
-            replacement.view(-1, 1, 1, 1),
-            data[stripe_env_ids],
-        )
+    Parameters for every band are sampled together. Bands are applied one at a
+    time so the mask stays one frame, not ``(count, N, H, W)``.
+    """
+    n, height, width, _ = data.shape
+    device, dtype = data.device, data.dtype
+    count_min, count_max = cfg.stripe_count_range
+    thickness_min, thickness_max = cfg.stripe_thickness_range
+    angle_min, angle_max = cfg.stripe_angle_range_deg
+    value_min, value_max = cfg.stripe_value_range
+
+    counts = torch.randint(count_min, count_max + 1, (n,), device=device)
+    thickness = torch.randint(thickness_min, thickness_max + 1, (count_max, n), device=device)
+    half_thickness = thickness.to(dtype=dtype) * 0.5
+    angles = torch.empty(count_max, n, device=device, dtype=dtype).uniform_(angle_min, angle_max)
+    angles = torch.deg2rad(angles)
+    normal_x = angles.cos()
+    normal_y = angles.sin()
+    span_x = normal_x * (width - 1)
+    span_y = normal_y * (height - 1)
+    projection_min = span_x.clamp(max=0) + span_y.clamp(max=0)
+    projection_max = span_x.clamp(min=0) + span_y.clamp(min=0)
+    centers = projection_min + torch.rand_like(projection_min) * (projection_max - projection_min)
+    values = torch.empty(count_max, n, device=device, dtype=dtype).uniform_(value_min, value_max)
+    rows, cols = row_col_grid(height, width, device, dtype)
+
+    for index in range(count_max):
+        normal_x_i = normal_x[index].view(n, 1, 1)
+        normal_y_i = normal_y[index].view(n, 1, 1)
+        stripe = (cols * normal_x_i + rows * normal_y_i - centers[index].view(n, 1, 1)).abs() <= half_thickness[
+            index
+        ].view(n, 1, 1)
+        valid = active & (counts > index)
+        masked_replace(data, valid.view(n, 1, 1, 1) & stripe.unsqueeze(-1), values[index].view(n, 1, 1, 1))

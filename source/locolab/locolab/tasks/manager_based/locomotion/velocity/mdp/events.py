@@ -143,7 +143,8 @@ def register_virtual_obstacle_to_sensor(
 ):
     """Connect terrain virtual obstacles to the volume points sensor.
 
-    Environments that are not on a virtual-obstacle terrain skip the warp query during rollout.
+    Environments that are not on a virtual-obstacle terrain skip the penetration query.
+    Link poses are still refreshed so debug markers stay on the bodies.
     """
     if isinstance(sensor_cfgs, SceneEntityCfg):
         sensor_cfgs = [sensor_cfgs]

@@ -27,6 +27,14 @@ class EdgeCylinderCfg(VirtualObstacleCfg):
     angle_threshold: float = 70.0
     """The angle threshold to consider an edge as sharp."""
 
+    min_upward_normal_z: float | None = 0.35
+    """Keep a sharp edge only when it bounds an upward face and the other face lies below that plane.
+
+    ``normal.z`` above this value marks the walkable face. Lips of boxes, stairs, and
+    gaps stay. Bottoms, vertical corners, and the foot of a wall do not.
+    ``None`` keeps every sharp edge.
+    """
+
     cylinder_radius: float = 0.2
     """The radius of the edge cylinder, which is used to treat the edge cylinders as a virtual obstacle."""
     num_grid_cells: int = 64**3

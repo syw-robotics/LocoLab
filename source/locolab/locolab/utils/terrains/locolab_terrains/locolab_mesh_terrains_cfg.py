@@ -165,24 +165,18 @@ class MeshStraightGapTerrainCfg(MeshRoughTerrainCfg):
     This is the mesh counterpart to :class:`HfStraightGapTerrainCfg`. The height-field
     version snaps every x and y span to ``horizontal_scale`` and the pit depth to
     ``vertical_scale``. This version places boxes in meters, so the sampled widths,
-    offsets, and depths are the collision dimensions. Roughness and poles use the
-    shared mesh parameters and are applied only on the walkable tops.
+    offsets, and depths are the collision dimensions.
+    Roughness and poles use the shared mesh parameters and are applied only on the
+    walkable tops.
 
-    The center platform width is sampled along x. Each island samples its x and y
-    sizes independently from :attr:`island_width_range`. Layout for two gaps per side::
+    Each side packs as many gaps as fit at the difficulty-scaled gap width.
+    Consecutive gaps are separated by an island. The center platform width is
+    sampled along x. A side with two gaps looks like::
 
-        landing | gap | island | gap | center | gap | island | gap | landing
+        landing | gap | island | gap | center
     """
 
     function = locolab_mesh_terrains.mesh_straight_gap_terrain
-
-    num_gaps_per_side_range: int | tuple[int, ...] = (1, 2)
-    """Gaps on each side of the center.
-
-    An int or ``(n,)`` pins that count. A pair ``(min, max)`` is sampled uniformly
-    (inclusive). Total gaps = ``2 * sampled_count``. If a side does not fit, gaps
-    are dropped then gap and island x-widths are capped.
-    """
 
     gap_width_range: tuple[float, float] = MISSING
     """The minimum and maximum gap width in meters. Scales with difficulty."""
@@ -196,10 +190,11 @@ class MeshStraightGapTerrainCfg(MeshRoughTerrainCfg):
     center_platform_width_range: tuple[float, float] = MISSING
     """The center platform width along x, in meters."""
 
-    island_width_range: tuple[float, float] = (0.5, 1.5)
+    island_width_range: tuple[float, float] = (1.0, 2.0)
     """Island size in meters. Each island samples x and y independently from this range.
 
-    Landings and the center platform also sample their y-width from this range.
+    The minimum is a hard lower bound on each island's x-width. Landings and the
+    center platform also sample their y-width from this range.
     Each x-edge landing reserves half of a sample from this range along x, so two
     neighboring gap tiles join into about one island width. The painted landing
     then extends from the tile edge to the first gap.
@@ -209,13 +204,13 @@ class MeshStraightGapTerrainCfg(MeshRoughTerrainCfg):
     """Lateral offset of each island center relative to the corridor, in meters.
 
     Sampled independently per island. Positive is +y. Landings and the center
-    platform stay on the corridor. Unused when the sampled gap count is 1.
+    platform stay on the corridor. Unused when that side has only one gap.
     """
 
     island_height_offset_range: tuple[float, float] = (0.0, 0.0)
     """Height of each island relative to the landings and center, in meters.
 
-    Sampled independently per island. Unused when the sampled gap count is 1.
+    Sampled independently per island. Unused when that side has only one gap.
     """
 
     border_width: float = 0.05
@@ -242,29 +237,26 @@ class MeshHurdleTerrainCfg(SubTerrainBaseCfg):
 
     function = locolab_mesh_terrains.mesh_hurdle_terrain
 
-    num_hurdles_per_side_range: int | tuple[int, ...] = (1, 1)
-    """Concentric hurdle rings around the center platform.
-
-    An int or ``(n,)`` pins that count. A pair ``(min, max)`` is sampled uniformly
-    (inclusive). The innermost ring stays flush with the platform. If outer rings
-    do not fit, their spacing is reduced and then the rings are dropped.
-    """
-
     hurdle_width_range: tuple[float, float] = MISSING
     """The minimum and maximum hurdle width in meters."""
 
     hurdle_height_range: tuple[float, float] = MISSING
     """The minimum and maximum hurdle height in meters."""
 
-    spacing_range: tuple[float, float] = (0.4, 1.2)
-    """Flat distance between consecutive hurdle rings, in meters.
+    spacing_range: tuple[float, float] = MISSING
+    """Flat spacing sampled once per terrain, in meters.
 
-    Sampled independently for each gap between rings. Unused when the sampled
-    ring count is 1.
+    The sampled value is the gap between consecutive hurdle rings. The first
+    ring is flush with the center platform, so this gap starts outside that
+    ring. At least half of it is left between the outermost ring and the nearer
+    tile border. Ring count is the largest number that still fits.
     """
 
     center_platform_width_range: tuple[float, float] = MISSING
-    """The minimum and maximum width of the center square platform in meters."""
+    """Width of the center square platform, sampled uniformly, in meters.
+
+    The innermost hurdle ring is placed on the edge of this platform.
+    """
 
 
 @configclass
@@ -276,8 +268,11 @@ class MeshStraightStairsTerrainCfg(SubTerrainBaseCfg):
     stair_width: float = MISSING
     """The fixed width of each stair in y direction (in m)."""
 
-    stair_width_noise_range: tuple[float, float] = MISSING
-    """The minimum and maximum noise for stair width (in m)."""
+    stair_width_noise_range: tuple[float, float] = (0.0, 0.0)
+    """Range for discrete noise added to :attr:`stair_width` for each sub-terrain (in m)."""
+
+    stair_width_noise_step: float = 0.1
+    """Smallest increment used when sampling stair-width noise (in m)."""
 
     stair_height_range: tuple[float, float] = MISSING
     """The minimum and maximum height of each stair (in m). Scales with difficulty."""
@@ -298,9 +293,22 @@ class MeshStraightStairsTerrainCfg(SubTerrainBaseCfg):
 
 @configclass
 class MeshInvertedStraightStairsTerrainCfg(MeshStraightStairsTerrainCfg):
-    """Configuration for stairs terrain (up then down) using mesh in x direction."""
+    """Stairs that descend from the tile edge to a low center platform.
+
+    The flat ring at the tile edge is :attr:`border_width` and is not a stair
+    tread. Every tread inside that ring uses the full :attr:`stair_width`, and
+    the first drop starts on the inner edge of the border. Spare length widens
+    the center platform.
+    """
 
     function = locolab_mesh_terrains.mesh_inverted_straight_stairs_terrain
+
+    border_width: float = 0.0
+    """Width of the flat outer ring, in meters.
+
+    This ring is the only ground at the tile edge and does not consume stair
+    width. Zero puts the first drop on the tile boundary.
+    """
 
 
 @configclass

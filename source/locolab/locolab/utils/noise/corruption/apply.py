@@ -8,13 +8,14 @@
 
 from __future__ import annotations
 
-from typing import Sequence
+from collections.abc import Sequence
 
 import torch
 
 from .cfg import DEPTH_CORRUPTION_MODE_NAMES, DepthCorruptionPatternCfg
 from .modes.artifacts import apply_strong_artifact
 from .modes.full_frame import apply_full_frame_mask
+from .modes.salt_pepper import apply_salt_pepper
 from .modes.sparkles import apply_sparkles
 from .modes.stripes import apply_random_stripes
 from .modes.strong_noise import apply_strong_noise
@@ -25,6 +26,7 @@ _PARTIAL_MODE_HANDLERS = {
     2: apply_strong_artifact,
     3: apply_random_stripes,
     4: apply_sparkles,
+    5: apply_salt_pepper,
 }
 
 
@@ -66,21 +68,24 @@ def apply_active_depth_corruption(
     active: torch.Tensor,
     modes_by_env: torch.Tensor,
     full_frame_value_choices: torch.Tensor | None = None,
+    enabled_modes: Sequence[int] | None = None,
 ) -> None:
-    """Training path: paint modes in-place on the active subset of a batch.
+    """Training path: paint modes in place. Masks stay on device.
 
     ``active[i]`` selects whether env ``i`` is currently in a corruption burst.
-    Inactive rows are left unchanged. :class:`~locolab.utils.noise.noise_model.DepthCorruptionNoiseModel`
-    uses this after it has sampled burst duration and mode.
+    ``enabled_modes`` is the host-side list of mode indices that can occur.
+    ``None`` runs every mode. Painters must not read those masks back to the host.
 
-    For a one-shot preview of chosen modes on a full batch, use
-    :func:`apply_selected_depth_corruption_modes`.
+    :class:`~locolab.utils.noise.noise_model.DepthCorruptionNoiseModel` passes the
+    modes whose probability is positive. For a one-shot preview of chosen modes,
+    use :func:`apply_selected_depth_corruption_modes`.
     """
-    full_frame_mask = active & (modes_by_env == 0)
-    if full_frame_mask.any():
-        apply_full_frame_mask(data, cfg, full_frame_mask, full_frame_value_choices)
+    if enabled_modes is None:
+        enabled_modes = range(len(DEPTH_CORRUPTION_MODE_NAMES))
 
-    for mode_index, handler in _PARTIAL_MODE_HANDLERS.items():
-        mode_mask = active & (modes_by_env == mode_index)
-        if mode_mask.any():
-            handler(data, cfg, mode_mask)
+    for mode_index in enabled_modes:
+        mask = active & (modes_by_env == mode_index)
+        if mode_index == 0:
+            apply_full_frame_mask(data, cfg, mask, full_frame_value_choices)
+        else:
+            _PARTIAL_MODE_HANDLERS[mode_index](data, cfg, mask)

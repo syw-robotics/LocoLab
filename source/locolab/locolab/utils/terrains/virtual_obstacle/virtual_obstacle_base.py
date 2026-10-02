@@ -110,13 +110,35 @@ class VirtualObstacleBase(ABC):
         raise NotImplementedError("This method should be implemented by subclasses.")
 
     @abstractmethod
-    def get_points_penetration_offset(self, points: torch.Tensor) -> torch.Tensor:
+    def get_points_penetration_offset(self, points: torch.Tensor, out: torch.Tensor | None = None) -> torch.Tensor:
         """Get the penetration offset for the given points.
 
         Args:
-            points (torch.Tensor): Shape (N, 3) The points to check for penetration.
+            points: Shape (N, 3). The points to check for penetration.
+            out: Optional (N, 3) buffer. When set, a hit is written only if it is deeper than the
+                offset already stored there.
 
         Returns:
-            torch.Tensor: Shape (N, 3) The penetration offsets for the points. pointing from the surface to the point.
+            Shape (N, 3). The penetration offsets for the points.
         """
         raise NotImplementedError("This method should be implemented by subclasses.")
+
+    def accumulate_selected_penetration(
+        self,
+        points: torch.Tensor,
+        out: torch.Tensor,
+        env_ids: torch.Tensor,
+        num_bodies: int,
+        num_points: int,
+    ) -> None:
+        """Merge this obstacle into ``out`` for the environments in ``env_ids``.
+
+        ``points`` and ``out`` have shape ``(num_envs, num_bodies, num_points, 3)``. The default
+        gathers the selected rows. Cylinder obstacles replace this with an in-place warp query.
+        """
+        if env_ids.numel() == 0:
+            return
+        selected_points = points[env_ids].reshape(-1, 3).contiguous()
+        selected_out = out[env_ids].reshape(-1, 3).contiguous()
+        self.get_points_penetration_offset(selected_points, out=selected_out)
+        out[env_ids] = selected_out.view(-1, num_bodies, num_points, 3)

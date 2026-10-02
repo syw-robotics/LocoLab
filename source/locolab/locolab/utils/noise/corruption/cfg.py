@@ -15,12 +15,13 @@ DEPTH_CORRUPTION_MODE_NAMES = (
     "artifact_patch",
     "random_stripe",
     "sparkle",
+    "salt_pepper",
 )
 
 
 @dataclass
 class DepthCorruptionPatternCfg:
-    """Parameters for the five visual corruption modes.
+    """Parameters for the visual corruption modes.
 
     Values are in normalized depth units ``[0, 1]`` unless noted otherwise.
     """
@@ -49,3 +50,7 @@ class DepthCorruptionPatternCfg:
     sparkle_radius_range: tuple[float, float] = (1.5, 4.0)
     sparkle_aspect_ratio_range: tuple[float, float] = (0.6, 1.4)
     sparkle_value_choices: tuple[float, ...] = (0.0, 1.0)
+
+    # 5. salt_pepper
+    salt_pepper_amount_range: tuple[float, float] = (0.02, 0.10)
+    salt_pepper_value_choices: tuple[float, ...] = (0.0, 1.0)

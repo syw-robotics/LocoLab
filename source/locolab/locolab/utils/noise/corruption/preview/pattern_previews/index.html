@@ -1,0 +1,28 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Depth Corruption Pattern Previews</title>
+  <style>
+    body { font-family: sans-serif; margin: 24px; background: #f6f7f8; color: #1f2933; }
+    main { display: flex; flex-direction: column; gap: 16px; max-width: 1100px; }
+    article { background: white; border: 1px solid #d8dee4; border-radius: 6px; padding: 10px; }
+    img { width: 100%; display: block; background: #f7f5ef; }
+    h2 { font-size: 16px; margin: 10px 0 4px; }
+    p { margin: 0; font-size: 14px; }
+  </style>
+</head>
+<body>
+  <h1>Depth Corruption Pattern Previews</h1>
+  <p>Each strip starts from the same synthetic depth image. Color only displays normalized depth in [0, 1].</p>
+  <main>
+<article class='overview'><a href='overview.png'><img src='overview.png' alt='overview'></a><h2>overview</h2><p>Clean synthetic depth, then one sample of each pattern.</p></article>
+<article><a href='full_frame_mask.png'><img src='full_frame_mask.png' alt='full_frame_mask'></a><h2>full_frame_mask</h2><p>Replaces every pixel with a constant 0 or 1.</p></article>
+<article><a href='random_depth_noise.png'><img src='random_depth_noise.png' alt='random_depth_noise'></a><h2>random_depth_noise</h2><p>Adds strong Gaussian noise, then clips back to [0, 1].</p></article>
+<article><a href='artifact_patch.png'><img src='artifact_patch.png' alt='artifact_patch'></a><h2>artifact_patch</h2><p>Paints a few rectangular holes filled with 0 or 1.</p></article>
+<article><a href='random_stripe.png'><img src='random_stripe.png' alt='random_stripe'></a><h2>random_stripe</h2><p>Draws thin bands at a random angle, each with its own value in [0, 1].</p></article>
+<article><a href='sparkle.png'><img src='sparkle.png' alt='sparkle'></a><h2>sparkle</h2><p>Draws elliptical blobs filled with 0 or 1.</p></article>
+<article><a href='salt_pepper.png'><img src='salt_pepper.png' alt='salt_pepper'></a><h2>salt_pepper</h2><p>Replaces a random fraction of pixels with 0 (pepper) or 1 (salt).</p></article>
+  </main>
+</body>
+</html>

@@ -12,7 +12,11 @@ import numpy as np
 import torch
 import warp as wp
 
-from .kernels import points_penetrate_cylinder_kernel
+from .kernels import (
+    launch_warp_on_torch_stream,
+    points_penetrate_cylinder_kernel,
+    points_penetrate_cylinder_selected_kernel,
+)
 
 
 class CylinderSpatialGrid:
@@ -134,48 +138,115 @@ class CylinderSpatialGrid:
         self.cylinder_thickness_wp = wp.array(self.cylinders_np[:, 6], dtype=wp.float32, device=wp_device)
         self._offset_buf: torch.Tensor | None = None
 
-    def get_points_penetration_offset(self, points: torch.Tensor) -> torch.Tensor:
-        """Compute the penetration depth of points into cylinders in the grid.
+    def get_points_penetration_offset(self, points: torch.Tensor, out: torch.Tensor | None = None) -> torch.Tensor:
+        """Compute the penetration offset of points into cylinders in the grid.
+
+        When ``out`` is set it is not cleared. A hit replaces the stored offset only when its
+        depth is larger, so repeated calls keep the deepest obstacle.
 
         ## Args:
             points: A tensor of shape (N, 3) where N is the number of points.
+            out: Optional (N, 3) buffer. Cleared internal storage is used when omitted.
 
         ## Returns:
             A tensor of shape (N, 3) containing the maximum penetration offset for each point.
         """
-        assert points.shape[1] == 3, "Points should be of shape (N, 3) where N is the number of points."
+        assert points.ndim == 2 and points.shape[1] == 3, "Points should be of shape (N, 3)."
         num_points = points.shape[0]
         if num_points == 0:
-            return torch.zeros(0, 3, device=points.device, dtype=points.dtype)
+            if out is None:
+                return torch.zeros(0, 3, device=points.device, dtype=points.dtype)
+            return out
 
         points = points.contiguous()
+        penetration_offset = self._penetration_output(num_points, points.device, points.dtype, out)
+        points_wp = wp.from_torch(points, dtype=wp.vec3)
+        offset_wp = wp.from_torch(penetration_offset, dtype=wp.vec3)
+        launch_warp_on_torch_stream(
+            points_penetrate_cylinder_kernel,
+            dim=num_points,
+            inputs=[points_wp, *self._spatial_grid_args(), offset_wp],
+            device=points.device,
+        )
+        return penetration_offset
+
+    def accumulate_selected_penetration(
+        self,
+        points: torch.Tensor,
+        out: torch.Tensor,
+        env_ids: torch.Tensor,
+        num_bodies: int,
+        num_points: int,
+    ) -> None:
+        """Merge this grid into ``out`` for ``env_ids`` only.
+
+        ``points`` and ``out`` have shape ``(num_envs, num_bodies, num_points, 3)`` and stay in
+        place. ``out`` for the selected environments must already be zero, or hold a deeper hit
+        from a previous obstacle.
+        """
+        if env_ids.numel() == 0 or num_bodies == 0 or num_points == 0:
+            return
+        if not points.is_contiguous() or not out.is_contiguous():
+            raise ValueError("points and out must be contiguous.")
+
+        env_ids = env_ids.to(device=points.device, dtype=torch.int32).reshape(-1)
+        num_queries = int(env_ids.shape[0]) * num_bodies * num_points
+        env_ids_wp = wp.from_torch(env_ids, dtype=wp.int32)
+        points_wp = wp.from_torch(points.reshape(-1, 3), dtype=wp.vec3)
+        offset_wp = wp.from_torch(out.reshape(-1, 3), dtype=wp.vec3)
+        launch_warp_on_torch_stream(
+            points_penetrate_cylinder_selected_kernel,
+            dim=num_queries,
+            inputs=[
+                env_ids_wp,
+                num_bodies,
+                num_points,
+                points_wp,
+                *self._spatial_grid_args(),
+                offset_wp,
+            ],
+            device=points.device,
+        )
+
+    def _spatial_grid_args(self) -> list:
+        """Grid fields shared by both penetration kernels, in kernel-parameter order."""
+        return [
+            self.cylinder_start_wp,
+            self.cylinder_end_wp,
+            self.cylinder_thickness_wp,
+            self.cell_offsets_wp,
+            self.cell_indices_wp,
+            self.grid_res_wp,
+            self.bbox_min_wp,
+            self.cell_size_wp,
+        ]
+
+    def _penetration_output(
+        self,
+        num_points: int,
+        device: torch.device,
+        dtype: torch.dtype,
+        out: torch.Tensor | None,
+    ) -> torch.Tensor:
+        """Buffer the kernel writes. Omitted ``out`` uses cleared internal storage."""
+        if out is None:
+            return self._zeroed_offset_buf(num_points, device, dtype)
+        if out.shape != (num_points, 3):
+            raise ValueError(f"Expected out shape {(num_points, 3)}, got {tuple(out.shape)}.")
+        if not out.is_contiguous():
+            raise ValueError("out must be contiguous; the kernel writes it in place.")
+        return out
+
+    def _zeroed_offset_buf(self, num_points: int, device: torch.device, dtype: torch.dtype) -> torch.Tensor:
         offset_buf = self._offset_buf
-        if offset_buf is None or offset_buf.shape[0] < num_points or offset_buf.device != points.device:
-            offset_buf = torch.zeros(num_points, 3, device=points.device, dtype=points.dtype)
+        if (
+            offset_buf is None
+            or offset_buf.shape[0] < num_points
+            or offset_buf.device != device
+            or offset_buf.dtype != dtype
+        ):
+            offset_buf = torch.zeros(num_points, 3, device=device, dtype=dtype)
             self._offset_buf = offset_buf
         else:
             offset_buf[:num_points].zero_()
-        penetration_offset = offset_buf[:num_points]
-
-        points_wp = wp.from_torch(points, dtype=wp.vec3)
-        penetration_offset_wp = wp.from_torch(penetration_offset, dtype=wp.vec3)
-
-        wp.launch(
-            points_penetrate_cylinder_kernel,
-            dim=num_points,
-            inputs=[
-                points_wp,
-                self.cylinder_start_wp,
-                self.cylinder_end_wp,
-                self.cylinder_thickness_wp,
-                self.cell_offsets_wp,
-                self.cell_indices_wp,
-                self.grid_res_wp,
-                self.bbox_min_wp,
-                self.cell_size_wp,
-                penetration_offset_wp,
-            ],
-            device=str(points.device),
-        )
-
-        return penetration_offset
+        return offset_buf[:num_points]

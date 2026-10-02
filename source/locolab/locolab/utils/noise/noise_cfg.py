@@ -186,6 +186,9 @@ class DepthCorruptionNoiseCfg(ImageNoiseCfg):
     sparkle_probability: float = 0.0
     """Probability of drawing reflection-like elliptical sparkles during an active corruption burst."""
 
+    salt_pepper_probability: float = 0.0
+    """Probability of replacing scattered pixels with salt or pepper during an active corruption burst."""
+
     strong_noise_std_range: tuple[float, float] = (0.10, 0.35)
     """Inclusive range for the Gaussian noise std used by strong_noise mode."""
 
@@ -227,6 +230,12 @@ class DepthCorruptionNoiseCfg(ImageNoiseCfg):
 
     sparkle_value_choices: tuple[float, ...] = (0.0, 1.0)
     """Replacement values sampled independently for each sparkle."""
+
+    salt_pepper_amount_range: tuple[float, float] = (0.02, 0.10)
+    """Inclusive per-frame fraction of pixels replaced by salt-and-pepper noise."""
+
+    salt_pepper_value_choices: tuple[float, ...] = (0.0, 1.0)
+    """Replacement values sampled independently for each salt-and-pepper pixel. ``0`` is pepper and ``1`` is salt."""
 
     func: type[DepthCorruptionNoiseModel] = DepthCorruptionNoiseModel
 

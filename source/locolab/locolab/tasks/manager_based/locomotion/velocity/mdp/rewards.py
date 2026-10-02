@@ -135,15 +135,9 @@ def base_height_l2(
     asset: Articulation = env.scene[asset_cfg.name]
     if sensor_cfg is not None:
         sensor: RayCaster = env.scene[sensor_cfg.name]
-        # Adjust the target height using the sensor data
-        ray_hits = sensor.data.ray_hits_w[..., 2]
-        # if ray hits are invalid, clip them to a reasonable range
-        if torch.isnan(ray_hits).any() or torch.isinf(ray_hits).any() or torch.max(torch.abs(ray_hits)) > 1e3:
-            print(
-                "\033[91m Ray hits are nan or inf or too large, using default target height \033[0m"
-            )  # print red for warning
-            ray_hits = torch.clip(ray_hits, min=-10.0, max=10.0)
-        adjusted_target_height = target_height + torch.mean(ray_hits, dim=1)
+        # Clamp Inf value into a reasonable range
+        ray_hits_z = sensor.data.ray_hits_w[..., 2].clamp(-10.0, 10.0)
+        adjusted_target_height = target_height + ray_hits_z.mean(dim=-1)
     else:
         # Use the provided target height directly for flat terrain
         adjusted_target_height = target_height
@@ -182,6 +176,16 @@ def joint_power_l1(env: ManagerBasedRLEnv, asset_cfg: SceneEntityCfg = SceneEnti
         torch.abs(asset.data.joint_vel[:, asset_cfg.joint_ids] * asset.data.applied_torque[:, asset_cfg.joint_ids]),
         dim=1,
     )
+    return reward
+
+
+def joint_power_variance(env: ManagerBasedRLEnv, asset_cfg: SceneEntityCfg = SceneEntityCfg("robot")) -> torch.Tensor:
+    """Penalize variance in joint power to encourage even distribution of work across joints."""
+    # extract the used quantities (to enable type-hinting)
+    asset: Articulation = env.scene[asset_cfg.name]
+    # compute the reward
+    joint_power = asset.data.joint_vel[:, asset_cfg.joint_ids] * asset.data.applied_torque[:, asset_cfg.joint_ids]
+    reward = torch.var(joint_power, dim=1)
     return reward
 
 
@@ -545,65 +549,6 @@ def is_alive(env: ManagerBasedRLEnv) -> torch.Tensor:
     return (~env.termination_manager.terminated).float()
 
 
-# This term seems to lead to slower speed ?
-#  class action_smoothness_l2(ManagerTermBase):
-#      """
-#      Reward term for penalizing large instantaneous changes in the network action output (L2 norm).
-#      This penalty encourages smoother actions over time.
-#      """
-#
-#      def __init__(self, cfg: RewardTermCfg, env: ManagerBasedRLEnv):
-#          """Initialize the term.
-#
-#          Args:
-#              cfg: The configuration of the reward term.
-#              env: The RL environment instance.
-#          """
-#          super().__init__(cfg, env)
-#          self.prev_prev_action = None
-#          self.prev_action = None
-#
-#      def __call__(self, env: ManagerBasedRLEnv) -> torch.Tensor:
-#          """Compute the action smoothness penalty.
-#
-#          Args:
-#              env: The RL environment instance.
-#
-#          Returns:
-#              The penalty value based on the action smoothness.
-#          """
-#          # Get the current action from the environment's action manager
-#          current_action = env.action_manager.action.clone()
-#
-#          # If this is the first call, initialize the previous actions
-#          if self.prev_action is None:
-#              self.prev_action = current_action
-#              return torch.zeros(current_action.shape[0], device=current_action.device)
-#
-#          if self.prev_prev_action is None:
-#              self.prev_prev_action = self.prev_action
-#              self.prev_action = current_action
-#              return torch.zeros(current_action.shape[0], device=current_action.device)
-#
-#          # Compute the smoothness penalty
-#          action_smoothness_penalty = torch.sum(
-#              torch.square(current_action - 2 * self.prev_action + self.prev_prev_action), dim=1
-#          )
-#
-#          # Update the previous actions for the next call
-#          self.prev_prev_action = self.prev_action
-#          self.prev_action = current_action
-#
-#          # Apply a condition to ignore penalty during the first few episodes
-#          startup_env_mask = env.episode_length_buf < 3
-#          action_smoothness_penalty[startup_env_mask] = 0
-#
-#          # Return the penalty scaled by the configured weight
-#          return action_smoothness_penalty
-
-
-# Reference implementation with fewer allocations. To use it, uncomment the class and
-# point the reward configuration to ``mdp.action_smoothness_l2_optimized``.
 class action_smoothness_l2(ManagerTermBase):
    """Penalize the second finite difference of actions using preallocated buffers."""
 

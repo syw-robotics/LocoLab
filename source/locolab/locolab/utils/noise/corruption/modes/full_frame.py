@@ -14,6 +14,8 @@ from typing import TYPE_CHECKING
 
 import torch
 
+from .common import choice_values, masked_replace
+
 if TYPE_CHECKING:
     from ..cfg import DepthCorruptionPatternCfg
 
@@ -25,8 +27,8 @@ def apply_full_frame_mask(
     value_choices: torch.Tensor | None,
 ) -> None:
     if value_choices is None:
-        value_choices = torch.as_tensor(cfg.full_frame_value_choices, device=data.device, dtype=data.dtype)
+        values = choice_values(cfg.full_frame_value_choices, data.device, data.dtype)
     else:
-        value_choices = value_choices.to(device=data.device, dtype=data.dtype)
-    choice_ids = torch.randint(0, value_choices.numel(), (int(active.sum()),), device=data.device)
-    data[active] = value_choices[choice_ids].view(-1, 1, 1, 1)
+        values = value_choices.to(device=data.device, dtype=data.dtype)
+    choice_ids = torch.randint(0, values.numel(), (data.shape[0],), device=data.device)
+    masked_replace(data, active, values[choice_ids].view(-1, 1, 1, 1))

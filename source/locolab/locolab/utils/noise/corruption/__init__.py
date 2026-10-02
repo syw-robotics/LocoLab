@@ -13,7 +13,8 @@ Burst timing lives in :class:`~locolab.utils.noise.noise_model.DepthCorruptionNo
 
 Call :func:`apply_active_depth_corruption` during training (in-place, ``active``
 mask). Call :func:`apply_selected_depth_corruption_modes` for offline previews
-(returns a cloned batch, every frame is painted).
+(returns a cloned batch, every frame is painted). A standalone gallery script
+lives at ``preview/preview_depth_corruption.py``.
 
 Mode index must match :data:`DEPTH_CORRUPTION_MODE_NAMES`:
 
@@ -22,6 +23,7 @@ Mode index must match :data:`DEPTH_CORRUPTION_MODE_NAMES`:
 2. ``artifact_patch`` — rectangular stereo holes
 3. ``random_stripe`` — thin bands at a random angle
 4. ``sparkle`` — elliptical specular blobs
+5. ``salt_pepper`` — scattered pixels replaced by 0 or 1
 """
 
 from .apply import apply_active_depth_corruption, apply_selected_depth_corruption_modes

@@ -59,7 +59,6 @@ PREVIEW_CASES: dict[str, dict] = {
         "border_width": 0.1,
     },
     "HfStraightGapTerrainCfg": {
-        "num_gaps_per_side_range": (2, 2),
         "gap_width_range": (0.2, 0.8),
         "gap_depth_range": (1.0, 3.0),
         "center_platform_width_range": (3.0, 4.0),
@@ -186,14 +185,12 @@ PREVIEW_CASES: dict[str, dict] = {
         "roughness_type": "fixed",
     },
     "MeshHurdleTerrainCfg": {
-        "num_hurdles_per_side_range": (2, 3),
         "hurdle_width_range": (0.2, 0.5),
         "hurdle_height_range": (0.05, 0.25),
         "spacing_range": (0.4, 1.0),
         "center_platform_width_range": (2.0, 3.0),
     },
     "MeshStraightGapTerrainCfg": {
-        "num_gaps_per_side_range": (2, 2),
         "gap_width_range": (0.2, 0.8),
         "gap_depth_range": (1.0, 3.0),
         "center_platform_width_range": (3.0, 4.0),

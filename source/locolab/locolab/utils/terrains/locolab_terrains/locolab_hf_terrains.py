@@ -304,25 +304,13 @@ def straight_gap_terrain(
 ) -> np.ndarray:
     """Generate a y-limited corridor with independently placed islands along x.
 
-    Gap width, platform width, island x-width, y spans, and lateral offsets are
-    truncated to ``horizontal_scale`` cells. Gap depth is truncated to
-    ``vertical_scale``. Roughness is added only on painted tops (landings, center,
-    islands), not the pit.
+    Each side packs as many gaps as fit at the difficulty-scaled gap width.
+    An island separates consecutive gaps. Gap width, platform width, island
+    x-width, y spans, and lateral offsets are truncated to ``horizontal_scale``
+    cells. Gap depth is truncated to ``vertical_scale``. Roughness is added only
+    on painted tops (landings, center, islands), not the pit.
     """
     # landing | gap | island | ... | gap | center | gap | ... | island | gap | landing
-    num_gaps = cfg.num_gaps_per_side_range
-    if isinstance(num_gaps, int):
-        num_min = num_max = num_gaps
-    elif len(num_gaps) == 1:
-        num_min = num_max = int(num_gaps[0])
-    elif len(num_gaps) == 2:
-        num_min, num_max = int(num_gaps[0]), int(num_gaps[1])
-    else:
-        raise ValueError(f"Invalid num_gaps_per_side_range: {cfg.num_gaps_per_side_range}.")
-    if num_min < 1 or num_min > num_max:
-        raise ValueError(f"Invalid num_gaps_per_side_range: {cfg.num_gaps_per_side_range}.")
-    num_gaps = int(np.random.randint(num_min, num_max + 1))
-
     gap_width = (cfg.gap_width_range[1] - cfg.gap_width_range[0]) * difficulty + cfg.gap_width_range[0]
     gap_width_pixels = max(int(gap_width / cfg.horizontal_scale), 1)
     width_pixels = int(cfg.size[0] / cfg.horizontal_scale)
@@ -331,30 +319,15 @@ def straight_gap_terrain(
     island_w_min, island_w_max = cfg.island_width_range
     if island_w_min <= 0.0 or island_w_min > island_w_max:
         raise ValueError(f"Invalid island_width_range: {cfg.island_width_range}.")
+    # int() can land one cell under the metric minimum, so ceil keeps the painted
+    # island at least as wide as island_width_range[0].
+    island_min_pixels = max(int(np.ceil((island_w_min - 1e-9) / cfg.horizontal_scale)), 1)
     offset_min, offset_max = cfg.island_y_offset_range
     if offset_min > offset_max:
         raise ValueError(f"Invalid island_y_offset_range: {cfg.island_y_offset_range}.")
     height_min, height_max = cfg.island_height_offset_range
     if height_min > height_max:
         raise ValueError(f"Invalid island_height_offset_range: {cfg.island_height_offset_range}.")
-
-    num_islands = num_gaps - 1
-
-    # sample islands
-    def _sample_islands() -> list[tuple[int, float, float, float]]:
-        # (x-width in pixels, y-width in meters, y-offset in meters, height in meters), inner first.
-        return [
-            (
-                max(int(np.random.uniform(island_w_min, island_w_max) / cfg.horizontal_scale), 1),
-                float(np.random.uniform(island_w_min, island_w_max)),
-                float(np.random.uniform(offset_min, offset_max)),
-                float(np.random.uniform(height_min, height_max)),
-            )
-            for _ in range(num_islands)
-        ]
-
-    left_islands = _sample_islands() if num_islands > 0 else []
-    right_islands = _sample_islands() if num_islands > 0 else []
 
     def _sample_edge_landing_x_pixels() -> int:
         return max(int(0.5 * np.random.uniform(island_w_min, island_w_max) / cfg.horizontal_scale), 1)
@@ -370,56 +343,34 @@ def straight_gap_terrain(
         inner_left = max(mid - 1, 0)
         inner_right = min(mid + 1, width_pixels)
 
-    # fit islands to the gap
-    def _fit_side(
-        budget: int,
-        side_gaps: int,
-        side_gap_width: int,
-        islands: list[tuple[int, float, float, float]],
-    ) -> tuple[int, int, list[tuple[int, float, float, float]]]:
-        # Keep the sampled layout if it fits. Otherwise drop gaps, then cap gap and island x-widths.
+    def _pack_side(budget: int) -> tuple[int, int, list[tuple[int, float, float, float]]]:
+        # First gap sits against the center. Each further gap needs an island.
+        # Island x-width stays at least island_min_pixels and is clamped to the
+        # remaining cells. Gap width is not reduced to add another gap.
         budget = max(int(budget), 0)
-        side_gap_width = max(int(side_gap_width), 1)
-        islands = list(islands)
-        side_gaps = max(int(side_gaps), 0)
-        if budget < 1 or side_gaps < 1:
+        if budget < gap_width_pixels:
             return 0, 0, []
-        # 1px gap + 1px island is the smallest layout that still has `side_gaps` pits.
-        while side_gaps > 1 and side_gaps + (side_gaps - 1) > budget:
-            side_gaps -= 1
-            islands = islands[: side_gaps - 1]
-        islands = islands[: max(side_gaps - 1, 0)]
-        side_gap_width = min(side_gap_width, max((budget - len(islands)) // side_gaps, 1))
-        # Shrink island x-widths from the outside so they occupy the leftover budget.
-        remain = max(budget - side_gaps * side_gap_width, 0)
-        if remain <= 0 or not islands:
-            islands = []
-        else:
-            widths = [max(int(width), 1) for width, *_ in islands]
-            overflow = sum(widths) - remain
-            if overflow > 0:
-                for i in range(len(widths) - 1, -1, -1):
-                    take = min(overflow, widths[i])
-                    widths[i] -= take
-                    overflow -= take
-                    if overflow <= 0:
-                        break
-            islands = [
-                (width, y_width, y_offset, height)
-                for width, (_, y_width, y_offset, height) in zip(widths, islands)
-                if width > 0
-            ]
-        return side_gaps, side_gap_width, islands
+        remaining = budget - gap_width_pixels
+        islands: list[tuple[int, float, float, float]] = []
+        while True:
+            room = remaining - gap_width_pixels
+            if room < island_min_pixels:
+                break
+            sampled = max(int(np.random.uniform(island_w_min, island_w_max) / cfg.horizontal_scale), island_min_pixels)
+            x_width = min(sampled, room)
+            islands.append(
+                (
+                    x_width,
+                    float(np.random.uniform(island_w_min, island_w_max)),
+                    float(np.random.uniform(offset_min, offset_max)),
+                    float(np.random.uniform(height_min, height_max)),
+                )
+            )
+            remaining -= x_width + gap_width_pixels
+        return len(islands) + 1, gap_width_pixels, islands
 
-    left_n, left_gap, left_islands = _fit_side(
-        max(inner_left - _sample_edge_landing_x_pixels(), 0), num_gaps, gap_width_pixels, left_islands
-    )
-    right_n, right_gap, right_islands = _fit_side(
-        max(width_pixels - inner_right - _sample_edge_landing_x_pixels(), 0),
-        num_gaps,
-        gap_width_pixels,
-        right_islands,
-    )
+    left_n, left_gap, left_islands = _pack_side(max(inner_left - _sample_edge_landing_x_pixels(), 0))
+    right_n, right_gap, right_islands = _pack_side(max(width_pixels - inner_right - _sample_edge_landing_x_pixels(), 0))
     outer_left = inner_left - (left_n * left_gap + sum(width for width, *_ in left_islands))
     outer_right = inner_right + (right_n * right_gap + sum(width for width, *_ in right_islands))
 
