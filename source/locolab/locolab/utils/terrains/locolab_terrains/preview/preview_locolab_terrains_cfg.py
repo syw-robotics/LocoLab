@@ -68,12 +68,6 @@ PREVIEW_CASES: dict[str, dict] = {
         "center_platform_width_range": (3.0, 4.0),
         "border_width": 0.1,
     },
-    "HfStraightClimbTerrainCfg": {
-        "wall_height_range": (0.25, 0.70),
-        "wall_width_range": (0.8, 1.2),
-        "wall_length_range": (4.0, 8.0),
-        "border_width": 0.1,
-    },
     "MeshCorridorTerrainCfg": {
         "center_platform_width_range": (3.8, 4.2),
         "wall_height_range": (1.0, 1.0),
@@ -190,6 +184,13 @@ PREVIEW_CASES: dict[str, dict] = {
         "spacing_range": (0.4, 1.0),
         "center_platform_width_range": (2.0, 3.0),
     },
+    "MeshStraightClimbTerrainCfg": {
+        "wall_height_range": (0.25, 0.55),
+        "wall_width_range": (0.25, 0.55),
+        "wall_length_range": (5.0, 6.5),
+        "spacing_range": (0.7, 0.9),
+        "center_platform_width_range": (1.6, 2.0),
+    },
     "MeshStraightGapTerrainCfg": {
         "gap_width_range": (0.2, 0.8),
         "gap_depth_range": (1.0, 3.0),
@@ -205,6 +206,7 @@ PREVIEW_CASES: dict[str, dict] = {
         "stair_length_range": (2.0, 6.0),
         "num_stairs_range": (2, 7),
         "center_platform_width_range": (3.0, 4.0),
+        "border_width": 0.1,
     },
     "MeshInvertedStraightStairsTerrainCfg": {
         "stair_width": 0.3,
@@ -213,6 +215,7 @@ PREVIEW_CASES: dict[str, dict] = {
         "stair_length_range": (2.0, 6.0),
         "num_stairs_range": (2, 7),
         "center_platform_width_range": (3.0, 4.0),
+        "border_width": 0.1,
     },
     "MeshRepeatedBoxesTerrainCfg": {
         "num_objects_range": (12, 18),

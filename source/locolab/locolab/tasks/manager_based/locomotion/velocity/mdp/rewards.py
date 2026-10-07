@@ -549,6 +549,11 @@ def is_alive(env: ManagerBasedRLEnv) -> torch.Tensor:
     return (~env.termination_manager.terminated).float()
 
 
+def is_terminated(env: ManagerBasedRLEnv) -> torch.Tensor:
+    """Penalize terminated episodes that don't correspond to episodic timeouts."""
+    return env.termination_manager.terminated.float()
+
+
 class action_smoothness_l2(ManagerTermBase):
    """Penalize the second finite difference of actions using preallocated buffers."""
 

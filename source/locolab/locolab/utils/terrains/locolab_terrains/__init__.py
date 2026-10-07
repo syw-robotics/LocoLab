@@ -9,7 +9,6 @@ from .locolab_hf_terrains_cfg import (
     HfPyramidSlopedRoughTerrainCfg,
     HfPyramidStairsTerrainCfg,
     HfRoughTerrainCfg,
-    HfStraightClimbTerrainCfg,
     HfStraightGapTerrainCfg,
     PoleParamsCfg,
     RoughnessParamsCfg,
@@ -30,6 +29,7 @@ from .locolab_mesh_terrains_cfg import (
     MeshRepeatedBoxesTerrainCfg,
     MeshRingPlatformsTerrainCfg,
     MeshRoughTerrainCfg,
+    MeshStraightClimbTerrainCfg,
     MeshStraightGapTerrainCfg,
     MeshStraightStairsTerrainCfg,
 )

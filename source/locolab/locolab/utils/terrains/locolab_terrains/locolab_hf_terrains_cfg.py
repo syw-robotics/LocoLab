@@ -244,27 +244,6 @@ class HfStraightGapTerrainCfg(HfRoughTerrainCfg):
 
 
 @configclass
-class HfStraightClimbTerrainCfg(HfRoughTerrainCfg):
-    """Two climb walls along x, spanning a sampled length in y.
-
-    Layout::
-
-        floor | wall | floor | wall | floor
-    """
-
-    function = locolab_hf_terrains.straight_climb_terrain
-
-    wall_height_range: tuple[float, float] = MISSING
-    """The minimum and maximum climb height in meters. Scales with difficulty."""
-
-    wall_width_range: tuple[float, float] = MISSING
-    """The minimum and maximum wall thickness along x, in meters. Sampled uniformly."""
-
-    wall_length_range: tuple[float, float] = MISSING
-    """The minimum and maximum wall length along y, in meters. Sampled uniformly."""
-
-
-@configclass
 class HfHurdleTerrainCfg(HfRoughTerrainCfg):
     """Configuration for rectangular hurdle terrain."""
 

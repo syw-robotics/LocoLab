@@ -491,27 +491,158 @@ def mesh_hurdle_terrain(
     return meshes, np.array([cx, cy, 0.0])
 
 
+# Mesh Straight Climb Terrain Definition
+def mesh_straight_climb_terrain(
+    difficulty: float, cfg: locolab_mesh_terrains_cfg.MeshStraightClimbTerrainCfg
+) -> tuple[list[trimesh.Trimesh], np.ndarray]:
+    """Generate climb walls along x, packing as many pairs as fit.
+
+    Walls run along y and stay centered on the tile, so the ends remain open.
+    The center is flat ground. The first wall on each side sits on the edge of
+    the sampled center platform. Later walls are separated by one sampled
+    spacing. Pair count is the largest number that still leaves at least half
+    of that spacing between the outer full wall and the nearer x border. When
+    that margin is also wide enough for one spacing plus half a wall, each x
+    border independently places a wall of thickness ``wall_width / 2`` with
+    probability ``apply_edge_half_wall``. Its outer face lies on the tile
+    edge. Boxes are used directly so wall dimensions are not quantized by
+    height-field scales.
+    """
+    width_min, width_max = cfg.wall_width_range
+    height_min, height_max = cfg.wall_height_range
+    length_min, length_max = cfg.wall_length_range
+    platform_min, platform_max = cfg.center_platform_width_range
+    spacing_min, spacing_max = cfg.spacing_range
+
+    if width_min <= 0.0 or width_min > width_max:
+        raise ValueError(f"Invalid wall_width_range: {cfg.wall_width_range}.")
+    if height_min < 0.0 or height_min > height_max:
+        raise ValueError(f"Invalid wall_height_range: {cfg.wall_height_range}.")
+    height_noise_min, height_noise_max = cfg.wall_height_noise_range
+    if height_noise_min > height_noise_max:
+        raise ValueError(f"Invalid wall_height_noise_range: {cfg.wall_height_noise_range}.")
+    if length_min <= 0.0 or length_min > length_max:
+        raise ValueError(f"Invalid wall_length_range: {cfg.wall_length_range}.")
+    if length_min > cfg.size[1] + 1e-9:
+        raise ValueError(
+            f"wall_length_range minimum {length_min} exceeds terrain size along y {cfg.size[1]}."
+        )
+    if platform_min <= 0.0 or platform_min > platform_max:
+        raise ValueError(f"Invalid center_platform_width_range: {cfg.center_platform_width_range}.")
+    if spacing_min < 0.0 or spacing_min > spacing_max:
+        raise ValueError(f"Invalid spacing_range: {cfg.spacing_range}.")
+    edge_probability = float(cfg.apply_edge_half_wall)
+    if not 0.0 <= edge_probability <= 1.0:
+        raise ValueError(
+            f"apply_edge_half_wall must be within [0, 1], got {cfg.apply_edge_half_wall}."
+        )
+
+    # Wide walls are easier to land on, so thickness decreases with difficulty.
+    wall_width = _interpolate_decreasing_range(cfg.wall_width_range, difficulty)
+    wall_height = _interpolate_range(cfg.wall_height_range, difficulty)
+    wall_height += float(np.random.uniform(height_noise_min, height_noise_max))
+    if wall_height < 0.0:
+        raise ValueError(
+            f"Sampled wall height must be non-negative, got {wall_height} from "
+            f"{cfg.wall_height_range} + {cfg.wall_height_noise_range} at difficulty {difficulty}."
+        )
+    wall_length = min(float(np.random.uniform(length_min, length_max)), float(cfg.size[1]))
+    center_platform_width = float(np.random.uniform(platform_min, platform_max))
+    spacing = float(np.random.uniform(spacing_min, spacing_max))
+    limit = float(cfg.size[0])
+
+    def _outer_span(count: int) -> float:
+        gaps = 2.0 * max(count - 1, 0) * spacing
+        return center_platform_width + 2.0 * count * wall_width + gaps
+
+    # Half a spacing must remain between the outermost wall and each x border.
+    usable = limit - spacing
+    denom = 2.0 * (wall_width + spacing)
+    num_pairs = int(np.floor((usable - center_platform_width + 2.0 * spacing) / denom + 1e-9))
+    while num_pairs >= 1 and _outer_span(num_pairs) > usable + 1e-6:
+        num_pairs -= 1
+    if num_pairs < 1:
+        raise ValueError(
+            "The center platform and one wall on each side must fit inside the terrain "
+            "with half-spacing clearance at the x borders: "
+            f"center_platform_width={center_platform_width}, wall_width={wall_width}, "
+            f"spacing={spacing}, size={cfg.size}."
+        )
+
+    cx, cy = 0.5 * cfg.size[0], 0.5 * cfg.size[1]
+    origin = np.array([cx, cy, 0.0])
+    meshes = [make_plane(cfg.size, height=0.0, center_zero=False)]
+    if wall_height == 0.0:
+        return apply_mesh_surface_details(meshes, origin, cfg, difficulty)
+
+    def add_wall(x: float, width: float) -> None:
+        meshes.append(
+            trimesh.creation.box(
+                (width, wall_length, wall_height),
+                trimesh.transformations.translation_matrix((x, cy, 0.5 * wall_height)),
+            )
+        )
+
+    inset = 0.0
+    outer_offset = 0.0
+    for pair in range(num_pairs):
+        if pair > 0:
+            inset += spacing + wall_width
+        inner = center_platform_width + 2.0 * inset
+        outer_offset = 0.5 * inner + 0.5 * wall_width
+        for x in (cx - outer_offset, cx + outer_offset):
+            add_wall(x, wall_width)
+
+    # Each border samples on its own. A half-width wall meets the neighbor's half.
+    def place_edge_half_wall() -> bool:
+        if edge_probability <= 0.0:
+            return False
+        if edge_probability >= 1.0:
+            return True
+        return bool(np.random.random() < edge_probability)
+
+    edge_width = 0.5 * wall_width
+    clearance = cx - (outer_offset + 0.5 * wall_width)
+    if clearance + 1e-6 >= spacing + edge_width:
+        if place_edge_half_wall():
+            add_wall(0.5 * edge_width, edge_width)
+        if place_edge_half_wall():
+            add_wall(cfg.size[0] - 0.5 * edge_width, edge_width)
+    return apply_mesh_surface_details(meshes, origin, cfg, difficulty)
+
+
 # Mesh Straight Stairs Terrain Definition
 def mesh_straight_stairs_terrain(
     difficulty: float, cfg: locolab_mesh_terrains_cfg.MeshStraightStairsTerrainCfg
 ) -> tuple[list[trimesh.Trimesh], np.ndarray]:
-    """Generate stairs terrain (up then down) in x direction."""
+    """Generate stairs that rise to a center platform inside a flat border.
+
+    The flat margin outside the stairs is ``border_width`` on every side, as in
+    pyramid stairs. Treads keep the full stair width and meet that margin. The
+    flight spans the inner width along y. The center platform keeps the sampled
+    width, plus any remainder shorter than two stair widths.
+    """
     # resolve the terrain configuration
     stair_height = cfg.stair_height_range[0] + difficulty * (cfg.stair_height_range[1] - cfg.stair_height_range[0])
     stair_width = _sample_stair_width(cfg.stair_width, cfg.stair_width_noise_range, cfg.stair_width_noise_step)
-    stair_length = np.random.uniform(cfg.stair_length_range[0], cfg.stair_length_range[1])
-    center_platform_width = np.random.uniform(cfg.center_platform_width_range[0], cfg.center_platform_width_range[1])
-    num_stairs = _sample_straight_stair_count(cfg, stair_width, center_platform_width)
+    border_width = float(cfg.border_width)
+    if border_width < 0.0 or 2.0 * border_width >= min(cfg.size):
+        raise ValueError(f"Invalid border_width: {border_width} for size {cfg.size}.")
+    length_min, length_max = cfg.stair_length_range
+    if length_min <= 0.0 or length_min > length_max:
+        raise ValueError(f"Invalid stair_length_range: {cfg.stair_length_range}.")
+    usable_length = float(cfg.size[0] - 2.0 * border_width)
+    # The flight meets the border on y, so the flat margin stays border_width.
+    stair_length = float(cfg.size[1] - 2.0 * border_width)
+    center_target = float(np.random.uniform(cfg.center_platform_width_range[0], cfg.center_platform_width_range[1]))
+    num_stairs = _sample_straight_stair_count(
+        cfg, stair_width, center_target, available_length=usable_length, choose_max=True
+    )
+    center_platform_width = usable_length - 2 * num_stairs * stair_width
 
     # initialize list of meshes
     meshes_list = list()
-
-    # make plane
-    border_center = [0.5 * cfg.size[0], 0.5 * cfg.size[1], -0.5 * stair_height]
-    border_inner_size = (2 * num_stairs * stair_width + center_platform_width, stair_length)
-    make_borders = make_border(cfg.size, border_inner_size, stair_height, border_center)
-    # add the border meshes to the list of meshes
-    meshes_list += make_borders
+    _add_straight_stair_border(meshes_list, cfg.size, usable_length, stair_length, border_width, stair_height)
 
     # generate the terrain
     # -- compute the position of the center of the terrain
@@ -551,7 +682,7 @@ def mesh_straight_stairs_terrain(
 def mesh_inverted_straight_stairs_terrain(
     difficulty: float, cfg: locolab_mesh_terrains_cfg.MeshStraightStairsTerrainCfg
 ) -> tuple[list[trimesh.Trimesh], np.ndarray]:
-    """Generate stairs terrain (down then up) in x direction.
+    """Generate stairs that descend from a flat outer ring to a low center platform.
 
     The flat ring at the tile edge is ``border_width`` and is not a stair tread.
     Every tread inside that ring has the full stair width, and the first drop
@@ -561,15 +692,7 @@ def mesh_inverted_straight_stairs_terrain(
     # resolve the terrain configuration
     stair_height = cfg.stair_height_range[0] + difficulty * (cfg.stair_height_range[1] - cfg.stair_height_range[0])
     stair_width = _sample_stair_width(cfg.stair_width, cfg.stair_width_noise_range, cfg.stair_width_noise_step)
-    stair_length = float(np.random.uniform(cfg.stair_length_range[0], cfg.stair_length_range[1]))
-    border_width = float(getattr(cfg, "border_width", 0.0))
-    if border_width < 0.0 or 2.0 * border_width >= min(cfg.size):
-        raise ValueError(f"Invalid border_width: {border_width} for size {cfg.size}.")
-    usable_length = cfg.size[0] - 2.0 * border_width
-    max_stair_length = cfg.size[1] - 2.0 * border_width
-    if max_stair_length <= 0.0:
-        raise ValueError(f"border_width leaves no room for the stair flight, got {border_width} for size {cfg.size}.")
-    stair_length = min(stair_length, max_stair_length)
+    border_width, usable_length, stair_length = _sample_straight_stair_footprint(cfg)
     minimum_center = float(np.random.uniform(cfg.center_platform_width_range[0], cfg.center_platform_width_range[1]))
     num_stairs = _sample_straight_stair_count(
         cfg, stair_width, minimum_center, outer_width_scale=0.0, available_length=usable_length
@@ -582,26 +705,7 @@ def mesh_inverted_straight_stairs_terrain(
 
     # initialize list of meshes
     meshes_list = list()
-
-    # Flat outer ring. Along x its thickness is exactly border_width; along y it
-    # also fills whatever the sampled stair length does not use.
-    border_center = [0.5 * cfg.size[0], 0.5 * cfg.size[1], -0.5 * stair_height]
-    border_inner_size = (usable_length, stair_length)
-    if border_width > 1e-6 and stair_length < cfg.size[1] - 1e-6:
-        meshes_list += make_border(cfg.size, border_inner_size, stair_height, border_center)
-    else:
-        thickness_y = 0.5 * (cfg.size[1] - stair_length)
-        if thickness_y > 1e-6:
-            border_dims = (cfg.size[0], thickness_y, stair_height)
-            for sign in (-1.0, 1.0):
-                border_pos = (
-                    0.5 * cfg.size[0],
-                    0.5 * cfg.size[1] + sign * (0.5 * stair_length + 0.5 * thickness_y),
-                    -0.5 * stair_height,
-                )
-                meshes_list.append(
-                    trimesh.creation.box(border_dims, trimesh.transformations.translation_matrix(border_pos))
-                )
+    _add_straight_stair_border(meshes_list, cfg.size, usable_length, stair_length, border_width, stair_height)
 
     # generate the terrain
     # -- compute the position of the center of the terrain
@@ -1289,20 +1393,72 @@ def _sample_stair_width(stair_width: float, noise_range: tuple[float, float], no
     return sampled
 
 
+def _sample_straight_stair_footprint(
+    cfg: locolab_mesh_terrains_cfg.MeshStraightStairsTerrainCfg,
+) -> tuple[float, float, float]:
+    """Sample the stair length and reserve the flat outer ring.
+
+    Returns the border width, the length left along x inside that ring, and the
+    stair length along y. The ring is exactly ``border_width`` along x and at
+    least ``border_width`` along y.
+    """
+    border_width = float(cfg.border_width)
+    if border_width < 0.0 or 2.0 * border_width >= min(cfg.size):
+        raise ValueError(f"Invalid border_width: {border_width} for size {cfg.size}.")
+    usable_length = float(cfg.size[0] - 2.0 * border_width)
+    max_stair_length = float(cfg.size[1] - 2.0 * border_width)
+    if max_stair_length <= 0.0:
+        raise ValueError(f"border_width leaves no room for the stair flight, got {border_width} for size {cfg.size}.")
+    stair_length = float(np.random.uniform(cfg.stair_length_range[0], cfg.stair_length_range[1]))
+    return border_width, usable_length, min(stair_length, max_stair_length)
+
+
+def _add_straight_stair_border(
+    meshes: list[trimesh.Trimesh],
+    size: tuple[float, float],
+    usable_length: float,
+    stair_length: float,
+    border_width: float,
+    stair_height: float,
+) -> None:
+    """Add the flat ring around a straight stair flight.
+
+    Along x the thickness is ``border_width``. Along y the ring fills whatever
+    the stair length does not use. A zero thickness is omitted.
+    """
+    center_z = -0.5 * stair_height
+    cx = 0.5 * size[0]
+    cy = 0.5 * size[1]
+    thickness_y = 0.5 * (size[1] - stair_length)
+    if thickness_y > 1e-6:
+        border_dims = (size[0], thickness_y, stair_height)
+        for sign in (-1.0, 1.0):
+            border_pos = (cx, cy + sign * (0.5 * stair_length + 0.5 * thickness_y), center_z)
+            meshes.append(trimesh.creation.box(border_dims, trimesh.transformations.translation_matrix(border_pos)))
+    if border_width > 1e-6:
+        border_dims = (border_width, stair_length, stair_height)
+        for sign in (-1.0, 1.0):
+            border_pos = (cx + sign * (0.5 * usable_length + 0.5 * border_width), cy, center_z)
+            meshes.append(trimesh.creation.box(border_dims, trimesh.transformations.translation_matrix(border_pos)))
+
+
 def _sample_straight_stair_count(
     cfg: locolab_mesh_terrains_cfg.MeshStraightStairsTerrainCfg,
     stair_width: float,
     center_platform_width: float,
     outer_width_scale: float = 1.0,
     available_length: float | None = None,
+    choose_max: bool = False,
 ) -> int:
     """Sample a stair count whose two flights and platform fit along x.
 
     ``num_stairs_range`` keeps the existing exclusive upper bound. When that
     range asks for more stairs than the terrain can hold, the count is capped
-    at the largest fitting value. ``outer_width_scale`` is the width of the
-    outermost tread on each side, as a fraction of ``stair_width``. Zero means
-    that tread adds no stair width, as when a border occupies the edge.
+    at the largest fitting value. ``choose_max`` keeps that largest value so the
+    flat margin outside the stairs stays the reserved border. ``outer_width_scale``
+    is the width of the outermost tread on each side, as a fraction of
+    ``stair_width``. Zero means that tread adds no stair width, as when a border
+    occupies the edge.
     """
     num_min, num_max = int(cfg.num_stairs_range[0]), int(cfg.num_stairs_range[1])
     if num_min < 1 or num_min >= num_max:
@@ -1332,8 +1488,8 @@ def _sample_straight_stair_count(
         )
     num_min = min(num_min, max_stairs)
     num_max = min(num_max, max_stairs + 1)
-    if num_min >= num_max:
-        return max_stairs
+    if num_min >= num_max or choose_max:
+        return max_stairs if num_min >= num_max else num_max - 1
     return int(np.random.randint(num_min, num_max))
 
 

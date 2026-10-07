@@ -422,39 +422,6 @@ def straight_gap_terrain(
 
 
 @height_field_to_mesh
-def straight_climb_terrain(
-    difficulty: float, cfg: locolab_hf_terrains_cfg.HfStraightClimbTerrainCfg
-) -> np.ndarray:
-    """Generate two climb walls along x with a sampled span in y."""
-    wall_height = (cfg.wall_height_range[1] - cfg.wall_height_range[0]) * difficulty + cfg.wall_height_range[0]
-    wall_height_pixels = int(wall_height / cfg.vertical_scale)
-    width_pixels = int(cfg.size[0] / cfg.horizontal_scale)
-    length_pixels = int(cfg.size[1] / cfg.horizontal_scale)
-
-    center_x = width_pixels // 2
-    offset_pixels = int(np.random.uniform(1.0, 2.0) / cfg.horizontal_scale)
-    wall_width_pixels = max(int(np.random.uniform(*cfg.wall_width_range) / cfg.horizontal_scale), 1)
-    right_x1 = np.clip(center_x + offset_pixels, 0, width_pixels)
-    right_x2 = np.clip(center_x + offset_pixels + wall_width_pixels, 0, width_pixels)
-    left_x2 = np.clip(center_x - offset_pixels, 0, width_pixels)
-    left_x1 = np.clip(center_x - offset_pixels - wall_width_pixels, 0, width_pixels)
-
-    center_y = length_pixels // 2
-    half_length_pixels = max(int(0.5 * np.random.uniform(*cfg.wall_length_range) / cfg.horizontal_scale), 1)
-    y1 = max(center_y - half_length_pixels, 0)
-    y2 = min(center_y + half_length_pixels, length_pixels)
-
-    hf_raw = np.zeros((width_pixels, length_pixels), dtype=np.float64)
-    if right_x2 > right_x1 and y2 > y1:
-        hf_raw[right_x1:right_x2, y1:y2] = wall_height_pixels
-    if left_x2 > left_x1 and y2 > y1:
-        hf_raw[left_x1:left_x2, y1:y2] = wall_height_pixels
-
-    hf_raw = _finalize_height_field(cfg, hf_raw, difficulty)
-    return np.rint(hf_raw).astype(np.int16)
-
-
-@height_field_to_mesh
 def hurdle_terrain(
     difficulty: float, cfg: locolab_hf_terrains_cfg.HfHurdleTerrainCfg
 ) -> np.ndarray:

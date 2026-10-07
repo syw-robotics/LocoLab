@@ -10,7 +10,7 @@ from isaaclab.utils import configclass
 
 from z_rl.adaptor.isaaclab import (
     ZRlEncoderEstimationPpoAlgorithmCfg,
-    ZRlEncoderMLPModelCfg,
+    ZRlMLPEncoderModelCfg,
     ZRlMLPModelCfg,
     ZRlMoEModelCfg,
     ZRlOnPolicyRunnerCfg,
@@ -65,6 +65,12 @@ class Go2RoughPPORunnerCfg(Go2RoughPPOBaseRunnerCfg):
         obs_normalization=True,
     )
 
+    def __post_init__(self):
+        # Rough observations do not declare symmetry transforms. Symmetry is
+        # compiled whenever symmetry_cfg is set, even if augmentation is off.
+        self.algorithm.symmetry_augmentation = False
+        self.algorithm.symmetry_cfg = None
+
 
 @configclass
 class Go2RoughMoEPPORunnerCfg(Go2RoughPPOBaseRunnerCfg):
@@ -108,15 +114,15 @@ class Go2RoughRNNPPORunnerCfg(Go2RoughPPOBaseRunnerCfg):
 
 @configclass
 class Go2RoughEncoderEstimationPPORunnerCfg(Go2RoughPPOBaseRunnerCfg):
-    actor = ZRlEncoderMLPModelCfg(
+    actor = ZRlMLPEncoderModelCfg(
         hidden_dims=[256, 128],
         activation="elu",
         obs_normalization=True,
         distribution_cfg=ZRlMLPModelCfg.GaussianDistributionCfg(init_std=1.0),
-        latent_dim=64,
+        encoder_latent_dim=64,
         encoder_hidden_dims=[256, 128],
         encoder_activation="elu",
-        concat_last_obs=False,
+        append_last_obs=False,
     )
     critic = ZRlMLPModelCfg(
         hidden_dims=[512, 256, 128],
@@ -148,6 +154,12 @@ class Go2FlatPPORunnerCfg(Go2RoughPPORunnerCfg):
     def __post_init__(self):
         super().__post_init__()
 
+        self.algorithm.symmetry_augmentation = True
+        self.algorithm.symmetry_cfg = ZRlSymmetryCfg(
+            use_mirror_loss=False,
+            log_mirror_loss=True,
+            mirror_loss_log_interval=100,
+        )
         self.max_iterations = 2000
         self.experiment_name = "go2_flat"
 

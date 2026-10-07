@@ -17,6 +17,11 @@ from isaaclab.utils import DelayBuffer, configclass
 from isaaclab.utils.types import ArticulationActions
 
 
+"""
+This delayed implicit actuator leads to slower rollout speed,
+compared to delayed action cfg 
+"""
+
 class DelayedImplicitActuator(ImplicitActuator):
     """Ideal PD actuator with delayed command application.
 

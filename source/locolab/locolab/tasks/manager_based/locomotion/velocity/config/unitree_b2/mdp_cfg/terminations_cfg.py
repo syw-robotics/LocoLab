@@ -38,6 +38,6 @@ class RoughTerminationsCfg:
         func=mdp.illegal_contact,
         params={
             "sensor_cfg": SceneEntityCfg("contact_forces", body_names=BASE_LINK_NAME),
-            "threshold": 1.0,
+            "threshold": 5.0,
         },
     )

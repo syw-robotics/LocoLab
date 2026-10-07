@@ -69,12 +69,41 @@ class G1FlatSceneCfg(InteractiveSceneCfg):
     )
 
     # =====  robots  =====
-    robot: ArticulationCfg = UNITREE_G1_29DOF_BEYONDMIMIC_PELVIS_BASE_CFG.replace(prim_path="{ENV_REGEX_NS}/Robot")
+    # Self-collisions stay on. The spawn hook disables every pair except feet-terrain,
+    # torso-arm, knee-knee, and ankle-ankle.
+    robot: ArticulationCfg = UNITREE_G1_29DOF_BEYONDMIMIC_PELVIS_BASE_CFG.replace(
+        prim_path="{ENV_REGEX_NS}/Robot",
+        spawn=UNITREE_G1_29DOF_BEYONDMIMIC_PELVIS_BASE_CFG.spawn.replace(func=spawn_g1_flat_robot),
+    )
 
     # =====  sensors  =====
-    contact_forces: ContactSensorCfg = ContactSensorCfg(
-        prim_path=f"{{ENV_REGEX_NS}}/Robot/{CONTACT_SENSOR_LINK_NAMES}", history_length=3, track_air_time=True
-    )
+    @configclass
+    class ContactSensors:
+        feet_contact_forces: ContactSensorCfg = ContactSensorCfg(
+            prim_path="{ENV_REGEX_NS}/Robot/.*_ankle_roll_link", history_length=3, track_air_time=True
+        )
+        self_collision_knee: ContactSensorCfg = ContactSensorCfg(
+            prim_path="{ENV_REGEX_NS}/Robot/left_knee_link",
+            filter_prim_paths_expr=["{ENV_REGEX_NS}/Robot/right_knee_link"],
+            history_length=3,
+        )
+        self_collision_ankle: ContactSensorCfg = ContactSensorCfg(
+            prim_path="{ENV_REGEX_NS}/Robot/left_ankle_roll_link",
+            filter_prim_paths_expr=["{ENV_REGEX_NS}/Robot/right_ankle_roll_link"],
+            history_length=3,
+        )
+        self_collision_torso: ContactSensorCfg = ContactSensorCfg(
+            prim_path="{ENV_REGEX_NS}/Robot/torso_link",
+            filter_prim_paths_expr=[
+                "{ENV_REGEX_NS}/Robot/left_shoulder_roll_link",
+                "{ENV_REGEX_NS}/Robot/left_shoulder_yaw_link",
+                "{ENV_REGEX_NS}/Robot/left_elbow_link",
+                "{ENV_REGEX_NS}/Robot/right_shoulder_roll_link",
+                "{ENV_REGEX_NS}/Robot/right_shoulder_yaw_link",
+                "{ENV_REGEX_NS}/Robot/right_elbow_link",
+            ],
+            history_length=3,
+        )
 
     # =====  lights  =====
     sky_light: AssetBaseCfg = blue_sky_light_cfg()
@@ -111,7 +140,8 @@ class G1FlatEnvCfg(ManagerBasedRLEnvCfg):
         self.sim.physx.gpu_max_rigid_patch_count = 10 * 2**15
         # update sensor update periods
         # we tick all the sensors based on the smallest update period (physics update period)
-        self.scene.contact_forces.update_period = self.sim.dt
+        for sensor_name in ("contact_forces", "self_col_knee", "self_col_ankle", "self_col_torso"):
+            getattr(self.scene, sensor_name).update_period = self.sim.dt
 
 
 def _configure_play_env(cfg: G1FlatEnvCfg) -> None:

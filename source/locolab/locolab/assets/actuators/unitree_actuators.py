@@ -17,6 +17,10 @@ from isaaclab.utils import configclass
 from isaaclab.utils.types import ArticulationActions
 
 
+"""
+This actuator is from unitree_rl_lab: https://github.com/unitreerobotics/unitree_rl_lab
+"""
+
 class UnitreeActuator(DelayedPDActuator):
     """Unitree actuator class that implements a torque-speed curve for the actuators.
 

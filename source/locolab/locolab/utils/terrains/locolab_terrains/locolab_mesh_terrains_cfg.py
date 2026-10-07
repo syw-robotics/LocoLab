@@ -260,8 +260,85 @@ class MeshHurdleTerrainCfg(SubTerrainBaseCfg):
 
 
 @configclass
+class MeshStraightClimbTerrainCfg(MeshRoughTerrainCfg):
+    """Climb walls along x, with the wall count chosen to fill the tile.
+
+    Walls are explicit ``trimesh`` boxes in meters, so the sampled thickness,
+    length, spacing, and height are the collision dimensions.
+
+    Layout along x, for two pairs::
+
+        margin | wall | spacing | wall | center | wall | spacing | wall | margin
+
+    The first full wall on each side is flush with the center platform. Spacing
+    is the flat gap between later walls. Pair count is however many full walls
+    fit while leaving at least half of the sampled spacing before each x border.
+    If that margin is still at least one spacing plus half a wall, each x
+    border independently adds a wall of thickness ``wall_width / 2`` with
+    probability :attr:`apply_edge_half_wall`.
+    """
+
+    function = locolab_mesh_terrains.mesh_straight_climb_terrain
+
+    wall_width_range: tuple[float, float] = MISSING
+    """Minimum and maximum wall thickness along x, in meters.
+
+    Thickness decreases from the maximum to the minimum as difficulty rises,
+    matching :attr:`MeshHurdleTerrainCfg.hurdle_width_range`. Narrower walls
+    can leave room for more pairs.
+    """
+
+    wall_height_range: tuple[float, float] = MISSING
+    """Minimum and maximum wall height, in meters. Increases with difficulty."""
+
+    wall_height_noise_range: tuple[float, float] = (0.0, 0.0)
+    """Uniform noise added to the difficulty-scaled wall height, in meters.
+
+    Sampled once per sub-terrain and shared by every wall, including a border
+    half-wall. The result must stay non-negative.
+    """
+
+    wall_length_range: tuple[float, float] = MISSING
+    """Minimum and maximum wall length along y, in meters. Sampled uniformly.
+
+    The sampled length is shared by every wall and is centered on the tile.
+    Values above the terrain size along y are clipped to that size.
+    """
+
+    spacing_range: tuple[float, float] = MISSING
+    """Flat gap between adjacent walls, sampled once per sub-terrain, in meters.
+
+    The first full wall on each side stays on the center-platform edge, so this
+    gap starts outside that wall. At least half of it is left between the
+    outermost full wall and each x border. Pair count is the largest number that
+    still fits. A half-width border wall also needs one extra sample of this
+    spacing between itself and the outermost full wall.
+    """
+
+    apply_edge_half_wall: float = 0.0
+    """Probability of placing a half-width wall on one x border.
+
+    Each border is sampled independently, and only when the margin can hold the
+    half wall plus one spacing. ``0`` never places one. ``1`` places one on
+    every border that fits. Defaults to 0.
+    """
+
+    center_platform_width_range: tuple[float, float] = MISSING
+    """Clear width of the center ground along x, sampled uniformly, in meters.
+
+    The inner face of the first wall on each side lies on the edge of this span.
+    """
+
+
+@configclass
 class MeshStraightStairsTerrainCfg(SubTerrainBaseCfg):
-    """Configuration for stairs terrain (up then down) using mesh in x direction."""
+    """Stairs that rise to a center platform inside a flat border.
+
+    The flat margin outside the finished stairs is :attr:`border_width` on
+    every side, the same role as :class:`MeshPyramidStairsTerrainCfg`. Treads
+    keep :attr:`stair_width` and run up to that margin. The flight spans the
+    full inner width along y.
+    """
 
     function = locolab_mesh_terrains.mesh_straight_stairs_terrain
 
@@ -278,37 +355,48 @@ class MeshStraightStairsTerrainCfg(SubTerrainBaseCfg):
     """The minimum and maximum height of each stair (in m). Scales with difficulty."""
 
     stair_length_range: tuple[float, float] = MISSING
-    """The minimum and maximum length of each stair in y direction (in m). Randomly sampled."""
+    """Minimum and maximum tread length along y, in meters.
+
+    The flight is extended to the inner edge of :attr:`border_width`, so this
+    range does not leave a wider flat margin than the border.
+    """
 
     num_stairs_range: tuple[int, int] = MISSING
     """Inclusive minimum and exclusive maximum stair count on each side.
 
-    The sampled count is reduced when both flights and the platform would
-    extend past the terrain length.
+    The generator uses the largest count in this range that fits between the
+    border and the sampled platform. The count is reduced when that flight
+    would pass the inner edge of the border.
     """
 
     center_platform_width_range: tuple[float, float] = MISSING
-    """The minimum and maximum width of the platform (in m)."""
+    """Minimum and maximum width of the center platform, in meters.
+
+    The sampled width is kept. Leftover shorter than two stair widths is added
+    so the outer step meets the border. If the stair-count range stops before
+    the inner length is filled, the platform takes that unused length.
+    """
+
+    border_width: float = 0.0
+    """Flat ground outside the finished stairs, in meters.
+
+    For these ascending stairs it is the margin past the outer step on every
+    side, matching :class:`MeshPyramidStairsTerrainCfg`. Inverted stairs use
+    the same value as the flat ring before the first drop. Zero puts the first
+    step on the tile boundary.
+    """
 
 
 @configclass
 class MeshInvertedStraightStairsTerrainCfg(MeshStraightStairsTerrainCfg):
-    """Stairs that descend from the tile edge to a low center platform.
+    """Stairs that descend from a flat outer ring to a low center platform.
 
-    The flat ring at the tile edge is :attr:`border_width` and is not a stair
-    tread. Every tread inside that ring uses the full :attr:`stair_width`, and
-    the first drop starts on the inner edge of the border. Spare length widens
-    the center platform.
+    The ring at the tile edge is :attr:`border_width` and is not a stair tread.
+    The first drop starts on its inner edge. Spare length widens the center
+    platform. Along y the ring is at least :attr:`border_width`.
     """
 
     function = locolab_mesh_terrains.mesh_inverted_straight_stairs_terrain
-
-    border_width: float = 0.0
-    """Width of the flat outer ring, in meters.
-
-    This ring is the only ground at the tile edge and does not consume stair
-    width. Zero puts the first drop on the tile boundary.
-    """
 
 
 @configclass

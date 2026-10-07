@@ -20,10 +20,7 @@ from isaaclab.utils import configclass
 
 from locolab.utils.symmetry import complete_symmetry_mapping
 
-from .actuators import (
-    DelayedImplicitActuatorCfg,  # Implicit Atuator shows higher fidelity but no latency compensation
-    beyondmimic_g1_29dof_actuators,
-)
+from .actuators import beyondmimic_g1_29dof_actuators
 
 # Get the absolute path to the robots directory relative to this file
 _ASSETS_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -137,15 +134,15 @@ UNITREE_GO2_CFG = UnitreeArticulationCfg(
         #      damping=0.5,
         #      friction=0.01,
         #  ),
-        #  "GO2Implicit": ImplicitActuatorCfg(
+        #  "GO2DelayedImplicit": DelayedImplicitActuatorCfg(
         #      joint_names_expr=[".*_hip_joint", ".*_thigh_joint", ".*_calf_joint"],
         #      effort_limit_sim=30.0,
         #      velocity_limit_sim=30.0,
-        #      stiffness=40.0,
-        #      damping=1.0,
-        #      friction=0.01,
+        #      stiffness=25.0,
+        #      damping=0.5,
+        #      #  friction=0.01,
         #  ),
-        "GO2DelayedImplicit": DelayedImplicitActuatorCfg(
+        "GO2Implicit": ImplicitActuatorCfg(
             joint_names_expr=[".*_hip_joint", ".*_thigh_joint", ".*_calf_joint"],
             effort_limit_sim=30.0,
             velocity_limit_sim=30.0,

@@ -18,25 +18,31 @@ from . import JOINT_NAMES, PRESERVE_ORDER
 class ActionsCfg:
     """Action specifications for the MDP."""
 
-    joint_pos = mdp.JointPositionActionCfg(
-        asset_name="robot",
-        joint_names=JOINT_NAMES,
-        scale={".*_hip_joint": 0.125, "^(?!.*_hip_joint).*": 0.25},
-        use_default_offset=True,
-        clip={".*": (-10.0, 10.0)},
-        preserve_order=PRESERVE_ORDER,
+    joint_pos = mdp.DelayedActionCfg(
+        action=mdp.JointPositionActionCfg(
+            asset_name="robot",
+            joint_names=JOINT_NAMES,
+            scale={".*_hip_joint": 0.125, "^(?!.*_hip_joint).*": 0.25},
+            use_default_offset=True,
+            clip={".*": (-10.0, 10.0)},
+            preserve_order=PRESERVE_ORDER,
+        ),
+        delay_range=(0, 1),
     )
 
 @configclass
 class ActionsCfg_W_Symmetry(ActionsCfg):
     """Action specifications for the MDP with symmetry."""
 
-    joint_pos = mdp.JointPositionActionCfg(
-        asset_name="robot",
-        joint_names=JOINT_NAMES,
-        scale={".*_hip_joint": 0.125, "^(?!.*_hip_joint).*": 0.25},
-        use_default_offset=True,
-        clip={".*": (-10.0, 10.0)},
-        preserve_order=PRESERVE_ORDER,
-        symmetry_transform=symmetry.joint_action,
+    joint_pos = mdp.DelayedActionCfg(
+        action=mdp.JointPositionActionCfg(
+            asset_name="robot",
+            joint_names=JOINT_NAMES,
+            scale={".*_hip_joint": 0.125, "^(?!.*_hip_joint).*": 0.25},
+            use_default_offset=True,
+            clip={".*": (-10.0, 10.0)},
+            preserve_order=PRESERVE_ORDER,
+            symmetry_transform=symmetry.joint_action,
+        ),
+        delay_range=(0, 1),
     )

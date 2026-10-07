@@ -13,9 +13,36 @@ from isaaclab.envs.mdp.actions import joint_actions
 from isaaclab.managers.action_manager import ActionTerm, ActionTermCfg
 from isaaclab.utils import configclass
 
+from .delayed_actions import DelayedAction
+
 ##
 # Joint actions.
 ##
+
+
+@configclass
+class DelayedActionCfg(ActionTermCfg):
+    """Wraps an action term and delays its processed command.
+
+    Delay is counted in physics steps, because ``apply_actions`` runs inside the
+    decimation loop. Scale, clip, and the sim write stay on ``action``.
+    """
+
+    class_type: type[ActionTerm] = DelayedAction
+
+    action: ActionTermCfg = MISSING
+    """The action term to delay."""
+
+    delay_range: tuple[int, int] = (0, 1)
+    """Inclusive physics-step delay sampled per environment at reset."""
+
+    symmetry_transform: Callable | None = None
+    """Optional symmetry transform. Defaults to the wrapped action's transform."""
+
+    def __post_init__(self):
+        self.asset_name = self.action.asset_name
+        if self.symmetry_transform is None:
+            self.symmetry_transform = getattr(self.action, "symmetry_transform", None)
 
 
 @configclass
@@ -35,6 +62,9 @@ class JointActionCfg(ActionTermCfg):
     """Whether to preserve the order of the joint names in the action output. Defaults to False."""
     symmetry_transform: Callable | None = None
     """Optional runtime provider for the raw action's symmetry transform."""
+
+
+# -------------------- Joint Position Action -------------------- #
 
 
 @configclass
@@ -71,6 +101,9 @@ class RelativeJointPositionActionCfg(JointActionCfg):
     """
 
 
+# -------------------- Joint Velocity Action -------------------- #
+
+
 @configclass
 class JointVelocityActionCfg(JointActionCfg):
     """Configuration for the joint velocity action term.
@@ -86,6 +119,9 @@ class JointVelocityActionCfg(JointActionCfg):
 
     This overrides the settings from :attr:`offset` if set to True.
     """
+
+
+# -------------------- Joint Effort Action -------------------- #
 
 
 @configclass

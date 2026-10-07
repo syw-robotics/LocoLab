@@ -181,6 +181,7 @@ PARKOUR_TERRAINS_CFG = TerrainGeneratorCfg(
         #      stair_length_range=(1.0, 3.0),
         #      num_stairs_range=(6, 8),
         #      center_platform_width_range=(2.0, 3.0),
+        #      border_width=0.5,
         #  ),
         #  "straight_stairs_inv": locolab_terrain_gen.MeshInvertedStraightStairsTerrainCfg(
         #      proportion=0.05,
@@ -190,6 +191,7 @@ PARKOUR_TERRAINS_CFG = TerrainGeneratorCfg(
         #      stair_length_range=(1.0, 3.0),
         #      num_stairs_range=(6, 8),
         #      center_platform_width_range=(2.0, 3.0),
+        #      border_width=0.5,
         #  ),
         "slope": locolab_terrain_gen.HfPyramidSlopedRoughTerrainCfg(
             proportion=0.05,
@@ -273,17 +275,20 @@ PARKOUR_TERRAINS_CFG = TerrainGeneratorCfg(
             roughness_strengths=(0.4, 0.7, 1.0),  # samples uniformly from these strengths
             apply_roughness=0.8,
         ),
-        "climb": locolab_terrain_gen.HfStraightClimbTerrainCfg(
+        "climb": locolab_terrain_gen.MeshStraightClimbTerrainCfg(
             proportion=0.05,
             wall_height_range=(0.25, 0.70),
-            wall_width_range=(0.8, 1.5),
+            wall_height_noise_range=(-0.05, 0.05),
+            wall_width_range=(0.35, 0.80),
             wall_length_range=(3.0, 6.0),
+            spacing_range=(0.50, 0.80),
+            center_platform_width_range=(1.2, 2.0),
+            apply_edge_half_wall=0.0,
             noise_range=(-0.03, 0.03),
             noise_step=0.01,
             roughness_type="random",
             roughness_strengths=(0.4, 0.7, 1.0),
             apply_roughness=0.8,
-            border_width=0.10,
         ),
         "corridor": locolab_terrain_gen.MeshCorridorTerrainCfg(
             proportion=0.05,

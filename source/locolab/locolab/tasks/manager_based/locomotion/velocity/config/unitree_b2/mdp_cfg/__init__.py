@@ -12,6 +12,7 @@ HIP_JOINT_NAMES = [".*_hip_joint"]
 UNDESIRED_CONTACT_LINK_NAMES = ["(?!.*_foot).*"]
 OTHER_BODY_LINK_NAMES = [".*_hip", ".*_thigh", ".*_calf"]
 FLAT_CONTACT_SENSOR_LINK_NAMES = ".*_(foot|calf)"
+ROUGH_CONTACT_SENSOR_LINK_NAMES = "(base_link|.*_(foot|calf))"
 
 PRESERVE_ORDER = True
 
