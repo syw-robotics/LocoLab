@@ -28,6 +28,10 @@ parser.add_argument(
 parser.add_argument("--seed", type=int, default=None, help="Seed used for the environment")
 parser.add_argument("--max_iterations", type=int, default=None, help="RL Policy training iterations.")
 parser.add_argument(
+    "--teacher_checkpoint", type=str, default=None,
+    help="Teacher checkpoint required for new distillation runs; optionally replace the teacher when resuming.",
+)
+parser.add_argument(
     "--distributed", action="store_true", default=False, help="Run training with multiple GPUs or nodes."
 )
 parser.add_argument("--export_io_descriptors", action="store_true", default=False, help="Export IO descriptors.")
@@ -104,6 +108,13 @@ def main(env_cfg: ManagerBasedRLEnvCfg, agent_cfg: ZRlBaseRunnerCfg):
     """Train with Z-RL agent."""
     # override configurations with non-hydra CLI arguments
     agent_cfg = cli_args.update_z_rl_cfg(agent_cfg, args_cli)
+
+    # for teacher-student distillation, teacher checkpoint is required for new runs, optional for resuming a student
+    if args_cli.teacher_checkpoint and agent_cfg.class_name != "DistillationRunner":
+        raise ValueError("--teacher_checkpoint requires a distillation task.")
+    if agent_cfg.class_name == "DistillationRunner" and not agent_cfg.resume and not args_cli.teacher_checkpoint:
+        raise ValueError("New distillation runs require --teacher_checkpoint; use --resume to restore a student.")
+
     env_cfg.scene.num_envs = args_cli.num_envs if args_cli.num_envs is not None else env_cfg.scene.num_envs
     agent_cfg.max_iterations = (
         args_cli.max_iterations if args_cli.max_iterations is not None else agent_cfg.max_iterations
@@ -158,7 +169,8 @@ def main(env_cfg: ManagerBasedRLEnvCfg, agent_cfg: ZRlBaseRunnerCfg):
     env = gym.make(args_cli.task, cfg=env_cfg, render_mode="rgb_array" if args_cli.video else None)
 
     # save resume path before creating a new log_dir
-    if agent_cfg.resume or agent_cfg.algorithm.class_name == "Distillation":
+    resume_path = None
+    if agent_cfg.resume:
         resume_path = get_checkpoint_path(log_root_path, agent_cfg.load_run, agent_cfg.load_checkpoint)
 
     # wrap for video recording
@@ -185,13 +197,37 @@ def main(env_cfg: ManagerBasedRLEnvCfg, agent_cfg: ZRlBaseRunnerCfg):
         runner = DistillationRunner(env, agent_cfg.to_dict(), log_dir=log_dir, device=agent_cfg.device)
     else:
         raise ValueError(f"Unsupported runner class: {agent_cfg.class_name}")
+
     # write git state to logs
     runner.add_git_repo_to_log(__file__)
+
     # load the checkpoint
-    if agent_cfg.resume or agent_cfg.algorithm.class_name == "Distillation":
+    if agent_cfg.resume:
         print(f"[INFO]: Loading model checkpoint from: {resume_path}")
         # load previously trained model
         runner.load(resume_path)
+
+    # load the teacher checkpoint if specified
+    if args_cli.teacher_checkpoint:
+        teacher_path = os.path.abspath(os.path.expanduser(args_cli.teacher_checkpoint))
+        # Fresh runs use the algorithm's teacher-to-student initialization. Resumes only replace the teacher.
+        load_cfg = {"teacher": True, "iteration": False} if agent_cfg.resume else None
+        runner.load(teacher_path, load_cfg=load_cfg)
+        runner.checkpoint_infos["teacher_checkpoint"] = teacher_path
+
+    # print teacher checkpoint path
+    if agent_cfg.class_name == "DistillationRunner":
+        teacher_source = runner.checkpoint_infos.get("teacher_checkpoint")
+        if agent_cfg.resume and not args_cli.teacher_checkpoint:
+            print(f"[Teacher Checkpoint]: Teacher loaded from saved student checkpoint: {resume_path}")
+        print(f"[Teacher Checkpoint]: Teacher loaded from: {teacher_source or 'unknown'}")
+        dump_yaml(
+            os.path.join(log_dir, "params", "checkpoint_sources.yaml"),
+            {
+                "training_checkpoint": resume_path,
+                "teacher_checkpoint": teacher_source,
+            },
+        )
 
     # dump the configuration into log-directory
     dump_yaml(os.path.join(log_dir, "params", "env.yaml"), env_cfg)

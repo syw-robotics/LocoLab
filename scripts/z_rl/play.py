@@ -166,6 +166,12 @@ def main(env_cfg: ManagerBasedRLEnvCfg, agent_cfg: ZRlBaseRunnerCfg):
         raise ValueError(f"Unsupported runner class: {agent_cfg.class_name}")
     runner.load(resume_path, load_cfg=load_cfg)
 
+    # print teacher checkpoint path
+    if agent_cfg.class_name == "DistillationRunner":
+        print(f"[Teacher Checkpoint]: Teacher loaded from saved student checkpoint: {resume_path}")
+        teacher_source = runner.checkpoint_infos.get("teacher_checkpoint")
+        print(f"[Teacher Checkpoint]: Teacher loaded from: {teacher_source or 'unknown'}")
+
     # obtain the trained policy for inference
     policy = runner.get_inference_policy(device=env.unwrapped.device)
 
