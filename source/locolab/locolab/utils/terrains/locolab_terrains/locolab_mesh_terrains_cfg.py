@@ -174,6 +174,10 @@ class MeshStraightGapTerrainCfg(MeshRoughTerrainCfg):
     sampled along x. A side with two gaps looks like::
 
         landing | gap | island | gap | center
+
+    The pit floor can be limited along y by :attr:`gap_bottom_width_range`.
+    Outside that span the tile is open unless :attr:`gap_outer_bottom_depth_range`
+    adds a deeper floor.
     """
 
     function = locolab_mesh_terrains.mesh_straight_gap_terrain
@@ -186,6 +190,25 @@ class MeshStraightGapTerrainCfg(MeshRoughTerrainCfg):
 
     gap_depth_type: Literal["difficulty", "random"] = "difficulty"
     """How gap depth is sampled. Must be ``"difficulty"`` or ``"random"``."""
+
+    gap_bottom_width_range: tuple[float, float] | None = None
+    """Pit-floor width along y, sampled once per sub-terrain, in meters.
+
+    The floor is centered on the corridor and runs the full tile along x.
+    Outside this span the tile is open, unless :attr:`gap_outer_bottom_depth_range`
+    is set. A walkable block that extends past the span keeps a solid column
+    only where it overlaps a floor; with no outer floor the overhang is a thin
+    slab. ``None`` keeps a floor across the full terrain width along y.
+    """
+
+    gap_outer_bottom_depth_range: tuple[float, float] | None = None
+    """Extra depth of the floor outside :attr:`gap_bottom_width_range`, in meters.
+
+    ``None`` leaves that region empty. Otherwise one value is sampled per
+    sub-terrain and added below the inner gap depth, so this floor is deeper.
+    The minimum must be non-negative. It has no effect when the inner floor
+    already spans the full terrain width along y.
+    """
 
     center_platform_width_range: tuple[float, float] = MISSING
     """The center platform width along x, in meters."""
@@ -213,7 +236,7 @@ class MeshStraightGapTerrainCfg(MeshRoughTerrainCfg):
     Sampled independently per island. Unused when that side has only one gap.
     """
 
-    border_width: float = 0.05
+    border_width: float = 0.0
     """Thickness of the perimeter wall, in meters.
 
     The wall rises from the pit floor to z=0 so the tile edge meets neighboring

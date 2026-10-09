@@ -283,7 +283,10 @@ def mesh_straight_gap_terrain(
 
     Each side packs as many gaps as fit at the difficulty-scaled gap width.
     An island separates consecutive gaps. Spans stay in meters, so a sampled
-    gap or island is not snapped to a height-field cell.
+    gap or island is not snapped to a height-field cell. When
+    ``gap_bottom_width_range`` is set, the pit floor is only that wide along y
+    and centered on the corridor. Outside it the tile stays open unless
+    ``gap_outer_bottom_depth_range`` places a deeper floor.
     """
     # landing | gap | island | ... | gap | center | gap | ... | island | gap | landing
     gap_min, gap_max = cfg.gap_width_range
@@ -304,6 +307,16 @@ def mesh_straight_gap_terrain(
     height_min, height_max = cfg.island_height_offset_range
     if height_min > height_max:
         raise ValueError(f"Invalid island_height_offset_range: {cfg.island_height_offset_range}.")
+    bottom_width_range = cfg.gap_bottom_width_range
+    if bottom_width_range is not None:
+        bottom_min, bottom_max = bottom_width_range
+        if bottom_min <= 0.0 or bottom_min > bottom_max:
+            raise ValueError(f"Invalid gap_bottom_width_range: {bottom_width_range}.")
+    outer_depth_range = cfg.gap_outer_bottom_depth_range
+    if outer_depth_range is not None:
+        outer_min, outer_max = outer_depth_range
+        if outer_min < 0.0 or outer_min > outer_max:
+            raise ValueError(f"Invalid gap_outer_bottom_depth_range: {outer_depth_range}.")
 
     gap_width = gap_min + difficulty * (gap_max - gap_min)
     if cfg.gap_depth_type == "difficulty":
@@ -316,6 +329,16 @@ def mesh_straight_gap_terrain(
         )
 
     cx, cy = 0.5 * cfg.size[0], 0.5 * cfg.size[1]
+    if bottom_width_range is None:
+        bottom_y0, bottom_y1 = 0.0, float(cfg.size[1])
+    else:
+        bottom_width = min(float(np.random.uniform(bottom_min, bottom_max)), float(cfg.size[1]))
+        bottom_y0 = float(np.clip(cy - 0.5 * bottom_width, 0.0, cfg.size[1]))
+        bottom_y1 = float(np.clip(cy + 0.5 * bottom_width, 0.0, cfg.size[1]))
+    # None keeps the sides empty. A sample is extra depth below the inner pit.
+    outer_depth = None
+    if outer_depth_range is not None and bottom_y1 - bottom_y0 < float(cfg.size[1]) - 1e-6:
+        outer_depth = gap_depth + float(np.random.uniform(outer_min, outer_max))
     center_platform_width = float(np.random.uniform(platform_min, platform_max))
     inner_left = max(cx - 0.5 * center_platform_width, 0.0)
     inner_right = min(cx + 0.5 * center_platform_width, cfg.size[0])
@@ -353,7 +376,49 @@ def mesh_straight_gap_terrain(
     outer_left = inner_left - (left_n * left_gap + sum(width for width, *_ in left_islands))
     outer_right = inner_right + (right_n * right_gap + sum(width for width, *_ in right_islands))
 
-    meshes = [make_plane(cfg.size, height=-gap_depth, center_zero=False)]
+    def make_floor(y0: float, y1: float, depth: float) -> trimesh.Trimesh | None:
+        if y1 - y0 <= 1e-6:
+            return None
+        plane = make_plane((cfg.size[0], y1 - y0), height=-depth, center_zero=False)
+        if y0 > 0.0:
+            plane.apply_translation((0.0, y0, 0.0))
+        return plane
+
+    def make_riser(y: float, z_lo: float, z_hi: float) -> trimesh.Trimesh | None:
+        if z_hi - z_lo <= 1e-6:
+            return None
+        vertices = np.array(
+            [[0.0, y, z_lo], [cfg.size[0], y, z_lo], [cfg.size[0], y, z_hi], [0.0, y, z_hi]]
+        )
+        faces = np.array([[0, 1, 2], [0, 2, 3], [0, 2, 1], [0, 3, 2]])
+        return trimesh.Trimesh(vertices=vertices, faces=faces, process=False)
+
+    floors = [make_floor(bottom_y0, bottom_y1, gap_depth)]
+    if outer_depth is not None:
+        floors.extend(
+            (
+                make_floor(0.0, bottom_y0, outer_depth),
+                make_floor(bottom_y1, float(cfg.size[1]), outer_depth),
+                make_riser(bottom_y0, -outer_depth, -gap_depth),
+                make_riser(bottom_y1, -outer_depth, -gap_depth),
+            )
+        )
+    floors = [mesh for mesh in floors if mesh is not None]
+    meshes = list(floors)
+    # With no outer floor, tops that stick past the inner pit stay this thick.
+    overhang_thickness = 0.05
+
+    def add_span(x0: float, x1: float, y0: float, y1: float, z0: float, z1: float) -> None:
+        if x1 - x0 <= 1e-6 or y1 - y0 <= 1e-6 or z1 - z0 <= 1e-6:
+            return
+        meshes.append(
+            trimesh.creation.box(
+                (x1 - x0, y1 - y0, z1 - z0),
+                trimesh.transformations.translation_matrix(
+                    ((x0 + x1) * 0.5, (y0 + y1) * 0.5, (z0 + z1) * 0.5)
+                ),
+            )
+        )
 
     def add_block(x0: float, x1: float, y_offset: float, y_width: float, top_z: float) -> None:
         x0 = float(np.clip(x0, 0.0, cfg.size[0]))
@@ -364,17 +429,20 @@ def mesh_straight_gap_terrain(
         y1 = float(np.clip(cy + y_offset + 0.5 * y_width, 0.0, cfg.size[1]))
         if y1 - y0 <= 1e-6:
             return
-        height = top_z + gap_depth
-        if height <= 1e-6:
+        floor_z = -gap_depth
+        if top_z - floor_z <= 1e-6:
             return
-        meshes.append(
-            trimesh.creation.box(
-                (x1 - x0, y1 - y0, height),
-                trimesh.transformations.translation_matrix(
-                    ((x0 + x1) * 0.5, (y0 + y1) * 0.5, -gap_depth + 0.5 * height)
-                ),
-            )
-        )
+        inside0 = max(y0, bottom_y0)
+        inside1 = min(y1, bottom_y1)
+        add_span(x0, x1, inside0, inside1, floor_z, top_z)
+        if outer_depth is None:
+            outer_z0 = top_z - min(overhang_thickness, top_z - floor_z)
+        else:
+            outer_z0 = -outer_depth
+        if y0 < bottom_y0 - 1e-6:
+            add_span(x0, x1, y0, min(y1, bottom_y0), outer_z0, top_z)
+        if y1 > bottom_y1 + 1e-6:
+            add_span(x0, x1, max(y0, bottom_y1), y1, outer_z0, top_z)
 
     add_block(0.0, outer_left, 0.0, float(np.random.uniform(island_w_min, island_w_max)), 0.0)
     add_block(inner_left, inner_right, 0.0, float(np.random.uniform(island_w_min, island_w_max)), 0.0)
@@ -392,20 +460,22 @@ def mesh_straight_gap_terrain(
             add_block(lo, hi, y_offset, y_width, height)
     # Roughness follows the height-field mask: walkable tops only, pit floor stays flat.
     origin = np.array([cx, cy, 0.0])
-    walkable, origin = apply_mesh_surface_details(meshes[1:], origin, cfg, difficulty)
+    floor_count = len(floors)
+    walkable, origin = apply_mesh_surface_details(meshes[floor_count:], origin, cfg, difficulty)
     # Thin perimeter wall closes the pit against neighboring tiles, whose border is at z=0.
     border_width = float(getattr(cfg, "border_width", 0.0))
     if border_width < 0.0 or 2.0 * border_width >= min(cfg.size):
         raise ValueError(f"Invalid border_width: {border_width} for size {cfg.size}.")
     border = []
-    if border_width > 0.0 and gap_depth > 1e-6:
+    border_depth = gap_depth if outer_depth is None else outer_depth
+    if border_width > 0.0 and border_depth > 1e-6:
         border = make_border(
             cfg.size,
             (cfg.size[0] - 2.0 * border_width, cfg.size[1] - 2.0 * border_width),
-            gap_depth,
-            (cx, cy, -0.5 * gap_depth),
+            border_depth,
+            (cx, cy, -0.5 * border_depth),
         )
-    return [meshes[0], *walkable, *border], origin
+    return [*meshes[:floor_count], *walkable, *border], origin
 
 
 # Mesh Hurdle Terrain Definition

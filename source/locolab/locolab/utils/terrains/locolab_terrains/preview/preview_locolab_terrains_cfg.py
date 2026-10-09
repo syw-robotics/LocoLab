@@ -194,6 +194,7 @@ PREVIEW_CASES: dict[str, dict] = {
     "MeshStraightGapTerrainCfg": {
         "gap_width_range": (0.2, 0.8),
         "gap_depth_range": (1.0, 3.0),
+        "gap_bottom_width_range": (2.0, 3.0),
         "center_platform_width_range": (3.0, 4.0),
         "island_width_range": (0.6, 1.2),
         "island_y_offset_range": (-1.0, 1.0),

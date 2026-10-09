@@ -266,6 +266,7 @@ PARKOUR_TERRAINS_CFG = TerrainGeneratorCfg(
             gap_width_range=(0.10, 0.80),
             gap_depth_range=(1.0, 2.5),
             gap_depth_type="random",
+            gap_bottom_width_range=(2.0, 3.0),
             island_width_range=(1.0, 2.0),
             island_y_offset_range=(-0.5, 0.5),
             center_platform_width_range=(2.0, 3.0),
