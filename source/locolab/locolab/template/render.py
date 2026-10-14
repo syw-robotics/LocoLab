@@ -15,6 +15,8 @@ _RL_AGENT_FILES = {
     "z_rl": "z_rl_ppo_cfg.py",
     "rsl_rl": "rsl_rl_ppo_cfg.py",
 }
+_SKIP_DIR_NAMES = {"__pycache__", ".git"}
+_SKIP_SUFFIXES = {".pyc", ".pyo"}
 
 
 def generate(spec: ProjectSpec, *, git_init: bool = True) -> Path:
@@ -24,7 +26,7 @@ def generate(spec: ProjectSpec, *, git_init: bool = True) -> Path:
 
     replacements = spec.replacements()
     for src in sorted(TEMPLATE_ROOT.rglob("*")):
-        if src.is_dir():
+        if not src.is_file() or _skip_template_file(src):
             continue
         if _skip_rl_library_file(src, spec.rl_libraries):
             continue
@@ -33,12 +35,22 @@ def generate(spec: ProjectSpec, *, git_init: bool = True) -> Path:
             rel = rel[: -len(".tmpl")]
         out_path = dest / rel
         out_path.parent.mkdir(parents=True, exist_ok=True)
-        text = _replace_tokens(src.read_text(encoding="utf-8"), replacements)
-        out_path.write_text(text, encoding="utf-8")
+        try:
+            text = src.read_text(encoding="utf-8")
+        except UnicodeDecodeError as error:
+            raise ValueError(f"Template file is not UTF-8 text: {src}") from error
+        out_path.write_text(_replace_tokens(text, replacements), encoding="utf-8")
 
     if git_init:
         _git_init(dest)
     return dest
+
+
+def _skip_template_file(src: Path) -> bool:
+    """Ignore bytecode and VCS metadata that can appear beside the templates."""
+    if src.suffix in _SKIP_SUFFIXES:
+        return True
+    return any(part in _SKIP_DIR_NAMES for part in src.relative_to(TEMPLATE_ROOT).parts)
 
 
 def _skip_rl_library_file(src: Path, rl_libraries: tuple[str, ...]) -> bool:

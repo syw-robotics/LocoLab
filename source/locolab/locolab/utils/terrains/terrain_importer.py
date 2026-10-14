@@ -68,6 +68,9 @@ class TerrainImporter:
     It is set to a tensor when using curriculum-based terrain origins (generator with use_terrain_origins=True).
     """
 
+    terrain_origin_indices: torch.Tensor | None
+    """Sub-terrain index of each tile, shape (num_rows, num_cols). ``update_env_origins`` does not read this."""
+
     def __init__(self, cfg: TerrainImporterCfg):
         """Initialize the terrain importer.
 
@@ -98,6 +101,7 @@ class TerrainImporter:
         self.terrain_origins = None
         self.env_origins = None  # assigned later when `configure_env_origins` is called
         self.env_terrain_indices = None  # assigned later when `configure_env_origins` is called
+        self.terrain_origin_indices = None  # assigned later when `configure_env_origins` is called
         # private variables
         self._terrain_flat_patches = dict()
 
@@ -463,6 +467,7 @@ class TerrainImporter:
             self.env_origins = self._compute_env_origins_grid(self.cfg.num_envs, self.cfg.env_spacing)
             # set env_terrain_indices to None for grid mode (no sub-terrain differentiation)
             self.env_terrain_indices = None
+            self.terrain_origin_indices = None
 
     def update_env_origins(self, env_ids: torch.Tensor, move_up: torch.Tensor, move_down: torch.Tensor):
         """Update the environment origins based on the terrain levels."""
@@ -480,16 +485,22 @@ class TerrainImporter:
         )
         # update the env origins
         self.env_origins[env_ids] = self.terrain_origins[self.terrain_levels[env_ids], self.terrain_types[env_ids]]
-        # Note: env_terrain_indices does not need to be updated because in curriculum mode,
-        # terrain_indices[row, col] only depends on col (not row), and terrain_types (col) doesn't change.
-        # So env_terrain_indices remains constant even when terrain_levels (row) changes.
+        # Only the row changes, so env_terrain_indices stays valid.
+
+    def assign_env_origins(self, env_ids: torch.Tensor, levels: torch.Tensor, types: torch.Tensor) -> None:
+        """Set the row, column, and origin. Refresh ``env_terrain_indices`` when the column changes."""
+        self.terrain_levels[env_ids] = levels
+        self.terrain_types[env_ids] = types
+        self.env_origins[env_ids] = self.terrain_origins[levels, types]
+        if self.terrain_origin_indices is not None:
+            self.env_terrain_indices[env_ids] = self.terrain_origin_indices[levels, types]
 
     """
     Internal helpers.
     """
 
     def _compute_env_origins_and_indices_curriculum(
-        self, num_envs: int, origins: torch.Tensor, terrain_indices: np.ndarray | torch.Tensor
+        self, num_envs: int, origins: torch.Tensor, terrain_indices: np.ndarray | torch.Tensor | None
     ) -> tuple[torch.Tensor, torch.Tensor]:
         """Compute the origins of the environments defined by the sub-terrains origins."""
         # extract number of rows and cols
@@ -509,16 +520,15 @@ class TerrainImporter:
         # create tensor based on number of environments
         env_origins = torch.zeros(num_envs, 3, device=self.device)
         env_origins[:] = origins[self.terrain_levels, self.terrain_types]
+        if terrain_indices is None:
+            self.terrain_origin_indices = None
+        elif isinstance(terrain_indices, torch.Tensor):
+            self.terrain_origin_indices = terrain_indices.to(device=self.device, dtype=torch.long)
+        else:
+            self.terrain_origin_indices = torch.as_tensor(terrain_indices, device=self.device, dtype=torch.long)
         env_terrain_indices = torch.zeros(num_envs, device=self.device, dtype=torch.long)
-        if terrain_indices is not None:
-            # convert to torch tensor if needed
-            if isinstance(terrain_indices, np.ndarray):
-                terrain_indices = torch.from_numpy(terrain_indices).to(self.device)
-            elif not isinstance(terrain_indices, torch.Tensor):
-                terrain_indices = torch.tensor(terrain_indices, device=self.device)
-            else:
-                terrain_indices = terrain_indices.to(self.device)
-            env_terrain_indices[:] = terrain_indices[self.terrain_levels, self.terrain_types]
+        if self.terrain_origin_indices is not None:
+            env_terrain_indices[:] = self.terrain_origin_indices[self.terrain_levels, self.terrain_types]
         return env_origins, env_terrain_indices
 
     def _compute_env_origins_grid(self, num_envs: int, env_spacing: float) -> torch.Tensor:

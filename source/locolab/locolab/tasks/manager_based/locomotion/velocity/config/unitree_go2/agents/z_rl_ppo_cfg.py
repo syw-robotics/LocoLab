@@ -65,12 +65,6 @@ class Go2RoughPPORunnerCfg(Go2RoughPPOBaseRunnerCfg):
         obs_normalization=True,
     )
 
-    def __post_init__(self):
-        # Rough observations do not declare symmetry transforms. Symmetry is
-        # compiled whenever symmetry_cfg is set, even if augmentation is off.
-        self.algorithm.symmetry_augmentation = False
-        self.algorithm.symmetry_cfg = None
-
 
 @configclass
 class Go2RoughMoEPPORunnerCfg(Go2RoughPPOBaseRunnerCfg):
@@ -151,41 +145,32 @@ class Go2RoughEncoderEstimationPPORunnerCfg(Go2RoughPPOBaseRunnerCfg):
 
 @configclass
 class Go2FlatPPORunnerCfg(Go2RoughPPORunnerCfg):
+    max_iterations = 2000
+    experiment_name = "go2_flat"
+
     def __post_init__(self):
         super().__post_init__()
-
         self.algorithm.symmetry_augmentation = True
         self.algorithm.symmetry_cfg = ZRlSymmetryCfg(
             use_mirror_loss=False,
             log_mirror_loss=True,
             mirror_loss_log_interval=100,
         )
-        self.max_iterations = 2000
-        self.experiment_name = "go2_flat"
 
 
 @configclass
 class Go2FlatMoEPPORunnerCfg(Go2RoughMoEPPORunnerCfg):
-    def __post_init__(self):
-        super().__post_init__()
-
-        self.max_iterations = 2000
-        self.experiment_name = "go2_flat_moe"
+    max_iterations = 2000
+    experiment_name = "go2_flat_moe"
 
 
 @configclass
 class Go2FlatRNNPPORunnerCfg(Go2RoughRNNPPORunnerCfg):
-    def __post_init__(self):
-        super().__post_init__()
-
-        self.max_iterations = 2000
-        self.experiment_name = "go2_flat_rnn"
+    max_iterations = 2000
+    experiment_name = "go2_flat_rnn"
 
 
 @configclass
 class Go2FlatEncoderEstimationPPORunnerCfg(Go2RoughEncoderEstimationPPORunnerCfg):
-    def __post_init__(self):
-        super().__post_init__()
-
-        self.max_iterations = 2000
-        self.experiment_name = "go2_flat_encoder_estimation"
+    max_iterations = 2000
+    experiment_name = "go2_flat_encoder_estimation"

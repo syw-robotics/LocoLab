@@ -21,12 +21,12 @@ from locolab.utils.terrains import TerrainImporterCfg
 # Pre-defined configs
 ##
 from locolab.tasks.manager_based.locomotion.velocity.config.unitree_go2.mdp_cfg import (  # isort: skip
-    ActionsCfg,
+    ActionsCfg_W_Symmetry,
     CommandsCfg,
     EventCfg,
     RoughRewardsCfg,
-    PrivObsCfg,
-    PropObsCfg,
+    PrivObsCfg_W_Symmetry,
+    PropObsCfg_W_Symmetry,
     RoughCurriculumsCfg,
     RoughTerminationsCfg,
 )
@@ -42,8 +42,8 @@ from locolab.utils.markers import BLUE_RAY_CASTER_MARKER_CFG  # isort: skip
 class Go2RoughObservationsCfg:
     """Configuration for Go2 on flat terrain observations"""
 
-    policy: PropObsCfg = PropObsCfg()
-    critic: PrivObsCfg = PrivObsCfg()
+    policy: PropObsCfg_W_Symmetry = PropObsCfg_W_Symmetry()
+    critic: PrivObsCfg_W_Symmetry = PrivObsCfg_W_Symmetry()
 
     policy.history_length = 5
 
@@ -138,7 +138,7 @@ class Go2RoughEnvCfg(ManagerBasedRLEnvCfg):
     scene: Go2RoughSceneCfg = Go2RoughSceneCfg(num_envs=4096, env_spacing=2.5)
     # Basic settings
     observations: Go2RoughObservationsCfg = Go2RoughObservationsCfg()
-    actions: ActionsCfg = ActionsCfg()
+    actions: ActionsCfg_W_Symmetry = ActionsCfg_W_Symmetry()
     commands: CommandsCfg = CommandsCfg()
     # MDP settings
     rewards: RoughRewardsCfg = RoughRewardsCfg()

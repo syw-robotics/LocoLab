@@ -208,9 +208,17 @@ def _validate_project_name(value: str) -> None:
 
 
 def _suggest_package_name(project_name: str) -> str | None:
-    candidate = project_name.replace("-", "_")
-    if candidate.isidentifier() and not keyword.iskeyword(candidate):
-        return candidate
+    """Reuse the project folder name only when it is already a package name.
+
+    ``pkg-haha`` is a valid directory name, but rewriting ``-`` to ``_`` is not
+    a package name the user chose. Leave the prompt empty in that case.
+    """
+    if (
+        project_name.isidentifier()
+        and not keyword.iskeyword(project_name)
+        and project_name.islower()
+    ):
+        return project_name
     return None
 
 
