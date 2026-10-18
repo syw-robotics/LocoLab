@@ -99,6 +99,7 @@ class TerrainImporter:
         # create buffers for the terrains
         self.terrain_prim_paths = list()
         self.terrain_origins = None
+        self.terrain_mesh = None  # set when cfg.retain_mesh keeps a copy for external viewers
         self.env_origins = None  # assigned later when `configure_env_origins` is called
         self.env_terrain_indices = None  # assigned later when `configure_env_origins` is called
         self.terrain_origin_indices = None  # assigned later when `configure_env_origins` is called
@@ -115,6 +116,9 @@ class TerrainImporter:
                 cfg=self.cfg.terrain_generator, device=self.device
             )
             self.import_mesh("terrain", terrain_generator.terrain_mesh, terrain_generator)
+            if getattr(self.cfg, "retain_mesh", False):
+                # for viser remote web viewer
+                self.terrain_mesh = terrain_generator.terrain_mesh.copy()
             if self.cfg.use_terrain_origins:
                 # configure the terrain origins based on the terrain generator
                 self.configure_env_origins(terrain_generator.terrain_origins, terrain_generator.terrain_indices)

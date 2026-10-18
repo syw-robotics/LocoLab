@@ -896,8 +896,11 @@ def _tessellate_for_height_noise(mesh: trimesh.Trimesh, max_edge: float) -> trim
         z0, z1 = float(zs[0]), float(zs[1])
         parts.append(_grid_z(gx, gy, z1))
         parts.append(_grid_z(np.array([x0, x1]), np.array([y0, y1]), z0, flip=True))
-        parts.append(_strip_const_y(gx, z0, z1, y0, flip=True))
-        parts.append(_strip_const_y(gx, z0, z1, y1, flip=False))
+        # A constant-Y strip's unflipped winding points toward -Y, so the low-Y
+        # riser stays unflipped and the high-Y riser is flipped. Constant-X
+        # strips are the opposite: unflipped winding already points toward +X.
+        parts.append(_strip_const_y(gx, z0, z1, y0, flip=False))
+        parts.append(_strip_const_y(gx, z0, z1, y1, flip=True))
         parts.append(_strip_const_x(gy, z0, z1, x0, flip=True))
         parts.append(_strip_const_x(gy, z0, z1, x1, flip=False))
     else:
