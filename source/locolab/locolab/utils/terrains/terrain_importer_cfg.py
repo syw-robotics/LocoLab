@@ -131,3 +131,10 @@ class TerrainImporterCfg(_TerrainImporterCfg):
 
     debug_vis: bool = False
     """Whether to enable visualization of terrain origins for the terrain. Defaults to False."""
+
+    retain_mesh: bool = False
+    """Keep a CPU copy of a generated terrain mesh. Defaults to False.
+
+    Play sets this when ``--viser`` is passed, so the browser viewer can draw the
+    same ground the simulator imported. Training leaves it off.
+    """

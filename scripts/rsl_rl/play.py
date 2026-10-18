@@ -14,6 +14,8 @@ import argparse
 import os
 import sys
 
+from locolab.utils.viewer import add_play_viewer_args, open_play_viewer, prepare_play_viewer
+
 from isaaclab.app import AppLauncher  # isort: skip
 
 # local imports
@@ -39,6 +41,9 @@ parser.add_argument(
     help="Use the pre-trained checkpoint from Nucleus.",
 )
 parser.add_argument("--real-time", action="store_true", default=False, help="Run in real-time, if possible.")
+
+# for viser remote web viewer
+add_play_viewer_args(parser)
 # append RSL-RL cli arguments
 cli_args.add_rsl_rl_args(parser)
 # append AppLauncher cli args
@@ -134,6 +139,9 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
     # set the log directory for the environment (works for all environment types)
     env_cfg.log_dir = log_dir
 
+    # for viser remote web viewer
+    prepare_play_viewer(args_cli, env_cfg)
+
     # create isaac environment
     env = gym.make(args_cli.task, cfg=env_cfg, render_mode="rgb_array" if args_cli.video else None)
 
@@ -197,36 +205,48 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
 
     dt = env.unwrapped.step_dt
 
+    def _reset_recurrent(done_mask: torch.Tensor) -> None:
+        if version.parse(installed_version) >= version.parse("4.0.0"):
+            policy.reset(done_mask)
+        else:
+            policy_nn.reset(done_mask)
+
+    # for viser remote web viewer
+    viewer = open_play_viewer(env, args_cli)
+
     # reset environment
     obs = env.get_observations()
     timestep = 0
     # simulate environment
-    while simulation_app.is_running():
-        start_time = time.time()
-        # run everything in inference mode
-        with torch.inference_mode():
-            # agent stepping
-            actions = policy(obs)
-            # env stepping
-            obs, _, dones, _ = env.step(actions)
-            # reset recurrent states for episodes that have terminated
-            if version.parse(installed_version) >= version.parse("4.0.0"):
-                policy.reset(dones)
-            else:
-                policy_nn.reset(dones)
-        if args_cli.video:
-            timestep += 1
-            # Exit the play loop after recording one video
-            if timestep == args_cli.video_length:
-                break
+    try:
+        while simulation_app.is_running():
+            start_time = time.time()
+            # run everything in inference mode
+            with torch.inference_mode():
+                if viewer.apply_reset(env, _reset_recurrent):
+                    obs = env.get_observations()
+                if not viewer.paused:
+                    # agent stepping
+                    actions = policy(obs)
+                    # env stepping
+                    obs, _, dones, _ = env.step(actions)
+                    # reset recurrent states for episodes that have terminated
+                    _reset_recurrent(dones)
+            if viewer.after_step():
+                continue
+            if args_cli.video:
+                timestep += 1
+                # Exit the play loop after recording one video
+                if timestep == args_cli.video_length:
+                    break
 
-        # time delay for real-time evaluation
-        sleep_time = dt - (time.time() - start_time)
-        if args_cli.real_time and sleep_time > 0:
-            time.sleep(sleep_time)
-
-    # close the simulator
-    env.close()
+            # time delay for real-time evaluation
+            sleep_time = dt - (time.time() - start_time)
+            if args_cli.real_time and not viewer.paces and sleep_time > 0:
+                time.sleep(sleep_time)
+    finally:
+        viewer.close()
+        env.close()
 
 
 if __name__ == "__main__":
