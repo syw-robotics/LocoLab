@@ -69,7 +69,7 @@ def height_scan_y(*, env, term_cfg, **_) -> MirrorTransform:
     if sensor_cfg is None:
         raise ValueError("Height-scan symmetry requires a 'sensor_cfg' observation parameter.")
     sensor = env.scene.sensors[sensor_cfg.name]
-    ray_starts = sensor.ray_starts
+    ray_starts = sensor.ray_starts.torch
     if ray_starts.ndim == 3:
         ray_starts = ray_starts[0]
     points = ray_starts[:, :2]

@@ -154,16 +154,16 @@ class UniformVelocityCommand(CommandTerm):
 
         # logs data
         self.metrics["error_vel_xy"].add_(
-            torch.norm(self.vel_command_b[:, :2] - self.robot.data.root_lin_vel_b[:, :2], dim=-1),
+            torch.norm(self.vel_command_b[:, :2] - self.robot.data.root_lin_vel_b.torch[:, :2], dim=-1),
             alpha=self._metrics_update_scale,
         )
         self.metrics["error_vel_yaw"].add_(
-            torch.abs(self.vel_command_b[:, 2] - self.robot.data.root_ang_vel_b[:, 2]),
+            torch.abs(self.vel_command_b[:, 2] - self.robot.data.root_ang_vel_b.torch[:, 2]),
             alpha=self._metrics_update_scale,
         )
 
-    def _resample_command(self, env_ids: Sequence[int]):
-        num_envs = len(env_ids)
+    def _resample_command(self, env_ids: Sequence[int] | slice):
+        num_envs = len(range(self.num_envs)[env_ids]) if isinstance(env_ids, slice) else len(env_ids)
         rand = torch.rand(num_envs, 3, device=self.device)
         commands = self._vel_bounds[:, 0] + (self._vel_bounds[:, 1] - self._vel_bounds[:, 0]) * rand
         r = torch.empty(num_envs, device=self.device)
@@ -199,7 +199,7 @@ class UniformVelocityCommand(CommandTerm):
             self._update_heading_velocity(self.cfg.ranges.ang_vel_z[0], self.cfg.ranges.ang_vel_z[1])
 
     def _update_heading_velocity(self, ang_min: float | torch.Tensor, ang_max: float | torch.Tensor) -> None:
-        heading_error = math_utils.wrap_to_pi(self.heading_target - self.robot.data.heading_w)
+        heading_error = math_utils.wrap_to_pi(self.heading_target - self.robot.data.heading_w.torch)
         ang_vel = (self.cfg.heading_control_stiffness * heading_error).clamp(min=ang_min, max=ang_max)
         self.vel_command_b[:, 2] = torch.where(self.is_heading_env, ang_vel, self.vel_command_b[:, 2])
 
@@ -228,11 +228,11 @@ class UniformVelocityCommand(CommandTerm):
             return
         # get marker location
         # -- base state
-        base_pos_w = self.robot.data.root_pos_w.clone()
+        base_pos_w = self.robot.data.root_pos_w.torch.clone()
         base_pos_w[:, 2] += self.cfg.vel_visualizer_offset_z
         # -- resolve the scales and quaternions
         vel_des_arrow_scale, vel_des_arrow_quat = self._resolve_xy_velocity_to_arrow(self.command[:, :2])
-        vel_arrow_scale, vel_arrow_quat = self._resolve_xy_velocity_to_arrow(self.robot.data.root_lin_vel_b[:, :2])
+        vel_arrow_scale, vel_arrow_quat = self._resolve_xy_velocity_to_arrow(self.robot.data.root_lin_vel_b.torch[:, :2])
         # display markers
         self.goal_vel_visualizer.visualize(base_pos_w, vel_des_arrow_quat, vel_des_arrow_scale)
         self.current_vel_visualizer.visualize(base_pos_w, vel_arrow_quat, vel_arrow_scale)
@@ -253,7 +253,7 @@ class UniformVelocityCommand(CommandTerm):
         zeros = torch.zeros_like(heading_angle)
         arrow_quat = math_utils.quat_from_euler_xyz(zeros, zeros, heading_angle)
         # convert everything back from base to world frame
-        base_quat_w = self.robot.data.root_quat_w
+        base_quat_w = self.robot.data.root_quat_w.torch
         arrow_quat = math_utils.quat_mul(base_quat_w, arrow_quat)
 
         return arrow_scale, arrow_quat
@@ -340,8 +340,8 @@ class UniformVelocityCommandByTerrain(UniformVelocityCommand):
         msg += f"\tTerrain groups: {group_names}\n"
         return msg
 
-    def _resample_command(self, env_ids: Sequence[int]):
-        num_envs = len(env_ids)
+    def _resample_command(self, env_ids: Sequence[int] | slice):
+        num_envs = len(range(self.num_envs)[env_ids]) if isinstance(env_ids, slice) else len(env_ids)
         bounds = self._command_range_table[self._terrain_type_indices[env_ids]]
         samples = bounds[:, :, 0] + (bounds[:, :, 1] - bounds[:, :, 0]) * torch.rand(num_envs, 4, device=self.device)
         r = torch.empty(num_envs, device=self.device)

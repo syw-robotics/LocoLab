@@ -19,6 +19,8 @@ import trimesh
 import yourdfpy
 from viser.transforms import SO3
 
+from .utils import rotate_wxyz
+
 
 def load_urdf(urdf_path: str | Path) -> yourdfpy.URDF:
     """Load a URDF and resolve ``package://`` or relative mesh paths."""
@@ -291,7 +293,7 @@ class RobotBodies:
                 continue
             parent_wxyz = world_wxyz[:, parent]
             world_wxyz[:, link] = _quat_mul(parent_wxyz, local_wxyz[:, joint])
-            world_position[:, link] = world_position[:, parent] + _rotate(parent_wxyz, local_position[:, joint])
+            world_position[:, link] = world_position[:, parent] + rotate_wxyz(parent_wxyz, local_position[:, joint])
         return world_position, world_wxyz
 
 
@@ -345,9 +347,3 @@ def _quat_mul(parent: np.ndarray, local: np.ndarray) -> np.ndarray:
         axis=-1,
     )
 
-
-def _rotate(wxyz: np.ndarray, vector: np.ndarray) -> np.ndarray:
-    """Rotate row vectors by wxyz quaternions."""
-    xyz = wxyz[..., 1:]
-    turn = 2.0 * np.cross(xyz, vector)
-    return vector + wxyz[..., :1] * turn + np.cross(xyz, turn)

@@ -16,6 +16,8 @@ from __future__ import annotations
 from dataclasses import MISSING
 from typing import TYPE_CHECKING, Literal
 
+from isaaclab_physx.sim.spawners.materials import PhysxRigidBodyMaterialCfg
+
 import isaaclab.sim as sim_utils
 from isaaclab.terrains.terrain_importer_cfg import (
     TerrainImporterCfg as _TerrainImporterCfg,
@@ -109,7 +111,7 @@ class TerrainImporterCfg(_TerrainImporterCfg):
       to the grid color of the imported ground plane.
     """
 
-    physics_material: sim_utils.RigidBodyMaterialCfg = sim_utils.RigidBodyMaterialCfg()
+    physics_material: PhysxRigidBodyMaterialCfg = PhysxRigidBodyMaterialCfg()
     """The physics material of the terrain. Defaults to a default physics material.
 
     The material is created at the path: ``{prim_path}/physicsMaterial``.

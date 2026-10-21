@@ -25,18 +25,15 @@ def body_mass(env: ManagerBasedRLEnv, asset_cfg: SceneEntityCfg = SceneEntityCfg
     """The mass of the specified bodies."""
     # extract the used quantities (to enable type-hinting)
     asset: Articulation = env.scene[asset_cfg.name]
-    mass_tensor = asset.root_physx_view.get_masses().to(device=env.device)
-    body_mass = mass_tensor[:, asset_cfg.body_ids]
-    return body_mass
+    return asset.data.body_mass.torch[:, asset_cfg.body_ids]
 
 
 def body_inertia(env: ManagerBasedRLEnv, asset_cfg: SceneEntityCfg = SceneEntityCfg("robot")) -> torch.Tensor:
     """The inertia of the specified bodies."""
     # extract the used quantities (to enable type-hinting)
     asset: Articulation = env.scene[asset_cfg.name]
-    inertia_tensor = asset.root_physx_view.get_inertias().to(device=env.device)
-    body_inertia = inertia_tensor[:, asset_cfg.body_ids]
-    return body_inertia.view(body_inertia.shape[0], -1)
+    body_inertia = asset.data.body_inertia.torch[:, asset_cfg.body_ids]
+    return body_inertia.reshape(body_inertia.shape[0], -1)
 
 
 # =====  feet  =====
@@ -46,7 +43,7 @@ def feet_contact_forces(
     """The contact forces of the specified bodies."""
     # extract the used quantities (to enable type-hinting)
     contact_sensor: ContactSensor = env.scene.sensors[sensor_cfg.name]
-    feet_contact_forces = contact_sensor.data.net_forces_w[:, sensor_cfg.body_ids, :]
+    feet_contact_forces = contact_sensor.data.net_forces_w.torch[:, sensor_cfg.body_ids, :]
     # Flatten to (num_envs, num_feet * 3) for concatenation with other observation terms
     return feet_contact_forces.view(feet_contact_forces.shape[0], -1)
 
@@ -57,7 +54,7 @@ def feet_contact_flag(
     """The contact forces of the specified bodies."""
     # extract the used quantities (to enable type-hinting)
     contact_sensor: ContactSensor = env.scene.sensors[sensor_cfg.name]
-    feet_contact = contact_sensor.data.net_forces_w[:, sensor_cfg.body_ids, :]
+    feet_contact = contact_sensor.data.net_forces_w.torch[:, sensor_cfg.body_ids, :]
     feet_contact_flag = torch.any(feet_contact > 1.0, dim=2).float() - 0.5
     return feet_contact_flag
 
@@ -69,9 +66,9 @@ def feet_height(env: ManagerBasedRLEnv, feet_names: list[str]) -> torch.Tensor:
         Tensor of shape (num_envs, 4) containing the average height of each foot above ground.
     """
     # Stack all sensor data at once
-    pos_z = torch.stack([env.scene.sensors[f"{name}_height_scanner"].data.pos_w[:, 2] for name in feet_names], dim=1)
+    pos_z = torch.stack([env.scene.sensors[f"{name}_height_scanner"].data.pos_w.torch[:, 2] for name in feet_names], dim=1)
     ray_hits_z = torch.stack(
-        [env.scene.sensors[f"{name}_height_scanner"].data.ray_hits_w[..., 2] for name in feet_names], dim=1
+        [env.scene.sensors[f"{name}_height_scanner"].data.ray_hits_w.torch[..., 2] for name in feet_names], dim=1
     )
 
     # Compute heights: (num_envs, 4, 1) - (num_envs, 4, num_rays) = (num_envs, 4, num_rays)
@@ -86,7 +83,7 @@ def joint_acc(env: ManagerBasedRLEnv, asset_cfg: SceneEntityCfg = SceneEntityCfg
     """The acceleration of the specified joints."""
     # extract the used quantities (to enable type-hinting)
     asset: Articulation = env.scene[asset_cfg.name]
-    joint_acc = asset.data.joint_acc[:, asset_cfg.joint_ids]
+    joint_acc = asset.data.joint_acc.torch[:, asset_cfg.joint_ids]
     return joint_acc
 
 

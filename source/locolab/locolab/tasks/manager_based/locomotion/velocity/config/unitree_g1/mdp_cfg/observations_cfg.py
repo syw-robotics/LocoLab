@@ -9,7 +9,7 @@
 from isaaclab.managers import ObservationGroupCfg as ObsGroup
 from isaaclab.managers import SceneEntityCfg
 from isaaclab.utils import configclass
-from isaaclab.utils.noise import AdditiveUniformNoiseCfg as Unoise
+from isaaclab.utils.noise import UniformNoiseCfg as Unoise
 
 import locolab.tasks.manager_based.locomotion.velocity.mdp as mdp
 from locolab.tasks.manager_based.locomotion.velocity.mdp import symmetry

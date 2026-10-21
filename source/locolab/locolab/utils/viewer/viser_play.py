@@ -24,6 +24,7 @@ from .browser import VIEWER_KEYS_JS, run_javascript, widen_broadcast_window
 from .debug_vis import DebugScene, debug_sources, draw_debug
 from .terrain import HEIGHT_COLOR_SCALE_M, SOLID_COLOR, paint_terrain
 from .urdf import RobotBodies, load_urdf, urdf_joint_ids
+from .utils import select_rows, xyzw_to_wxyz
 
 
 class _ProbeHandshakeFilter(logging.Filter):
@@ -257,9 +258,9 @@ class ViserPlayViewer:
         env_ids = range(self._num_envs) if show_all else (env_idx,)
         data = self._robot.data
         position, orientation, joints = _robot_arrays(
-            data.root_pos_w[selector],
-            data.root_quat_w[selector],
-            data.joint_pos[selector],
+            select_rows(data.root_pos_w, selector),
+            xyzw_to_wxyz(select_rows(data.root_quat_w, selector)),
+            select_rows(data.joint_pos, selector),
         )
         with self._server.atomic():
             self._sync_robots(env_ids, position, orientation, joints, show_scales)

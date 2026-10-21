@@ -194,7 +194,14 @@ def _height_field_to_mesh(func):
             (length_pixels - 2 * border_pixels) * cfg.horizontal_scale,
         )
         cfg.size = sub_terrain_size
-        z_gen = func(difficulty, cfg)
+        generated = func(difficulty, cfg)
+        if isinstance(generated, tuple):
+            z_gen, origin = generated
+            origin = np.array(origin, dtype=np.float64, copy=True)
+            origin[:2] += border_pixels * cfg.horizontal_scale
+        else:
+            z_gen = generated
+            origin = None
         heights[border_pixels:-border_pixels, border_pixels:-border_pixels] = z_gen
         cfg.size = terrain_size
 
@@ -202,12 +209,14 @@ def _height_field_to_mesh(func):
             heights, cfg.horizontal_scale, cfg.vertical_scale, cfg.slope_threshold
         )
         mesh = trimesh.Trimesh(vertices=vertices, faces=triangles, process=False)
-        x1 = int((cfg.size[0] * 0.5 - 1) / cfg.horizontal_scale)
-        x2 = int((cfg.size[0] * 0.5 + 1) / cfg.horizontal_scale)
-        y1 = int((cfg.size[1] * 0.5 - 1) / cfg.horizontal_scale)
-        y2 = int((cfg.size[1] * 0.5 + 1) / cfg.horizontal_scale)
-        origin_z = np.max(heights[x1:x2, y1:y2]) * cfg.vertical_scale
-        return [mesh], np.array([0.5 * cfg.size[0], 0.5 * cfg.size[1], origin_z])
+        if origin is None:
+            x1 = int((cfg.size[0] * 0.5 - 1) / cfg.horizontal_scale)
+            x2 = int((cfg.size[0] * 0.5 + 1) / cfg.horizontal_scale)
+            y1 = int((cfg.size[1] * 0.5 - 1) / cfg.horizontal_scale)
+            y2 = int((cfg.size[1] * 0.5 + 1) / cfg.horizontal_scale)
+            origin_z = np.max(heights[x1:x2, y1:y2]) * cfg.vertical_scale
+            origin = np.array([0.5 * cfg.size[0], 0.5 * cfg.size[1], origin_z])
+        return [mesh], origin
 
     return wrapper
 

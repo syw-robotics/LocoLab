@@ -4,23 +4,58 @@ from __future__ import annotations
 
 import numpy as np
 
-from isaaclab.terrains.height_field.utils import height_field_to_mesh
+from isaaclab.terrains.height_field.utils import height_field_to_mesh, to_discrete_units
 
 from . import locolab_hf_terrains_cfg
 from .utils import _finalize_height_field
 
 
+def _height_field_origin(height_field: np.ndarray, cfg, height: int | None = None) -> np.ndarray:
+    """Origin [m] in the generated height field, before the border is added.
+
+    With ``height`` omitted, the vertical coordinate is the highest sample within one meter of the
+    center. Pass the center-platform sample when the spawn surface is a pit, a gap, or a stair top.
+    """
+    center_x = height_field.shape[0] // 2
+    center_y = height_field.shape[1] // 2
+    if height is None:
+        radius = max(1, to_discrete_units(1.0, cfg.horizontal_scale))
+        window = height_field[
+            max(0, center_x - radius) : center_x + radius,
+            max(0, center_y - radius) : center_y + radius,
+        ]
+        height = int(np.max(window)) if window.size else 0
+    return np.array(
+        [
+            (height_field.shape[0] - 1) * cfg.horizontal_scale / 2,
+            (height_field.shape[1] - 1) * cfg.horizontal_scale / 2,
+            float(height) * cfg.vertical_scale,
+        ]
+    )
+
+
+def _pack_height_field(
+    height_field: np.ndarray, cfg, height: int | None = None
+) -> tuple[np.ndarray, np.ndarray]:
+    """Return the height field and the origin expected by ``height_field_to_mesh``."""
+    return height_field, _height_field_origin(height_field, cfg, height)
+
+
 @height_field_to_mesh
-def flat_rough_terrain(difficulty: float, cfg: locolab_hf_terrains_cfg.HfFlatRoughTerrainCfg) -> np.ndarray:
+def flat_rough_terrain(
+    difficulty: float, cfg: locolab_hf_terrains_cfg.HfFlatRoughTerrainCfg
+) -> tuple[np.ndarray, np.ndarray]:
     """Generate flat terrain with LocoLab fractal Perlin roughness."""
     width_pixels = int(cfg.size[0] / cfg.horizontal_scale)
     length_pixels = int(cfg.size[1] / cfg.horizontal_scale)
     hf_raw = np.zeros((width_pixels, length_pixels), dtype=np.int16)
-    return _finalize_height_field(cfg, hf_raw, difficulty)
+    return _pack_height_field(_finalize_height_field(cfg, hf_raw, difficulty), cfg)
 
 
 @height_field_to_mesh
-def pyramid_sloped_rough_terrain(difficulty: float, cfg: locolab_hf_terrains_cfg.HfPyramidSlopedRoughTerrainCfg) -> np.ndarray:
+def pyramid_sloped_rough_terrain(
+    difficulty: float, cfg: locolab_hf_terrains_cfg.HfPyramidSlopedRoughTerrainCfg
+) -> tuple[np.ndarray, np.ndarray]:
     """Generate a terrain with a truncated pyramid structure with optional roughness.
 
     The terrain is a pyramid-shaped sloped surface with a slope of :obj:`slope` that trims into a flat platform
@@ -37,9 +72,7 @@ def pyramid_sloped_rough_terrain(difficulty: float, cfg: locolab_hf_terrains_cfg
         cfg: The configuration for the terrain.
 
     Returns:
-        The height field of the terrain as a 2D numpy array with discretized heights.
-        The shape of the array is (width, length), where width and length are the number of points
-        along the x and y axis, respectively.
+        The discretized height field with shape (width, length) and its origin [m] with shape (3,).
     """
     # resolve terrain configuration
     if cfg.inverted:
@@ -83,13 +116,18 @@ def pyramid_sloped_rough_terrain(difficulty: float, cfg: locolab_hf_terrains_cfg
     hf_raw = _finalize_height_field(cfg, hf_raw, difficulty)
 
     # round off the heights to the nearest vertical step
-    return np.rint(hf_raw).astype(np.int16)
+    return _pack_height_field(np.rint(hf_raw).astype(np.int16), cfg, _center_height(hf_raw))
+
+
+def _center_height(height_field: np.ndarray) -> int:
+    """Height sample at the center cell, in vertical-scale units."""
+    return int(np.rint(height_field[height_field.shape[0] // 2, height_field.shape[1] // 2]))
 
 
 @height_field_to_mesh
 def discrete_obstacles_terrain(
     difficulty: float, cfg: locolab_hf_terrains_cfg.HfDiscreteObstaclesTerrainCfg
-) -> np.ndarray:
+) -> tuple[np.ndarray, np.ndarray]:
     """Generate legged_gym-style discrete rectangular obstacles."""
     # resolve terrain configuration
     obstacle_height = cfg.obstacle_height_range[0] + difficulty * (
@@ -148,13 +186,13 @@ def discrete_obstacles_terrain(
 
     hf_raw = _finalize_height_field(cfg, hf_raw, difficulty)
 
-    return np.rint(hf_raw).astype(np.int16)
+    return _pack_height_field(np.rint(hf_raw).astype(np.int16), cfg, _center_height(hf_raw))
 
 
 @height_field_to_mesh
 def gap_terrain(
     difficulty: float, cfg: locolab_hf_terrains_cfg.HfGapTerrainCfg
-) -> np.ndarray:
+) -> tuple[np.ndarray, np.ndarray]:
     """Generate rectangular gap terrain."""
     # 0------x_11         x_1-----x_2          x_22---end
     # --------- gap_size ----------- gap_size --------
@@ -213,13 +251,13 @@ def gap_terrain(
     hf_raw = _finalize_height_field(cfg, hf_raw, difficulty)
 
     # round off the heights to the nearest vertical step
-    return np.rint(hf_raw).astype(np.int16)
+    return _pack_height_field(np.rint(hf_raw).astype(np.int16), cfg, _center_height(hf_raw))
 
 
 @height_field_to_mesh
 def double_gap_terrain(
     difficulty: float, cfg: locolab_hf_terrains_cfg.HfDoubleGapTerrainCfg
-) -> np.ndarray:
+) -> tuple[np.ndarray, np.ndarray]:
     """Generate double rectangular gap terrain."""
     # 0------x_33         x_3-----x_11          x_1------x_2         x_22-----x_4          x_4---end
     # --------- gap_size ----------- gap_size -------------- gap_size ----------- gap_size --------
@@ -295,13 +333,13 @@ def double_gap_terrain(
     hf_raw = _finalize_height_field(cfg, hf_raw, difficulty)
 
     # round off the heights to the nearest vertical step
-    return np.rint(hf_raw).astype(np.int16)
+    return _pack_height_field(np.rint(hf_raw).astype(np.int16), cfg, _center_height(hf_raw))
 
 
 @height_field_to_mesh
 def straight_gap_terrain(
     difficulty: float, cfg: locolab_hf_terrains_cfg.HfStraightGapTerrainCfg
-) -> np.ndarray:
+) -> tuple[np.ndarray, np.ndarray]:
     """Generate a y-limited corridor with independently placed islands along x.
 
     Each side packs as many gaps as fit at the difficulty-scaled gap width.
@@ -418,13 +456,13 @@ def straight_gap_terrain(
             _paint(lo, hi, y_offset_m, y_width_m, int(height_m / cfg.vertical_scale))
 
     hf_raw = _finalize_height_field(cfg, hf_raw, difficulty, mask=walkable)
-    return np.rint(hf_raw).astype(np.int16)
+    return _pack_height_field(np.rint(hf_raw).astype(np.int16), cfg, _center_height(hf_raw))
 
 
 @height_field_to_mesh
 def hurdle_terrain(
     difficulty: float, cfg: locolab_hf_terrains_cfg.HfHurdleTerrainCfg
-) -> np.ndarray:
+) -> tuple[np.ndarray, np.ndarray]:
     """Generate rectangular gap terrain."""
     # 0------x_11         x_1-----x_2          x_22---end
     #          ----------           ----------
@@ -472,11 +510,13 @@ def hurdle_terrain(
     hf_raw = _finalize_height_field(cfg, hf_raw, difficulty)
 
     # round off the heights to the nearest vertical step
-    return np.rint(hf_raw).astype(np.int16)
+    return _pack_height_field(np.rint(hf_raw).astype(np.int16), cfg, _center_height(hf_raw))
 
 
 @height_field_to_mesh
-def pyramid_stairs_terrain(difficulty: float, cfg: locolab_hf_terrains_cfg.HfPyramidStairsTerrainCfg) -> np.ndarray:
+def pyramid_stairs_terrain(
+    difficulty: float, cfg: locolab_hf_terrains_cfg.HfPyramidStairsTerrainCfg
+) -> tuple[np.ndarray, np.ndarray]:
     """Generate pyramid stairs, snapping tread width to the height-field grid."""
     noise_min, noise_max = cfg.stair_width_noise_range
     if cfg.stair_width <= 0.0:
@@ -531,4 +571,4 @@ def pyramid_stairs_terrain(difficulty: float, cfg: locolab_hf_terrains_cfg.HfPyr
         hf_raw[start_x:stop_x, start_y:stop_y] = current_step_height
 
     hf_raw = _finalize_height_field(cfg, hf_raw, difficulty)
-    return np.rint(hf_raw).astype(np.int16)
+    return _pack_height_field(np.rint(hf_raw).astype(np.int16), cfg, _center_height(hf_raw))

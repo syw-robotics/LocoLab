@@ -7,14 +7,12 @@
 
 """Script to play a checkpoint if an RL agent from Z-RL."""
 
-"""Launch Isaac Sim Simulator first."""
-
 import argparse
 import sys
 
 from locolab.utils.viewer import add_play_viewer_args, open_play_viewer, prepare_play_viewer
 
-from isaaclab.app import AppLauncher
+from isaaclab.app import add_launcher_args, launch_simulation
 
 # local imports
 import cli_args  # isort: skip
@@ -44,24 +42,18 @@ parser.add_argument("--real-time", action="store_true", default=False, help="Run
 add_play_viewer_args(parser)
 # append Z-RL cli arguments
 cli_args.add_z_rl_args(parser)
-# append AppLauncher cli args
-AppLauncher.add_app_launcher_args(parser)
+# append simulation launcher cli args
+add_launcher_args(parser)
 # parse the arguments
-args_cli, hydra_args = parser.parse_known_args()
+from isaaclab_tasks.utils.hydra import setup_preset_cli
+
+args_cli, hydra_args = setup_preset_cli(parser)
 if args_cli.task is not None and not args_cli.task.endswith("-Play"):
     args_cli.task = f"{args_cli.task}-Play"
     print(f"[INFO] Using play task: {args_cli.task}")
-# always enable cameras to record video
-if args_cli.video:
-    args_cli.enable_cameras = True
 
 # clear out sys.argv for Hydra
 sys.argv = [sys.argv[0]] + hydra_args
-
-# launch omniverse app
-app_launcher = AppLauncher(args_cli)
-simulation_app = app_launcher.app
-
 
 """Rest everything follows."""
 
@@ -72,21 +64,20 @@ import gymnasium as gym
 import torch
 from z_rl.runners import DistillationRunner, OnPolicyRunner
 
-from isaaclab.envs import ManagerBasedRLEnvCfg
 from isaaclab.utils.assets import retrieve_file_path
-from isaaclab.utils.dict import print_dict
+from isaaclab.envs.utils.video_recorder_cfg import VideoRecorderCfg
 
 from z_rl.adaptor.isaaclab import ZRlBaseRunnerCfg, ZRlVecEnvWrapper
 from isaaclab_rl.utils.pretrained_checkpoint import get_published_pretrained_checkpoint
 
 import locolab.tasks  # noqa: F401
 from isaaclab_tasks.utils import get_checkpoint_path
-from isaaclab_tasks.utils.hydra import hydra_task_config
+from isaaclab_tasks.utils.hydra import resolve_task_config
 
 
-@hydra_task_config(args_cli.task, args_cli.agent)
-def main(env_cfg: ManagerBasedRLEnvCfg, agent_cfg: ZRlBaseRunnerCfg):
+def main():
     """Play with Z-RL agent."""
+    env_cfg, agent_cfg = resolve_task_config(args_cli.task, args_cli.agent, overrides=hydra_args)
     # grab task name for checkpoint path
     task_name = args_cli.task.split(":")[-1]
     train_task_name = task_name.replace("-Play", "")
@@ -147,20 +138,25 @@ def main(env_cfg: ManagerBasedRLEnvCfg, agent_cfg: ZRlBaseRunnerCfg):
     # for viser remote web viewer
     prepare_play_viewer(args_cli, env_cfg)
 
-    # create isaac environment
-    env = gym.make(args_cli.task, cfg=env_cfg, render_mode="rgb_array" if args_cli.video else None)
-
-    # wrap for video recording
     if args_cli.video:
-        video_kwargs = {
-            "video_folder": os.path.join(log_dir, "videos", "play"),
-            "step_trigger": lambda step: step == 0,
-            "video_length": args_cli.video_length,
-            "disable_logger": True,
-        }
-        print("[INFO] Recording videos during training.")
-        print_dict(video_kwargs, nesting=4)
-        env = gym.wrappers.RecordVideo(env, **video_kwargs)
+        env_cfg.video_recorders = [
+            VideoRecorderCfg(
+                source="viz:kit",
+                output_dir=os.path.join(log_dir, "videos", "play"),
+                video_length=args_cli.video_length,
+                video_interval=0,
+            )
+        ]
+        print("[INFO] Recording a video during playback.")
+
+    with launch_simulation(env_cfg, args_cli):
+        _play(env_cfg, agent_cfg, resume_path, load_cfg)
+
+
+def _play(env_cfg, agent_cfg, resume_path, load_cfg):
+    """Play a checkpoint after the simulation runtime has started."""
+    # create isaac environment
+    env = gym.make(args_cli.task, cfg=env_cfg)
 
     # wrap around environment for z-rl
     env = ZRlVecEnvWrapper(env, clip_actions=agent_cfg.clip_actions)
@@ -201,7 +197,7 @@ def main(env_cfg: ManagerBasedRLEnvCfg, agent_cfg: ZRlBaseRunnerCfg):
     timestep = 0
     # simulate environment
     try:
-        while simulation_app.is_running():
+        while env.unwrapped.sim.is_running():
             start_time = time.time()
             # run everything in inference mode
             with torch.inference_mode():
@@ -246,5 +242,3 @@ def main(env_cfg: ManagerBasedRLEnvCfg, agent_cfg: ZRlBaseRunnerCfg):
 if __name__ == "__main__":
     # run the main function
     main()
-    # close sim app
-    simulation_app.close()

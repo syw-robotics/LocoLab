@@ -5,12 +5,10 @@
 
 """Script to train RL agent with Z-RL."""
 
-"""Launch Isaac Sim Simulator first."""
-
 import argparse
 import sys
 
-from isaaclab.app import AppLauncher
+from isaaclab.app import add_launcher_args, launch_simulation
 
 # local imports
 import cli_args  # isort: skip
@@ -43,21 +41,14 @@ parser.add_argument("--cprofile", action="store_true", default=False, help="Enab
 
 # append Z-RL cli arguments
 cli_args.add_z_rl_args(parser)
-# append AppLauncher cli args
-AppLauncher.add_app_launcher_args(parser)
-args_cli, hydra_args = parser.parse_known_args()
+# append simulation launcher cli args
+add_launcher_args(parser)
+from isaaclab_tasks.utils.hydra import setup_preset_cli
 
-# always enable cameras to record video
-if args_cli.video:
-    args_cli.enable_cameras = True
+args_cli, hydra_args = setup_preset_cli(parser)
 
 # clear out sys.argv for Hydra
 sys.argv = [sys.argv[0]] + hydra_args
-
-# launch omniverse app
-app_launcher = AppLauncher(args_cli)
-simulation_app = app_launcher.app
-
 
 """Rest everything follows."""
 
@@ -71,14 +62,14 @@ import torch
 from z_rl.runners import DistillationRunner, OnPolicyRunner
 
 from isaaclab.envs import ManagerBasedRLEnvCfg
-from isaaclab.utils.dict import print_dict
+from isaaclab.envs.utils.video_recorder_cfg import VideoRecorderCfg
 from isaaclab.utils.io import dump_yaml
 
-from z_rl.adaptor.isaaclab import ZRlBaseRunnerCfg, ZRlVecEnvWrapper
+from z_rl.adaptor.isaaclab import ZRlVecEnvWrapper
 
 import locolab.tasks  # noqa: F401
 from isaaclab_tasks.utils import get_checkpoint_path
-from isaaclab_tasks.utils.hydra import hydra_task_config
+from isaaclab_tasks.utils.hydra import resolve_task_config
 
 # debug mode with debugpy
 if args_cli.debug:
@@ -103,9 +94,9 @@ torch.backends.cudnn.deterministic = False
 torch.backends.cudnn.benchmark = False
 
 
-@hydra_task_config(args_cli.task, args_cli.agent)
-def main(env_cfg: ManagerBasedRLEnvCfg, agent_cfg: ZRlBaseRunnerCfg):
+def main():
     """Train with Z-RL agent."""
+    env_cfg, agent_cfg = resolve_task_config(args_cli.task, args_cli.agent, overrides=hydra_args)
     # override configurations with non-hydra CLI arguments
     agent_cfg = cli_args.update_z_rl_cfg(agent_cfg, args_cli)
 
@@ -131,13 +122,10 @@ def main(env_cfg: ManagerBasedRLEnvCfg, agent_cfg: ZRlBaseRunnerCfg):
             "Please use GPU device (e.g., --device cuda) for distributed training."
         )
 
-    # multi-gpu training configuration
+    # multi-gpu training configuration. launch_simulation assigns the rank device.
     if args_cli.distributed:
-        env_cfg.sim.device = f"cuda:{app_launcher.local_rank}"
-        agent_cfg.device = f"cuda:{app_launcher.local_rank}"
-
-        # set seed to have diversity in different threads
-        seed = agent_cfg.seed + app_launcher.local_rank
+        local_rank = int(os.environ.get("LOCAL_RANK", "0"))
+        seed = agent_cfg.seed + local_rank
         env_cfg.seed = seed
         agent_cfg.seed = seed
 
@@ -165,27 +153,33 @@ def main(env_cfg: ManagerBasedRLEnvCfg, agent_cfg: ZRlBaseRunnerCfg):
     # set the log directory for the environment (works for all environment types)
     env_cfg.log_dir = log_dir
 
-    # create isaac environment
-    env = gym.make(args_cli.task, cfg=env_cfg, render_mode="rgb_array" if args_cli.video else None)
+    # Video recorders must exist before launch so Kit can be started for capture.
+    if args_cli.video:
+        env_cfg.video_recorders = [
+            VideoRecorderCfg(
+                source="viz:kit",
+                output_dir=os.path.join(log_dir, "videos", "train"),
+                video_length=args_cli.video_length,
+                video_interval=args_cli.video_interval,
+            )
+        ]
+        print("[INFO] Recording videos during training.")
 
     # save resume path before creating a new log_dir
     resume_path = None
     if agent_cfg.resume:
         resume_path = get_checkpoint_path(log_root_path, agent_cfg.load_run, agent_cfg.load_checkpoint)
 
-    # wrap for video recording
-    if args_cli.video:
-        video_kwargs = {
-            "video_folder": os.path.join(log_dir, "videos", "train"),
-            "step_trigger": lambda step: step % args_cli.video_interval == 0,
-            "video_length": args_cli.video_length,
-            "disable_logger": True,
-        }
-        print("[INFO] Recording videos during training.")
-        print_dict(video_kwargs, nesting=4)
-        env = gym.wrappers.RecordVideo(env, **video_kwargs)
+    with launch_simulation(env_cfg, args_cli):
+        if args_cli.distributed:
+            agent_cfg.device = env_cfg.sim.device
+        _train(env_cfg, agent_cfg, log_dir, resume_path)
 
+
+def _train(env_cfg, agent_cfg, log_dir, resume_path):
+    """Run training after the simulation runtime has started."""
     start_time = time.time()
+    env = gym.make(args_cli.task, cfg=env_cfg)
 
     # wrap around environment for z-rl
     env = ZRlVecEnvWrapper(env, clip_actions=agent_cfg.clip_actions)
@@ -261,5 +255,3 @@ def main(env_cfg: ManagerBasedRLEnvCfg, agent_cfg: ZRlBaseRunnerCfg):
 if __name__ == "__main__":
     # run the main function
     main()
-    # close sim app
-    simulation_app.close()

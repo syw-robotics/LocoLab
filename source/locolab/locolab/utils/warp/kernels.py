@@ -188,7 +188,7 @@ def refresh_volume_points_kernel(
 
     ``body_poses`` rows are PhysX transforms ``(x, y, z, qx, qy, qz, qw)``. ``body_vels`` rows are
     ``(vx, vy, vz, wx, wy, wz)``. Both are flattened env-major over every environment.
-    ``quat_w`` is stored ``(w, x, y, z)``.
+    ``quat_w`` is stored ``(x, y, z, w)``, matching Isaac Lab 3.x.
     """
     # One thread per selected body. ``src`` is that body's row in the full env-major buffers.
     local = wp.tid()
@@ -205,7 +205,7 @@ def refresh_volume_points_kernel(
     ang = wp.vec3(body_vels[src, 3], body_vels[src, 4], body_vels[src, 5])
 
     pos_w[src] = origin
-    quat_w[src] = wp.vec4(qw, qx, qy, qz)
+    quat_w[src] = wp.vec4(qx, qy, qz, qw)
     vel_w[src] = lin
     ang_vel_w[src] = ang
 

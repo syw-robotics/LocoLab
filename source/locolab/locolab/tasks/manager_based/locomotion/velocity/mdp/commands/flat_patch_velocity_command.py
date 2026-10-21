@@ -61,19 +61,20 @@ class FlatPatchVelocityCommand(CommandTerm):
         """Desired base velocity (x, y, yaw) in the base frame."""
         return self.vel_command_b
 
-    def _resample_command(self, env_ids: Sequence[int]):
-        patch_ids = torch.randint(self._flat_patches.shape[2], (len(env_ids),), device=self.device)
+    def _resample_command(self, env_ids: Sequence[int] | slice):
+        num_envs = len(range(self.num_envs)[env_ids]) if isinstance(env_ids, slice) else len(env_ids)
+        patch_ids = torch.randint(self._flat_patches.shape[2], (num_envs,), device=self.device)
         self.target_pos_w[env_ids] = self._flat_patches[
             self._terrain.terrain_levels[env_ids], self._terrain.terrain_types[env_ids], patch_ids
         ]
         if self.cfg.rel_standing_envs > 0.0:
-            self.is_standing_env[env_ids] = torch.rand(len(env_ids), device=self.device) < self.cfg.rel_standing_envs
+            self.is_standing_env[env_ids] = torch.rand(num_envs, device=self.device) < self.cfg.rel_standing_envs
 
     def _update_command(self):
-        target_delta = self.target_pos_w[:, :2] - self.robot.data.root_pos_w[:, :2]
+        target_delta = self.target_pos_w[:, :2] - self.robot.data.root_pos_w.torch[:, :2]
         distance = torch.linalg.vector_norm(target_delta, dim=1)
         heading_error = math_utils.wrap_to_pi(
-            torch.atan2(target_delta[:, 1], target_delta[:, 0]) - self.robot.data.heading_w
+            torch.atan2(target_delta[:, 1], target_delta[:, 0]) - self.robot.data.heading_w.torch
         )
         speed = (distance * self.cfg.velocity_control_stiffness).clamp(max=self.cfg.max_linear_velocity)
         active = (distance > self.cfg.target_distance_threshold) & ~self.is_standing_env
@@ -90,10 +91,10 @@ class FlatPatchVelocityCommand(CommandTerm):
             return
 
         self.metrics["error_vel_xy"].add_(
-            torch.norm(self.vel_command_b[:, :2] - self.robot.data.root_lin_vel_b[:, :2], dim=-1),
+            torch.norm(self.vel_command_b[:, :2] - self.robot.data.root_lin_vel_b.torch[:, :2], dim=-1),
             alpha=self._metrics_update_scale,
         )
         self.metrics["error_vel_yaw"].add_(
-            torch.abs(self.vel_command_b[:, 2] - self.robot.data.root_ang_vel_b[:, 2]),
+            torch.abs(self.vel_command_b[:, 2] - self.robot.data.root_ang_vel_b.torch[:, 2]),
             alpha=self._metrics_update_scale,
         )
