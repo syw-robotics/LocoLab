@@ -12,7 +12,7 @@ from dataclasses import MISSING
 
 import torch
 
-from isaaclab.actuators import DelayedPDActuator, DelayedPDActuatorCfg
+from isaaclab.actuators import DelayedPDActuator, DelayedPDActuatorCfg, resolve_joint_parameter
 from isaaclab.utils import configclass
 from isaaclab.utils.types import ArticulationActions
 
@@ -58,13 +58,13 @@ class UnitreeActuator(DelayedPDActuator):
         super().__init__(cfg, *args, **kwargs)
 
         self._joint_vel = torch.zeros_like(self.computed_effort)
-        self._effort_y1 = self._parse_joint_parameter(cfg.Y1, 1e9)
-        self._effort_y2 = self._parse_joint_parameter(cfg.Y2, cfg.Y1)
-        self._velocity_x1 = self._parse_joint_parameter(cfg.X1, 1e9)
-        self._velocity_x2 = self._parse_joint_parameter(cfg.X2, 1e9)
-        self._friction_static = self._parse_joint_parameter(cfg.Fs, 0.0)
-        self._friction_dynamic = self._parse_joint_parameter(cfg.Fd, 0.0)
-        self._activation_vel = self._parse_joint_parameter(cfg.Va, 0.01)
+        self._effort_y1 = resolve_joint_parameter(cfg.Y1, 1e9, self.joint_names, self._num_envs, self._device)
+        self._effort_y2 = resolve_joint_parameter(cfg.Y2, cfg.Y1, self.joint_names, self._num_envs, self._device)
+        self._velocity_x1 = resolve_joint_parameter(cfg.X1, 1e9, self.joint_names, self._num_envs, self._device)
+        self._velocity_x2 = resolve_joint_parameter(cfg.X2, 1e9, self.joint_names, self._num_envs, self._device)
+        self._friction_static = resolve_joint_parameter(cfg.Fs, 0.0, self.joint_names, self._num_envs, self._device)
+        self._friction_dynamic = resolve_joint_parameter(cfg.Fd, 0.0, self.joint_names, self._num_envs, self._device)
+        self._activation_vel = resolve_joint_parameter(cfg.Va, 0.01, self.joint_names, self._num_envs, self._device)
 
     def compute(
         self, control_action: ArticulationActions, joint_pos: torch.Tensor, joint_vel: torch.Tensor

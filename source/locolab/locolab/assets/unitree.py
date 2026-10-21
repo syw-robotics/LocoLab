@@ -13,6 +13,9 @@ Reference: https://github.com/unitreerobotics/unitree_rl_lab
 
 import os
 
+from isaaclab_newton.sim.schemas import NewtonArticulationCfg
+from isaaclab_physx.sim.schemas import PhysxArticulationCfg, PhysxRigidBodyCfg
+
 import isaaclab.sim as sim_utils
 from isaaclab.actuators import ImplicitActuatorCfg
 from isaaclab.assets.articulation import ArticulationCfg
@@ -25,6 +28,26 @@ from .actuators import beyondmimic_g1_29dof_actuators
 # Get the absolute path to the robots directory relative to this file
 _ASSETS_DIR = os.path.dirname(os.path.abspath(__file__))
 UNITREE_MODEL_DIR = os.path.join(_ASSETS_DIR, "robots", "unitree")
+
+
+def articulation_fragments(
+    self_collisions: bool,
+    position_iterations: int = 4,
+    velocity_iterations: int = 2,
+) -> list:
+    """PhysX and Newton articulation settings for one robot.
+
+    A bare PhysX fragment is ignored when the simulation runs on Newton, so
+    self-collision is written into both backends.
+    """
+    return [
+        PhysxArticulationCfg(
+            enabled_self_collisions=self_collisions,
+            solver_position_iteration_count=position_iterations,
+            solver_velocity_iteration_count=velocity_iterations,
+        ),
+        NewtonArticulationCfg(self_collision_enabled=self_collisions),
+    ]
 
 
 @configclass
@@ -43,17 +66,17 @@ class UnitreeArticulationCfg(ArticulationCfg):
 class UnitreeUrdfFileCfg(sim_utils.UrdfFileCfg):
     fix_base: bool = False
     activate_contact_sensors: bool = True
-    replace_cylinders_with_capsules = False
-    merge_fixed_joints = True
+    # Shipped URDFs already merge every fixed joint except the feet.
+    merge_fixed_joints = False
     joint_drive = sim_utils.UrdfConverterCfg.JointDriveCfg(
         gains=sim_utils.UrdfConverterCfg.JointDriveCfg.PDGainsCfg(stiffness=0, damping=0)
     )
-    articulation_props = sim_utils.ArticulationRootPropertiesCfg(
-        enabled_self_collisions=False,
-        solver_position_iteration_count=4,
-        solver_velocity_iteration_count=2,
+    articulation_props = articulation_fragments(
+        self_collisions=False,
+        position_iterations=4,
+        velocity_iterations=2,
     )
-    rigid_props = sim_utils.RigidBodyPropertiesCfg(
+    rigid_props = PhysxRigidBodyCfg(
         disable_gravity=False,
         retain_accelerations=False,
         linear_damping=0.0,
@@ -114,7 +137,7 @@ GO2_SPATIAL_SYMMETRY_MAPPING = complete_symmetry_mapping(
 UNITREE_GO2_CFG = UnitreeArticulationCfg(
     # Here we prefer URDF over USD for the convenience of modifying collision shapes
     spawn=UnitreeUrdfFileCfg(
-        asset_path=f"{UNITREE_MODEL_DIR}/Go2/urdf/go2_description/urdf/go2_description.urdf",
+        asset_path=f"{UNITREE_MODEL_DIR}/Go2/urdf/go2_description/urdf/go2_description_merged.urdf",
     ),
     init_state=ArticulationCfg.InitialStateCfg(
         pos=(0.0, 0.0, 0.4),
@@ -144,8 +167,8 @@ UNITREE_GO2_CFG = UnitreeArticulationCfg(
         #  ),
         "GO2Implicit": ImplicitActuatorCfg(
             joint_names_expr=[".*_hip_joint", ".*_thigh_joint", ".*_calf_joint"],
-            effort_limit_sim=30.0,
-            velocity_limit_sim=30.0,
+            joint_effort_limit=30.0,
+            joint_velocity_limit=30.0,
             stiffness=25.0,
             damping=0.5,
             #  friction=0.01,
@@ -193,12 +216,12 @@ B2_SPATIAL_SYMMETRY_MAPPING = complete_symmetry_mapping(
 UNITREE_B2_CFG = UnitreeArticulationCfg(
     # Here we prefer URDF over USD for the convenience of modifying collision shapes
     spawn=UnitreeUrdfFileCfg(
-        asset_path=f"{UNITREE_MODEL_DIR}/B2/urdf/b2_description/urdf/b2_description.urdf",
+        asset_path=f"{UNITREE_MODEL_DIR}/B2/urdf/b2_description/urdf/b2_description_merged.urdf",
     ).replace(
-        articulation_props=sim_utils.ArticulationRootPropertiesCfg(
-            enabled_self_collisions=True,
-            solver_position_iteration_count=4,
-            solver_velocity_iteration_count=2,
+        articulation_props=articulation_fragments(
+            self_collisions=False,
+            position_iterations=4,
+            velocity_iterations=2,
         ),
     ),
     init_state=ArticulationCfg.InitialStateCfg(
@@ -216,8 +239,8 @@ UNITREE_B2_CFG = UnitreeArticulationCfg(
         #  "B2DelayedImplicit_Hip_Thigh": DelayedImplicitActuatorCfg(
         "B2Implicit_Hip_Thigh": ImplicitActuatorCfg(
             joint_names_expr=[".*_hip_joint", ".*_thigh_joint"],
-            effort_limit_sim=200.0,
-            velocity_limit_sim=23.0,
+            joint_effort_limit=200.0,
+            joint_velocity_limit=23.0,
             stiffness=100.0,
             damping=2.0,
             friction=0.01,
@@ -225,8 +248,8 @@ UNITREE_B2_CFG = UnitreeArticulationCfg(
         ),
         "B2Implicit_Calf": ImplicitActuatorCfg(
             joint_names_expr=[".*_calf_joint"],
-            effort_limit_sim=320.0,
-            velocity_limit_sim=14.0,
+            joint_effort_limit=320.0,
+            joint_velocity_limit=14.0,
             stiffness=100.0,
             damping=2.0,
             friction=0.01,
@@ -295,10 +318,9 @@ UNITREE_G1_29DOF_BEYONDMIMIC_PELVIS_BASE_CFG = UnitreeArticulationCfg(
     # Here we prefer URDF over USD for the convenience of modifying collision shapes
     spawn=sim_utils.UrdfFileCfg(
         fix_base=False,
-        replace_cylinders_with_capsules=True,
         asset_path=f"{UNITREE_MODEL_DIR}/G1/urdf/g1_description/g1_29dof_beyondmimic_pelvis_base.urdf",
         activate_contact_sensors=True,
-        rigid_props=sim_utils.RigidBodyPropertiesCfg(
+        rigid_props=PhysxRigidBodyCfg(
             disable_gravity=False,
             retain_accelerations=False,
             linear_damping=0.0,
@@ -307,12 +329,10 @@ UNITREE_G1_29DOF_BEYONDMIMIC_PELVIS_BASE_CFG = UnitreeArticulationCfg(
             max_angular_velocity=1000.0,
             max_depenetration_velocity=1.0,
         ),
-        articulation_props=sim_utils.ArticulationRootPropertiesCfg(
-            enabled_self_collisions=True,
-            #  solver_position_iteration_count=8,
-            #  solver_velocity_iteration_count=4,
-            solver_position_iteration_count=4,
-            solver_velocity_iteration_count=2,
+        articulation_props=articulation_fragments(
+            self_collisions=False,
+            position_iterations=4,
+            velocity_iterations=2,
         ),
         joint_drive=sim_utils.UrdfConverterCfg.JointDriveCfg(
             gains=sim_utils.UrdfConverterCfg.JointDriveCfg.PDGainsCfg(stiffness=0, damping=0)
@@ -376,3 +396,5 @@ UNITREE_G1_29DOF_BEYONDMIMIC_TORSO_BASE_CFG = UNITREE_G1_29DOF_BEYONDMIMIC_PELVI
     )
 )
 """Configuration for the torso-base Unitree G1 29DOF humanoid robot."""
+
+

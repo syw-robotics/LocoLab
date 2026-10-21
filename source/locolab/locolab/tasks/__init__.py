@@ -17,6 +17,37 @@ from __future__ import annotations
 
 import sys
 
+
+def _cli_selects_newton(argv: list[str]) -> bool:
+    """Return whether this process asked for a Newton physics preset.
+
+    Importing the Isaac Sim URDF helper registers ``physxSchemaFallback``. OvPhysX then
+    fails when it registers the real ``physxSchema`` plugin for the same types. Newton URDF
+    conversion still needs those codeless schemas before the first USD lookup.
+    """
+    newton_presets = {"newton", "newton_mjwarp", "newton_kamino", "kamino"}
+    selected_physics: list[str] = []
+    selected_presets: list[str] = []
+    for arg in argv:
+        key, separator, value = arg.partition("=")
+        if not separator:
+            continue
+        names = [item.strip() for item in value.split(",") if item.strip()]
+        key = key.removeprefix("--")
+        if key == "physics":
+            selected_physics.extend(names)
+        elif key == "presets":
+            selected_presets.extend(names)
+    if any(name in newton_presets for name in selected_physics):
+        return True
+    return not selected_physics and any(name in newton_presets for name in selected_presets)
+
+
+if _cli_selects_newton(sys.argv[1:]):
+    from isaacsim.asset.importer.urdf import URDFImporter as _URDFImporter
+
+    del _URDFImporter
+
 from isaaclab_tasks.utils import import_packages
 
 ##

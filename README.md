@@ -7,7 +7,7 @@
 
 
 <!-- [![IsaacSim](https://img.shields.io/badge/IsaacSim-5.1.0-silver.svg)](https://docs.omniverse.nvidia.com/isaacsim/latest/overview.html) -->
-[![Isaac Lab](https://img.shields.io/badge/IsaacLab-2.3.2-brightgreen?logo=nvidia&logoColor=white)](https://isaac-sim.github.io/IsaacLab)
+[![Isaac Lab](https://img.shields.io/badge/IsaacLab-3.0-brightgreen?logo=nvidia&logoColor=white)](https://isaac-sim.github.io/IsaacLab)
 [![Z RL](https://img.shields.io/badge/Z_RL-Flexible_RL_Lib-orange?logo=python&logoColor=white)](https://github.com/syw-robotics/z_rl)
 
 <!-- [![Linux platform](https://img.shields.io/badge/platform-linux--64-orange.svg)](https://releases.ubuntu.com/22.04/)
@@ -39,8 +39,8 @@ We introduce **LocoLab**, a RL locomotion **env benchmark** with sim2real robust
 
 ## 📦 Installation
 
-- Install Isaac Lab by following the [installation guide](https://isaac-sim.github.io/IsaacLab/main/source/setup/installation/index.html).
-  We recommend using the conda or uv installation as it simplifies calling Python scripts from the terminal.
+- Install Isaac Lab 3.0 with uv by following the [installation guide](https://isaac-sim.github.io/IsaacLab/main/source/setup/installation/index.html).
+  From the Isaac Lab checkout, `uv sync --extra isaacsim` creates the environment. `isaaclab.sh` and the conda installer are no longer part of Isaac Lab 3.0.
 
 - Clone `LocoLab` separately from the Isaac Lab installation (i.e. outside the `IsaacLab` directory):
 
@@ -48,17 +48,17 @@ We introduce **LocoLab**, a RL locomotion **env benchmark** with sim2real robust
     git clone https://github.com/syw-robotics/LocoLab.git
     ```
 
-- Using a python interpreter that has Isaac Lab installed, install the library in editable mode using:
+- Using the Isaac Lab 3.0 interpreter, install the library in editable mode:
 
     ```bash
-    python -m pip install -e source/locolab
+    uv run --project /path/to/IsaacLab python -m pip install -e source/locolab
     ```
 
 - Install [`Z RL`](https://github.com/syw-robotics/z_rl.git), which is built on [`RSL-RL`](https://github.com/leggedrobotics/rsl_rl) but more flexible for developing algorithms.
     ```bash
     git clone https://github.com/syw-robotics/z_rl.git
     cd z_rl
-    python -m pip install -e .
+    uv run --project /path/to/IsaacLab python -m pip install -e .
     ```
 
 ## 🚀 Usage
@@ -68,14 +68,17 @@ We introduce **LocoLab**, a RL locomotion **env benchmark** with sim2real robust
     python scripts/z_rl/train.py --task=<TASK_NAME>
     ```
 
+    - Isaac Lab 3.0 no longer accepts `--headless`;
+    - The default backend is PhysX (`--physics physx`). `--physics newton_mjwarp` runs the same task on Newton with MJWarp. Presets are defined in [`physics.py`](source/locolab/locolab/utils/physics.py).
+
 - **Playing:**
     ```bash
-    python scripts/z_rl/train.py --task=<TASK_NAME>
+    python scripts/z_rl/play.py --task=<TASK_NAME>
     ```
 
-<!-- - **Deployment:** -->
-<!--  -->
-<!--     For sim2im and sim2real deployment, see [go2_isaaclab_deploy](https://github.com/syw-robotics/go2_isaaclab_deploy) -->
+    - Add `--viz xxx` to use xxx front end viewer. A run without `--viz` stays headless.
+    - Still keeps `--viser`, this is a previous implemented viser viewer option.
+    - `--video` records through `VideoRecorderCfg` with the Kit visualizer (`viz:kit`).
 
 - **Helpful scripts:**
 
@@ -169,7 +172,6 @@ Different types of tasks are organized in different sub-directories, such that t
 - [ ] **G1**: Add Velocity-Flat-AMP-G1 and Velocity-Rough-G1
 - [ ] **Go2**: Refine Velocity-Rough-Go2
 - [ ] **B2**: Add Velocity-Rough-B2
-- [x] **B2Z1**: Moved to external project `B2Z1-LocoLab`
 - [ ] **Active Adaptation Port**: Migrate LocoLab tasks to (AA)[https://github.com/Agent-3154/active-adaptation]
 
 

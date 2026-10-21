@@ -15,6 +15,8 @@ from __future__ import annotations
 import numpy as np
 import trimesh
 
+from .utils import as_numpy, rotate_wxyz, xyzw_to_wxyz
+
 _SHAFT_RADIUS = 0.05
 _HEAD_RADIUS = 0.10
 _HEAD_FRACTION = 0.30
@@ -159,7 +161,7 @@ def _draw_terrain(scene: DebugScene, label: str, obj) -> None:
     if origins is None:
         scene.clear(label)
         return
-    scene.show_frames(f"{label}/origin", _numpy(origins, slice(None)).reshape(-1, 3))
+    scene.show_frames(f"{label}/origin", as_numpy(origins, slice(None)).reshape(-1, 3))
 
 
 def _ray_hits(obj):
@@ -178,15 +180,15 @@ def _draw_velocity(scene: DebugScene, label: str, obj, selector) -> None:
         scene.clear(label)
         return
     data = robot.data
-    origin = _numpy(data.root_pos_w, selector) + _marker_offset(obj)
-    quat = _numpy(data.root_quat_w, selector)
+    origin = as_numpy(data.root_pos_w, selector) + _marker_offset(obj)
+    quat = xyzw_to_wxyz(as_numpy(data.root_quat_w, selector))
     gain = _length_gain(obj)
     _draw_arrow(
         scene,
         f"{label}/goal",
         origin,
         quat,
-        _numpy(obj.vel_command_b, selector)[:, :2],
+        as_numpy(obj.vel_command_b, selector)[:, :2],
         gain,
         _marker_color(obj, "goal_vel_visualizer_cfg", _GOAL_COLOR),
     )
@@ -195,7 +197,7 @@ def _draw_velocity(scene: DebugScene, label: str, obj, selector) -> None:
         f"{label}/current",
         origin,
         quat,
-        _numpy(data.root_lin_vel_b, selector)[:, :2],
+        as_numpy(data.root_lin_vel_b, selector)[:, :2],
         gain,
         _marker_color(obj, "current_vel_visualizer_cfg", _CURRENT_COLOR),
     )
@@ -212,7 +214,7 @@ def _draw_arrow(scene, name, origin, quat, xy, gain: float, color: tuple[int, in
     direction_b[moving, 0] = xy[moving, 0] / speed[moving]
     direction_b[moving, 1] = xy[moving, 1] / speed[moving]
     direction_b[~moving, 0] = 1.0
-    direction_w = _quat_apply(quat, direction_b)
+    direction_w = rotate_wxyz(quat, direction_b)
     direction_w /= np.maximum(np.linalg.norm(direction_w, axis=1, keepdims=True), 1e-8)
     length = np.where(moving, speed * gain, _MIN_ARROW_LENGTH)
     shaft_len = length * (1.0 - _HEAD_FRACTION)
@@ -231,7 +233,7 @@ def _draw_arrow(scene, name, origin, quat, xy, gain: float, color: tuple[int, in
 
 
 def _draw_rays(scene: DebugScene, label: str, obj, selector) -> None:
-    hits = _numpy(_ray_hits(obj), selector).reshape(-1, 3)
+    hits = as_numpy(_ray_hits(obj), selector).reshape(-1, 3)
     finite = np.isfinite(hits).all(axis=1)
     points = hits[finite]
     if len(points) > _MAX_RAY_POINTS:
@@ -249,15 +251,6 @@ def _draw_rays(scene: DebugScene, label: str, obj, selector) -> None:
         np.full((count, 3), radius, dtype=np.float32),
         _RAY_COLOR,
     )
-
-
-def _numpy(value, selector) -> np.ndarray:
-    if hasattr(value, "torch"):
-        value = value.torch
-    value = value[selector]
-    if hasattr(value, "detach"):
-        value = value.detach().cpu().numpy()
-    return np.asarray(value, dtype=np.float64)
 
 
 def _marker_offset(obj) -> np.ndarray:
@@ -287,13 +280,6 @@ def _marker_color(obj, attr: str, default: tuple[int, int, int]) -> tuple[int, i
     if color is None or len(color) < 3:
         return default
     return tuple(int(np.clip(float(channel), 0.0, 1.0) * 255.0) for channel in color[:3])
-
-
-def _quat_apply(quat: np.ndarray, vec: np.ndarray) -> np.ndarray:
-    """Rotate vectors by wxyz quaternions. Both arrays are shaped ``(N, *)``."""
-    xyz = quat[:, 1:]
-    t = np.cross(xyz, vec) * 2.0
-    return vec + quat[:, :1] * t + np.cross(xyz, t)
 
 
 def _quats_from_z(directions: np.ndarray) -> np.ndarray:

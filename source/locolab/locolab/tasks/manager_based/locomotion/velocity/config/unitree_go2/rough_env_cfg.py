@@ -6,7 +6,8 @@
 # All rights reserved.
 # Modifications are licensed under BSD-3-Clause.
 
-import isaaclab.sim as sim_utils
+from isaaclab_physx.sim.spawners.materials import PhysxRigidBodyMaterialCfg
+
 from isaaclab.assets import ArticulationCfg, AssetBaseCfg
 from isaaclab.envs import ManagerBasedRLEnvCfg
 from isaaclab.scene import InteractiveSceneCfg
@@ -14,6 +15,7 @@ from isaaclab.sensors import ContactSensorCfg, RayCasterCfg, patterns
 from isaaclab.utils import configclass
 
 #  from isaaclab.utils.assets import ISAAC_NUCLEUS_DIR
+from locolab.utils.physics import use_locomotion_physics
 from locolab.utils.scene import rough_terrain_visual_material_cfg, blue_sky_light_cfg
 from locolab.utils.terrains import TerrainImporterCfg
 
@@ -60,7 +62,7 @@ class Go2RoughSceneCfg(InteractiveSceneCfg):
         prim_path="/World/ground",
         terrain_type="generator",
         terrain_generator=ROUGH_TERRAINS_CFG,
-        physics_material=sim_utils.RigidBodyMaterialCfg(
+        physics_material=PhysxRigidBodyMaterialCfg(
             friction_combine_mode="multiply",
             restitution_combine_mode="multiply",
             static_friction=1.0,
@@ -75,12 +77,14 @@ class Go2RoughSceneCfg(InteractiveSceneCfg):
 
     # =====  sensors  =====
     height_scanner: RayCasterCfg = RayCasterCfg(
-        prim_path="{ENV_REGEX_NS}/Robot/base",
-        offset=RayCasterCfg.OffsetCfg(pos=(0.0, 0.0, 5.0)),
+        # URDF import nests the rigid body under Geometry, not directly under Robot.
+        prim_path="{ENV_REGEX_NS}/Robot/Geometry/base",
+        offset=RayCasterCfg.OffsetCfg(pos=(0.0, 0.0, 20.0)),
         ray_alignment="yaw",
         pattern_cfg=patterns.GridPatternCfg(resolution=0.1, size=[1.6, 1.0]),
         debug_vis=False,
         mesh_prim_paths=["/World/ground"],
+        global_world_only=True,
         visualizer_cfg=BLUE_RAY_CASTER_MARKER_CFG,
     )
     contact_forces: ContactSensorCfg = ContactSensorCfg(
@@ -155,7 +159,7 @@ class Go2RoughEnvCfg(ManagerBasedRLEnvCfg):
         self.sim.dt = 0.005
         self.sim.render_interval = self.decimation
         self.sim.physics_material = self.scene.terrain.physics_material
-        self.sim.physx.gpu_max_rigid_patch_count = 10 * 2**15
+        use_locomotion_physics(self.sim, rigid_patch_count=2**16, njmax=100, nconmax=20)
         self.scene.terrain.max_init_terrain_level = 0
         # update sensor update periods
         # we tick all the sensors based on the smallest update period (physics update period)

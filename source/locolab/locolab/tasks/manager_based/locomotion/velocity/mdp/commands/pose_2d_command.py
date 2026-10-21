@@ -31,18 +31,19 @@ class TerrainBasedPose2dCommand(UniformPose2dCommand):
         if self.valid_targets.shape[2] == 0:
             raise ValueError(f"Terrain flat patches named '{cfg.flat_patch_key}' are empty.")
 
-    def _resample_command(self, env_ids: Sequence[int]):
-        patch_ids = torch.randint(self.valid_targets.shape[2], (len(env_ids),), device=self.device)
+    def _resample_command(self, env_ids: Sequence[int] | slice):
+        num_envs = len(range(self.num_envs)[env_ids]) if isinstance(env_ids, slice) else len(env_ids)
+        patch_ids = torch.randint(self.valid_targets.shape[2], (num_envs,), device=self.device)
         self.pos_command_w[env_ids] = self.valid_targets[
             self.terrain.terrain_levels[env_ids], self.terrain.terrain_types[env_ids], patch_ids
         ]
-        self.pos_command_w[env_ids, 2] += self.robot.data.default_root_state[env_ids, 2]
+        self.pos_command_w[env_ids, 2] += self.robot.data.default_root_pose.torch[env_ids, 2]
 
         if self.cfg.simple_heading:
-            target_delta = self.pos_command_w[env_ids, :2] - self.robot.data.root_pos_w[env_ids, :2]
+            target_delta = self.pos_command_w[env_ids, :2] - self.robot.data.root_pos_w.torch[env_ids, :2]
             target_heading = torch.atan2(target_delta[:, 1], target_delta[:, 0])
             flipped_heading = wrap_to_pi(target_heading + torch.pi)
-            current_heading = self.robot.data.heading_w[env_ids]
+            current_heading = self.robot.data.heading_w.torch[env_ids]
             self.heading_command_w[env_ids] = torch.where(
                 wrap_to_pi(target_heading - current_heading).abs()
                 < wrap_to_pi(flipped_heading - current_heading).abs(),
@@ -50,6 +51,6 @@ class TerrainBasedPose2dCommand(UniformPose2dCommand):
                 flipped_heading,
             )
         else:
-            self.heading_command_w[env_ids] = torch.empty(len(env_ids), device=self.device).uniform_(
+            self.heading_command_w[env_ids] = torch.empty(num_envs, device=self.device).uniform_(
                 *self.cfg.ranges.heading
             )

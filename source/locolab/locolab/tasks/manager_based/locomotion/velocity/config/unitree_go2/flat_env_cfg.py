@@ -6,13 +6,15 @@
 # All rights reserved.
 # Modifications are licensed under BSD-3-Clause.
 
-import isaaclab.sim as sim_utils
+from isaaclab_physx.sim.spawners.materials import PhysxRigidBodyMaterialCfg
+
 from isaaclab.assets import ArticulationCfg, AssetBaseCfg
 from isaaclab.envs import ManagerBasedRLEnvCfg
 from isaaclab.scene import InteractiveSceneCfg
 from isaaclab.sensors import ContactSensorCfg
 from isaaclab.utils import configclass
 
+from locolab.utils.physics import set_self_collisions, use_locomotion_physics
 from locolab.utils.scene import flat_rough_terrain_visual_material_cfg, blue_sky_light_cfg
 from locolab.utils.terrains import TerrainImporterCfg
 
@@ -72,7 +74,7 @@ class Go2FlatSceneCfg(InteractiveSceneCfg):
                 ),
             },
         ),
-        physics_material=sim_utils.RigidBodyMaterialCfg(
+        physics_material=PhysxRigidBodyMaterialCfg(
             friction_combine_mode="multiply",
             restitution_combine_mode="multiply",
             static_friction=1.0,
@@ -121,12 +123,12 @@ class Go2FlatEnvCfg(ManagerBasedRLEnvCfg):
         self.sim.dt = 0.005
         self.sim.render_interval = self.decimation
         self.sim.physics_material = self.scene.terrain.physics_material
-        self.sim.physx.gpu_max_rigid_patch_count = 10 * 2**15
+        use_locomotion_physics(self.sim, rigid_patch_count=2**16, njmax=50, nconmax=25)
         # update sensor update periods
         # we tick all the sensors based on the smallest update period (physics update period)
         self.scene.contact_forces.update_period = self.sim.dt
         # disable self collisions for flat terrain
-        self.scene.robot.spawn.articulation_props.enabled_self_collisions = False
+        set_self_collisions(self.scene.robot.spawn, False)
 
 @configclass
 class Go2FlatEnvCfg_PLAY(Go2FlatEnvCfg):

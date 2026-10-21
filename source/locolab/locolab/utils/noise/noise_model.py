@@ -13,9 +13,9 @@ from typing import TYPE_CHECKING, Sequence
 
 import torch
 import torch.nn.functional as F
-from isaacsim.core.utils.torch.maths import torch_rand_float
 from torchvision.transforms import GaussianBlur
 from locolab.utils.buffers import AsyncDelayBuffer
+
 from .corruption import (
     DEPTH_CORRUPTION_MODE_NAMES,
     apply_active_depth_corruption,
@@ -40,6 +40,11 @@ if TYPE_CHECKING:
         RangeBasedGaussianNoiseCfg,
         StereoTooCloseNoiseCfg,
     )
+
+
+def torch_rand_float(lower: float, upper: float, shape: tuple[int, ...], device: str | torch.device) -> torch.Tensor:
+    """Uniform samples in ``[lower, upper)`` with shape ``shape``."""
+    return (upper - lower) * torch.rand(*shape, device=device) + lower
 
 
 class ImageNoiseModel:

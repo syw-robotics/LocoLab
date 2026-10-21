@@ -39,13 +39,13 @@ beyondmimic_g1_29dof_actuators = {
             ".*_hip_pitch_joint",
             ".*_knee_joint",
         ],
-        effort_limit_sim={
+        joint_effort_limit={
             ".*_hip_yaw_joint": 88.0,
             ".*_hip_roll_joint": 139.0,
             ".*_hip_pitch_joint": 88.0,
             ".*_knee_joint": 139.0,
         },
-        velocity_limit_sim={
+        joint_velocity_limit={
             ".*_hip_yaw_joint": 32.0,
             ".*_hip_roll_joint": 20.0,
             ".*_hip_pitch_joint": 32.0,
@@ -71,24 +71,24 @@ beyondmimic_g1_29dof_actuators = {
         },
     ),
     "feet": ImplicitActuatorCfg(
-        effort_limit_sim=50.0,
-        velocity_limit_sim=37.0,
+        joint_effort_limit=50.0,
+        joint_velocity_limit=37.0,
         joint_names_expr=[".*_ankle_pitch_joint", ".*_ankle_roll_joint"],
         stiffness=2.0 * STIFFNESS_5020,
         damping=2.0 * DAMPING_5020,
         armature=2.0 * ARMATURE_5020,
     ),
     "waist": ImplicitActuatorCfg(
-        effort_limit_sim=50,
-        velocity_limit_sim=37.0,
+        joint_effort_limit=50,
+        joint_velocity_limit=37.0,
         joint_names_expr=["waist_roll_joint", "waist_pitch_joint"],
         stiffness=2.0 * STIFFNESS_5020,
         damping=2.0 * DAMPING_5020,
         armature=2.0 * ARMATURE_5020,
     ),
     "waist_yaw": ImplicitActuatorCfg(
-        effort_limit_sim=88,
-        velocity_limit_sim=32.0,
+        joint_effort_limit=88,
+        joint_velocity_limit=32.0,
         joint_names_expr=["waist_yaw_joint"],
         stiffness=STIFFNESS_7520_14,
         damping=DAMPING_7520_14,
@@ -104,7 +104,7 @@ beyondmimic_g1_29dof_actuators = {
             ".*_wrist_pitch_joint",
             ".*_wrist_yaw_joint",
         ],
-        effort_limit_sim={
+        joint_effort_limit={
             ".*_shoulder_pitch_joint": 25.0,
             ".*_shoulder_roll_joint": 25.0,
             ".*_shoulder_yaw_joint": 25.0,
@@ -113,7 +113,7 @@ beyondmimic_g1_29dof_actuators = {
             ".*_wrist_pitch_joint": 5.0,
             ".*_wrist_yaw_joint": 5.0,
         },
-        velocity_limit_sim={
+        joint_velocity_limit={
             ".*_shoulder_pitch_joint": 37.0,
             ".*_shoulder_roll_joint": 37.0,
             ".*_shoulder_yaw_joint": 37.0,
@@ -155,7 +155,7 @@ beyondmimic_g1_29dof_actuators = {
 
 beyondmimic_action_scale = {}
 for a in beyondmimic_g1_29dof_actuators.values():
-    e = a.effort_limit_sim
+    e = a.joint_effort_limit
     s = a.stiffness
     names = a.joint_names_expr
     if not isinstance(e, dict):

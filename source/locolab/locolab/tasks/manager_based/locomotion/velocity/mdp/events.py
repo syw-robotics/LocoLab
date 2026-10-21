@@ -86,7 +86,8 @@ def reset_root_state_uniform_by_terrain(
     if env_ids.numel() == 0:
         return
 
-    root_states = asset.data.default_root_state[env_ids].clone()
+    root_pose = asset.data.default_root_pose.torch[env_ids].clone()
+    root_vel = asset.data.default_root_vel.torch[env_ids].clone()
 
     # Per-env (min, max) bounds, shape (num_reset, 6, 2). Unlisted sub-terrains keep the defaults.
     default_pose = range_dict_to_tensor(pose_range, asset.device)
@@ -120,17 +121,19 @@ def reset_root_state_uniform_by_terrain(
     pose_samples = math_utils.sample_uniform(
         pose_bounds[:, :, 0], pose_bounds[:, :, 1], (len(env_ids), 6), device=asset.device
     )
-    positions = root_states[:, 0:3] + env.scene.env_origins[env_ids] + pose_samples[:, 0:3]
+    positions = root_pose[:, 0:3] + env.scene.env_origins[env_ids] + pose_samples[:, 0:3]
     orientation_delta = math_utils.quat_from_euler_xyz(pose_samples[:, 3], pose_samples[:, 4], pose_samples[:, 5])
-    orientations = math_utils.quat_mul(root_states[:, 3:7], orientation_delta)
+    orientations = math_utils.quat_mul(root_pose[:, 3:7], orientation_delta)
 
     vel_samples = math_utils.sample_uniform(
         vel_bounds[:, :, 0], vel_bounds[:, :, 1], (len(env_ids), 6), device=asset.device
     )
-    velocities = root_states[:, 7:13] + vel_samples
+    velocities = root_vel + vel_samples
 
-    asset.write_root_pose_to_sim(torch.cat([positions, orientations], dim=-1), env_ids=env_ids)
-    asset.write_root_velocity_to_sim(velocities, env_ids=env_ids)
+    asset.write_root_pose_to_sim_index(
+        root_pose=torch.cat([positions, orientations], dim=-1), env_ids=env_ids
+    )
+    asset.write_root_velocity_to_sim_index(root_velocity=velocities, env_ids=env_ids)
 
 
 # ===== virtual obstacles =====
@@ -204,8 +207,8 @@ def randomize_ray_offsets(
     num_env_ids = env.scene.num_envs if env_ids is None else len(env_ids)
     # extract the used quantities (to enable type-hinting)
     sensor: RayCaster | MultiMeshRayCaster = env.scene[asset_cfg.name]
-    ray_starts = sensor.ray_starts[env_ids]  # (num_envs, num_rays, 3)
-    ray_directions = sensor.ray_directions[env_ids]  # (num_envs, num_rays, 3)
+    ray_starts = sensor.ray_starts.torch[env_ids]  # (num_envs, num_rays, 3)
+    ray_directions = sensor.ray_directions.torch[env_ids]  # (num_envs, num_rays, 3)
     # sample from given range
     range_list = [offset_pose_ranges.get(key, (0.0, 0.0)) for key in ["x", "y", "z", "roll", "pitch", "yaw"]]
     ranges = torch.tensor(range_list, device=ray_starts.device)  # (6, 2)
@@ -224,10 +227,10 @@ def randomize_ray_offsets(
         rand_samples[..., 3],
         rand_samples[..., 4],
         rand_samples[..., 5],
-    )  # (num_envs * num_rays, 4) (w, x, y, z)
+    )  # (num_envs * num_rays, 4) (x, y, z, w)
     # apply the randomization
     ray_starts += position_samples.reshape(ray_starts.shape)
     ray_directions = math_utils.quat_apply(rotation_samples.reshape(*ray_directions.shape[:-1], 4), ray_directions)
 
-    sensor.ray_starts[env_ids] = ray_starts
-    sensor.ray_directions[env_ids] = ray_directions
+    sensor.ray_starts.torch[env_ids] = ray_starts
+    sensor.ray_directions.torch[env_ids] = ray_directions

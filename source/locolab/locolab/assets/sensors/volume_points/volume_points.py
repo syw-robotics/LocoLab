@@ -18,12 +18,11 @@ from typing import TYPE_CHECKING, Any
 
 import isaaclab.sim as sim_utils
 import isaaclab.utils.string as string_utils
-import omni.kit.app
-import omni.physics.tensors.impl.api as physx
 import torch
 import warp as wp
 from isaaclab.markers import VisualizationMarkers
 from isaaclab.sensors.sensor_base import SensorBase
+from isaaclab.sim import SimulationContext
 
 from locolab.utils.warp.kernels import launch_warp_on_torch_stream, refresh_volume_points_kernel
 
@@ -31,6 +30,42 @@ from .volume_points_data import VolumePointsData
 
 if TYPE_CHECKING:
     from .volume_points_cfg import VolumePointsCfg
+
+
+def _articulation_for_bodies(prim_path: str, body_names: list[str]):
+    """Find the live articulation that owns these links.
+
+    Newton has no PhysX rigid-body view. The articulation is created before
+    sensors initialize, so the matching instance is already alive.
+    """
+    import gc
+
+    from isaaclab.assets import Articulation
+
+    robot_path = prim_path.rsplit("/", 1)[0]
+    matches = []
+    for obj in gc.get_objects():
+        if not isinstance(obj, Articulation):
+            continue
+        cfg_path = getattr(getattr(obj, "cfg", None), "prim_path", None)
+        names = getattr(obj, "body_names", None) or []
+        if cfg_path == robot_path and all(name in names for name in body_names):
+            matches.append(obj)
+    if len(matches) != 1:
+        raise RuntimeError(
+            f"VolumePoints at '{prim_path}' could not find its articulation on this physics backend "
+            f"(found {len(matches)})."
+        )
+    return matches[0]
+
+
+def _view_to_torch_rows(array, width: int) -> torch.Tensor:
+    """Flatten a PhysX view buffer to ``(N, width)`` torch rows.
+
+    Isaac Lab 3.x views return Warp arrays. Older tensor views return torch tensors.
+    """
+    tensor = array if isinstance(array, torch.Tensor) else wp.to_torch(array)
+    return tensor.reshape(-1, width).contiguous()
 
 
 class VolumePoints(SensorBase):
@@ -46,6 +81,10 @@ class VolumePoints(SensorBase):
         self._enabled_env_ids: torch.Tensor | None = None
         self._enabled_env_ids_i32: torch.Tensor | None = None
         self._all_env_ids_i32: torch.Tensor | None = None
+        self._body_names: list[str] = []
+        self._body_physx_view = None
+        self._articulation = None
+        self._body_ids: list[int] | None = None
 
     """
     Properties
@@ -66,11 +105,10 @@ class VolumePoints(SensorBase):
     @property
     def body_names(self) -> list[str]:
         """Ordered names of bodies with volume points sensors attached."""
-        prim_paths = self.body_physx_view.prim_paths[: self.num_bodies]
-        return [path.split("/")[-1] for path in prim_paths]
+        return list(self._body_names)
 
     @property
-    def body_physx_view(self) -> physx.RigidBodyView:
+    def body_physx_view(self):
         """View for the rigid bodies captured (PhysX).
 
         Note:
@@ -138,9 +176,6 @@ class VolumePoints(SensorBase):
 
     def _initialize_impl(self):
         super()._initialize_impl()
-        # create simulation view
-        self._physics_sim_view = physx.create_simulation_view(self._backend)
-        self._physics_sim_view.set_subspace_roots("/")
         # check that only rigid bodies are selected
         leaf_pattern = self.cfg.prim_path.rsplit("/", 1)[-1]
         template_prim_path = self._parent_prims[0].GetPath().pathString
@@ -150,25 +185,29 @@ class VolumePoints(SensorBase):
             body_names.append(prim_path.rsplit("/", 1)[-1])
         if not body_names:
             raise RuntimeError(f"Sensor at path '{self.cfg.prim_path}' could not find any bodies.")
+        self._body_names = body_names
 
-        # construct regex expression for the body names
-        body_names_regex = r"(" + "|".join(body_names) + r")"
-        body_names_regex = f"{self.cfg.prim_path.rsplit('/', 1)[0]}/{body_names_regex}"
-        # convert regex expressions to glob expressions for PhysX
-        body_names_glob = body_names_regex.replace(".*", "*")
-
-        # create a rigid prim view for the sensor
-        self._body_physx_view = self._physics_sim_view.create_rigid_body_view(body_names_glob)
-
-        # resolve the true count of bodies
-        self._num_bodies = self.body_physx_view.count // self._num_envs
-        # check that volume points sensor succeeded
-        if self._num_bodies != len(body_names):
-            raise RuntimeError(
-                "Failed to initialize volume points sensor for specified bodies."
-                f"\n\tInput prim path    : {self.cfg.prim_path}"
-                f"\n\tResolved prim paths: {body_names_regex}"
-            )
+        # PhysX exposes a rigid-body view. Newton does not, so those poses come from the articulation.
+        physics_sim_view = SimulationContext.instance().physics_sim_view
+        if hasattr(physics_sim_view, "create_rigid_body_view"):
+            body_names_regex = r"(" + "|".join(body_names) + r")"
+            body_names_regex = f"{self.cfg.prim_path.rsplit('/', 1)[0]}/{body_names_regex}"
+            body_names_glob = body_names_regex.replace(".*", "*")
+            self._body_physx_view = physics_sim_view.create_rigid_body_view(body_names_glob)
+            self._articulation = None
+            self._body_ids = None
+            self._num_bodies = self.body_physx_view.count // self._num_envs
+            if self._num_bodies != len(body_names):
+                raise RuntimeError(
+                    "Failed to initialize volume points sensor for specified bodies."
+                    f"\n\tInput prim path    : {self.cfg.prim_path}"
+                    f"\n\tResolved prim paths: {body_names_regex}"
+                )
+        else:
+            self._body_physx_view = None
+            self._articulation = _articulation_for_bodies(self.cfg.prim_path, body_names)
+            self._body_ids = [self._articulation.body_names.index(name) for name in body_names]
+            self._num_bodies = len(body_names)
 
         # initialize the volume points data
         self._volume_points_pattern: torch.Tensor = self.cfg.points_generator.func(self.cfg.points_generator).to(
@@ -204,10 +243,9 @@ class VolumePoints(SensorBase):
         if env_ids_i32.numel() == 0 or self.num_bodies == 0:
             return
 
-        # PhysX stores one row per body, env-major:
+        # One row per body, env-major:
         # pose (x, y, z, qx, qy, qz, qw), velocity (vx, vy, vz, wx, wy, wz).
-        body_poses = self.body_physx_view.get_transforms().reshape(-1, 7).contiguous()
-        body_vels = self.body_physx_view.get_velocities().reshape(-1, 6).contiguous()
+        body_poses, body_vels = self._body_state_rows()
         data = self._data
         env_ids_wp = wp.from_torch(env_ids_i32, dtype=wp.int32)
         body_poses_wp = wp.from_torch(body_poses)
@@ -301,6 +339,10 @@ class VolumePoints(SensorBase):
         self._is_visualizing = debug_vis
         if debug_vis:
             if self._debug_vis_handle is None:
+                try:
+                    import omni.kit.app
+                except ImportError:
+                    return super().set_debug_vis(debug_vis)
                 app_interface = omni.kit.app.get_app_interface()
                 self._debug_vis_handle = app_interface.get_pre_update_event_stream().create_subscription_to_pop(
                     lambda event, obj=weakref.proxy(self): obj._debug_vis_callback(event)
@@ -326,7 +368,7 @@ class VolumePoints(SensorBase):
     def _debug_vis_callback(self, event):
         # safely return if view becomes invalid
         # note: this invalidity happens because of isaac sim view callbacks
-        if not self._is_initialized or getattr(self, "_body_physx_view", None) is None:
+        if not self._is_initialized or (self._body_physx_view is None and self._articulation is None):
             return
 
         # ``sim.render()`` runs before ``scene.update()``, so the cached buffer is still
@@ -353,6 +395,23 @@ class VolumePoints(SensorBase):
     Internal simulation callbacks.
     """
 
+    def _body_state_rows(self) -> tuple[torch.Tensor, torch.Tensor]:
+        """Body pose and velocity, one env-major row per selected link."""
+        if self._body_physx_view is not None:
+            return (
+                _view_to_torch_rows(self._body_physx_view.get_transforms(), 7),
+                _view_to_torch_rows(self._body_physx_view.get_velocities(), 6),
+            )
+        asset = self._articulation
+        ids = self._body_ids
+        pos = asset.data.body_pos_w.torch[:, ids]
+        quat = asset.data.body_quat_w.torch[:, ids]
+        lin = asset.data.body_lin_vel_w.torch[:, ids]
+        ang = asset.data.body_ang_vel_w.torch[:, ids]
+        poses = torch.cat((pos, quat), dim=-1).reshape(-1, 7).contiguous()
+        vels = torch.cat((lin, ang), dim=-1).reshape(-1, 6).contiguous()
+        return poses, vels
+
     def _invalidate_initialize_callback(self, event):
         """Invalidates the scene elements."""
         # call parent
@@ -360,5 +419,5 @@ class VolumePoints(SensorBase):
         # set all existing views to None to invalidate them
         if hasattr(self, "points_visualizer"):
             delattr(self, "points_visualizer")
-        self._physics_sim_view = None
         self._body_physx_view = None
+        self._articulation = None
