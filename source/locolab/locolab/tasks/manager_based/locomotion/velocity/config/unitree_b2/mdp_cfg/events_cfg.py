@@ -19,7 +19,7 @@ from . import BASE_LINK_NAME, FOOT_LINK_NAMES, JOINT_NAMES, OTHER_BODY_LINK_NAME
 class EventCfg:
     """Configuration for events."""
 
-    # ===== startup ===== (6 events)
+    # ===== startup ===== (7 events)
     # 1.
     randomize_feet_material = EventTerm(
         func=mdp.randomize_rigid_body_material,
@@ -84,11 +84,17 @@ class EventCfg:
         mode="startup",
         params={
             "asset_cfg": SceneEntityCfg("robot", joint_names=JOINT_NAMES),
-            "friction_distribution_params": (0.5, 2.0),
-            "armature_distribution_params": (0.5, 2.0),
+            "friction_distribution_params": (0.75, 5.0),
+            "armature_distribution_params": (0.75, 2.5),
             "operation": "scale",
             "distribution": "uniform",
         },
+    )
+    # 7.
+    randomize_joint_encoder_bias = EventTerm(
+        func=mdp.randomize_encoder_bias,
+        mode="startup",
+        params={"asset_cfg": SceneEntityCfg("robot"), "bias_range": (-0.01, 0.01)},
     )
 
     # ===== reset ===== (2 events)

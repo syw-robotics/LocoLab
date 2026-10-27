@@ -14,7 +14,7 @@ from isaaclab.scene import InteractiveSceneCfg
 from isaaclab.sensors import ContactSensorCfg
 from isaaclab.utils import configclass
 
-from locolab.utils.physics import use_locomotion_physics
+from locolab.utils.physics import set_self_collisions, use_locomotion_physics
 from locolab.utils.scene import blue_sky_light_cfg, flat_terrain_visual_material_cfg
 from locolab.utils.terrains import TerrainImporterCfg
 
@@ -31,7 +31,8 @@ from locolab.tasks.manager_based.locomotion.velocity.config.unitree_g1.mdp_cfg i
     PropObsCfg,
     FlatTerminationsCfg,
     FlatCurriculumsCfg,
-    CONTACT_SENSOR_LINK_NAMES,
+    FOOT_CONTACT_LINK_NAMES,
+    SELF_COLLISION_LINK_NAMES,
 )
 from locolab.assets import UNITREE_G1_29DOF_BEYONDMIMIC_PELVIS_BASE_CFG  # isort: skip
 
@@ -78,32 +79,27 @@ class G1FlatSceneCfg(InteractiveSceneCfg):
     )
 
     # =====  sensors  =====
-    contact_forces: ContactSensorCfg = ContactSensorCfg(
-        prim_path=f"{{ENV_REGEX_NS}}/Robot/{CONTACT_SENSOR_LINK_NAMES}",
+    # Feet-ground contact: feet only, history for feet_slide / feet_gait
+    feet_contact_forces: ContactSensorCfg = ContactSensorCfg(
+        prim_path=f"{{ENV_REGEX_NS}}/Robot/{FOOT_CONTACT_LINK_NAMES}",
         history_length=3,
         track_air_time=True,
     )
-    self_col_knee: ContactSensorCfg = ContactSensorCfg(
-        prim_path="{ENV_REGEX_NS}/Robot/left_knee_link",
-        filter_prim_paths_expr=["{ENV_REGEX_NS}/Robot/right_knee_link"],
-        history_length=3,
-    )
-    self_col_ankle: ContactSensorCfg = ContactSensorCfg(
-        prim_path="{ENV_REGEX_NS}/Robot/left_ankle_roll_link",
-        filter_prim_paths_expr=["{ENV_REGEX_NS}/Robot/right_ankle_roll_link"],
-        history_length=3,
-    )
-    self_col_torso: ContactSensorCfg = ContactSensorCfg(
-        prim_path="{ENV_REGEX_NS}/Robot/torso_link",
+    # Self-collision: knee vs knee, ankle vs ankle
+    self_collision_contact_forces: ContactSensorCfg = ContactSensorCfg(
+        prim_path=f"{{ENV_REGEX_NS}}/Robot/{SELF_COLLISION_LINK_NAMES}",
         filter_prim_paths_expr=[
-            "{ENV_REGEX_NS}/Robot/left_shoulder_roll_link",
-            "{ENV_REGEX_NS}/Robot/left_shoulder_yaw_link",
-            "{ENV_REGEX_NS}/Robot/left_elbow_link",
-            "{ENV_REGEX_NS}/Robot/right_shoulder_roll_link",
-            "{ENV_REGEX_NS}/Robot/right_shoulder_yaw_link",
-            "{ENV_REGEX_NS}/Robot/right_elbow_link",
+            "{ENV_REGEX_NS}/Robot/right_knee_link",
+            "{ENV_REGEX_NS}/Robot/left_knee_link",
+            "{ENV_REGEX_NS}/Robot/right_ankle_roll_link",
+            "{ENV_REGEX_NS}/Robot/left_ankle_roll_link",
+            "{ENV_REGEX_NS}/Robot/right_hip_roll_link",
+            "{ENV_REGEX_NS}/Robot/left_hip_roll_link",
+            "{ENV_REGEX_NS}/Robot/right_wrist_yaw_link",
+            "{ENV_REGEX_NS}/Robot/left_wrist_yaw_link",
         ],
         history_length=3,
+        track_air_time=False,
     )
 
     # =====  lights  =====
@@ -138,11 +134,12 @@ class G1FlatEnvCfg(ManagerBasedRLEnvCfg):
         self.sim.dt = 0.005
         self.sim.render_interval = self.decimation
         self.sim.physics_material = self.scene.terrain.physics_material
-        use_locomotion_physics(self.sim, rigid_patch_count=2**16, njmax=90, nconmax=10)
+        use_locomotion_physics(self.sim, rigid_patch_count=2**16, njmax=70, nconmax=10)
+        set_self_collisions(self.scene.robot.spawn, True)
+
         # update sensor update periods
-        # we tick all the sensors based on the smallest update period (physics update period)
-        for sensor_name in ("contact_forces", "self_col_knee", "self_col_ankle", "self_col_torso"):
-            getattr(self.scene, sensor_name).update_period = self.sim.dt
+        self.scene.feet_contact_forces.update_period = self.sim.dt
+        self.scene.self_collision_contact_forces.update_period = self.sim.dt
 
 
 def _configure_play_env(cfg: G1FlatEnvCfg) -> None:

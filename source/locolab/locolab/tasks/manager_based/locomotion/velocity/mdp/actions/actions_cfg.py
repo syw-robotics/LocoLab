@@ -13,7 +13,7 @@ from isaaclab.envs.mdp.actions import joint_actions
 from isaaclab.managers.action_manager import ActionTerm, ActionTermCfg
 from isaaclab.utils import configclass
 
-from .delayed_actions import DelayedAction
+from .delayed_actions import DelayedAction, EncoderBiasJointPositionAction
 
 ##
 # Joint actions.
@@ -74,7 +74,7 @@ class JointPositionActionCfg(JointActionCfg):
     See :class:`JointPositionAction` for more details.
     """
 
-    class_type: type[ActionTerm] = joint_actions.JointPositionAction
+    class_type: type[ActionTerm] = EncoderBiasJointPositionAction
 
     use_default_offset: bool = True
     """Whether to use default joint positions configured in the articulation asset as offset.

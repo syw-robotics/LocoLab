@@ -31,7 +31,6 @@ class PropObsCfg(ObsGroup):
     # observation terms (order preserved)
     base_ang_vel = SymmObsTerm(
         func=mdp.base_ang_vel,
-        scale=0.2,
         noise=Unoise(n_min=-0.2, n_max=0.2),
         clip=(-10.0, 10.0),
         symmetry_transform=symmetry.axial_vector,
@@ -49,7 +48,7 @@ class PropObsCfg(ObsGroup):
         symmetry_transform=symmetry.velocity_command,
     )
     joint_pos = SymmObsTerm(
-        func=mdp.joint_pos_rel,
+        func=mdp.joint_pos_rel_biased,
         params={"asset_cfg": SceneEntityCfg("robot", joint_names=JOINT_NAMES, preserve_order=PRESERVE_ORDER)},
         noise=Unoise(n_min=-0.01, n_max=0.01),
         clip=(-10.0, 10.0),
@@ -57,7 +56,6 @@ class PropObsCfg(ObsGroup):
     )
     joint_vel = SymmObsTerm(
         func=mdp.joint_vel_rel,
-        scale=0.05,
         params={"asset_cfg": SceneEntityCfg("robot", joint_names=JOINT_NAMES, preserve_order=PRESERVE_ORDER)},
         noise=Unoise(n_min=-1.5, n_max=1.5),
         clip=(-50.0, 50.0),
@@ -87,7 +85,6 @@ class PrivObsCfg(ObsGroup):
     )
     base_ang_vel = SymmObsTerm(
         func=mdp.base_ang_vel,
-        scale=0.2,
         clip=(-10.0, 10.0),
         symmetry_transform=symmetry.axial_vector,
     )
@@ -110,21 +107,18 @@ class PrivObsCfg(ObsGroup):
     )
     joint_vel = SymmObsTerm(
         func=mdp.joint_vel_rel,
-        scale=0.05,
         params={"asset_cfg": SceneEntityCfg("robot", joint_names=JOINT_NAMES, preserve_order=PRESERVE_ORDER)},
         clip=(-50.0, 50.0),
         symmetry_transform=symmetry.joint_space,
     )
     joint_effort = SymmObsTerm(
         func=mdp.joint_effort,
-        scale=0.05,
         params={"asset_cfg": SceneEntityCfg("robot", joint_names=JOINT_NAMES, preserve_order=PRESERVE_ORDER)},
         clip=(-500.0, 500.0),
         symmetry_transform=symmetry.joint_space,
     )
     joint_acc = SymmObsTerm(
         func=mdp.joint_acc,
-        scale=0.05,
         params={"asset_cfg": SceneEntityCfg("robot", joint_names=JOINT_NAMES, preserve_order=PRESERVE_ORDER)},
         clip=(-500.0, 500.0),
         symmetry_transform=symmetry.joint_space,
@@ -142,7 +136,7 @@ class PrivObsCfg(ObsGroup):
     )
     feet_contact_flag = SymmObsTerm(
         func=mdp.feet_contact_flag,
-        params={"sensor_cfg": SceneEntityCfg("contact_forces", body_names=FOOT_LINK_NAMES)},
+        params={"sensor_cfg": SceneEntityCfg("feet_contact_forces", body_names=FOOT_LINK_NAMES)},
         symmetry_transform=symmetry.body_scalar,
     )
     gait_phase = SymmObsTerm(func=mdp.gait_phase, params={"period": 0.8}, symmetry_transform=symmetry.identity)

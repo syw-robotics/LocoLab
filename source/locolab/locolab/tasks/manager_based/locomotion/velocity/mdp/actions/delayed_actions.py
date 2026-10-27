@@ -4,6 +4,7 @@ import torch
 from collections.abc import Sequence
 from typing import TYPE_CHECKING
 
+from isaaclab.envs.mdp.actions.joint_actions import JointPositionAction
 from isaaclab.managers.action_manager import ActionTerm
 
 if TYPE_CHECKING:
@@ -92,3 +93,19 @@ class DelayedAction(ActionTerm):
             self._term.apply_actions()
         finally:
             self._term._processed_actions = saved_actions
+
+
+class EncoderBiasJointPositionAction(JointPositionAction):
+    """Subtract the fixed encoder zero-offset from the position target."""
+
+    def __init__(self, cfg, env: ManagerBasedEnv):
+        super().__init__(cfg, env)
+        # Created before observations, and filled in place by randomize_encoder_bias.
+        self._encoder_bias = torch.zeros(self.num_envs, self._asset.num_joints, device=self.device)
+        self._asset.encoder_bias = self._encoder_bias
+
+    def apply_actions(self):
+        self._asset.set_joint_position_target_index(
+            target=self.processed_actions - self._encoder_bias[:, self._joint_ids],
+            joint_ids=self._joint_ids,
+        )

@@ -25,24 +25,21 @@ JOINT_NAMES = [
 ]
 # fmt: on
 
-from .actions_cfg import ActionsCfg, ActionsCfg_W_Symmetry
+from .actions_cfg import ActionsCfg
 from .commands_cfg import CommandsCfg
 from .curriculumns_cfg import RoughCurriculumsCfg
 from .events_cfg import EventCfg
-from .observations_cfg import PrivObsCfg, PrivObsCfg_W_Symmetry, PropObsCfg, PropObsCfg_W_Symmetry
+from .observations_cfg import PrivObsCfg, PropObsCfg
 from .rewards_cfg import FlatRewardsCfg
 from .terminations_cfg import FlatTerminationsCfg, RoughTerminationsCfg
 
 __all__ = [
     "ActionsCfg",
-    "ActionsCfg_W_Symmetry",
     "CommandsCfg",
     "EventCfg",
     "RoughCurriculumsCfg",
     "PropObsCfg",
-    "PropObsCfg_W_Symmetry",
     "PrivObsCfg",
-    "PrivObsCfg_W_Symmetry",
     "FlatRewardsCfg",
     "FlatTerminationsCfg",
     "RoughTerminationsCfg",

@@ -24,48 +24,6 @@ from . import JOINT_NAMES, PRESERVE_ORDER
 
 @configclass
 class PropObsCfg(ObsGroup):
-    """Proprioceptive observations group."""
-
-    # observation terms (order preserved)
-    base_ang_vel = ObsTerm(
-        func=mdp.base_ang_vel,
-        noise=Unoise(n_min=-0.2, n_max=0.2),
-        clip=(-10.0, 10.0),
-    )
-    projected_gravity = ObsTerm(
-        func=mdp.projected_gravity,
-        noise=Unoise(n_min=-0.05, n_max=0.05),
-        clip=(-1.0, 1.0),
-    )
-    velocity_commands = ObsTerm(
-        func=mdp.generated_commands,
-        params={"command_name": "base_velocity"},
-        clip=(-10.0, 10.0),
-    )
-    joint_pos = ObsTerm(
-        func=mdp.joint_pos_rel,
-        params={"asset_cfg": SceneEntityCfg("robot", joint_names=JOINT_NAMES, preserve_order=PRESERVE_ORDER)},
-        noise=Unoise(n_min=-0.01, n_max=0.01),
-        clip=(-10.0, 10.0),
-    )
-    joint_vel = ObsTerm(
-        func=mdp.joint_vel_rel,
-        params={"asset_cfg": SceneEntityCfg("robot", joint_names=JOINT_NAMES, preserve_order=PRESERVE_ORDER)},
-        noise=Unoise(n_min=-1.5, n_max=1.5),
-        clip=(-50.0, 50.0),
-    )
-    actions = ObsTerm(
-        func=mdp.last_action,
-        clip=(-10.0, 10.0),
-    )
-
-    def __post_init__(self):
-        self.enable_corruption = True
-        self.concatenate_terms = True
-
-
-@configclass
-class PropObsCfg_W_Symmetry(ObsGroup):
     """Proprioceptive observations group with symmetry."""
 
     # observation terms (order preserved)
@@ -88,7 +46,7 @@ class PropObsCfg_W_Symmetry(ObsGroup):
         symmetry_transform=symmetry.velocity_command,
     )
     joint_pos = SymmObsTerm(
-        func=mdp.joint_pos_rel,
+        func=mdp.joint_pos_rel_biased,
         params={"asset_cfg": SceneEntityCfg("robot", joint_names=JOINT_NAMES, preserve_order=PRESERVE_ORDER)},
         noise=Unoise(n_min=-0.01, n_max=0.01),
         clip=(-10.0, 10.0),
@@ -114,59 +72,6 @@ class PropObsCfg_W_Symmetry(ObsGroup):
 
 @configclass
 class PrivObsCfg(ObsGroup):
-    """Privileged observations group."""
-
-    # observation terms (order preserved)
-    # put base_lin_vel at front for convenience
-    base_lin_vel = ObsTerm(func=mdp.base_lin_vel, clip=(-10.0, 10.0))
-    base_ang_vel = ObsTerm(func=mdp.base_ang_vel, clip=(-10.0, 10.0))
-    projected_gravity = ObsTerm(func=mdp.projected_gravity, clip=(-1.0, 1.0))
-    velocity_commands = ObsTerm(
-        func=mdp.generated_commands,
-        params={"command_name": "base_velocity"},
-        clip=(-10.0, 10.0),
-    )
-    joint_pos = ObsTerm(
-        func=mdp.joint_pos_rel,
-        params={"asset_cfg": SceneEntityCfg("robot", joint_names=JOINT_NAMES, preserve_order=PRESERVE_ORDER)},
-        clip=(-10.0, 10.0),
-    )
-    joint_vel = ObsTerm(
-        func=mdp.joint_vel_rel,
-        params={"asset_cfg": SceneEntityCfg("robot", joint_names=JOINT_NAMES, preserve_order=PRESERVE_ORDER)},
-        clip=(-50.0, 50.0),
-    )
-    joint_effort = ObsTerm(
-        func=mdp.joint_effort,
-        params={"asset_cfg": SceneEntityCfg("robot", joint_names=JOINT_NAMES, preserve_order=PRESERVE_ORDER)},
-        clip=(-320.0, 320.0),
-    )
-    joint_acc = ObsTerm(
-        func=mdp.joint_acc,
-        params={"asset_cfg": SceneEntityCfg("robot", joint_names=JOINT_NAMES, preserve_order=PRESERVE_ORDER)},
-        clip=(-50.0, 50.0),
-    )
-    actions = ObsTerm(
-        func=mdp.last_action,
-        clip=(-10.0, 10.0),
-    )
-    height_scan = ObsTerm(
-        func=mdp.height_scan,
-        params={"sensor_cfg": SceneEntityCfg("height_scanner")},
-        clip=(-10.0, 10.0),
-    )
-    feet_contact_flag = ObsTerm(
-        func=mdp.feet_contact_flag,
-        params={"sensor_cfg": SceneEntityCfg("contact_forces", body_names=".*_foot")},
-    )
-
-    def __post_init__(self):
-        self.enable_corruption = False
-        self.concatenate_terms = True
-
-
-@configclass
-class PrivObsCfg_W_Symmetry(ObsGroup):
     """Privileged observations group with symmetry."""
 
     # observation terms (order preserved)
@@ -178,7 +83,6 @@ class PrivObsCfg_W_Symmetry(ObsGroup):
     )
     base_ang_vel = SymmObsTerm(
         func=mdp.base_ang_vel, 
-        scale=0.2,
         clip=(-10.0, 10.0),
         symmetry_transform=symmetry.axial_vector,
     )

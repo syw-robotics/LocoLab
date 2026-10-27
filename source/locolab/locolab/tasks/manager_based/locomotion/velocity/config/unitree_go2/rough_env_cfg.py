@@ -15,7 +15,7 @@ from isaaclab.sensors import ContactSensorCfg, RayCasterCfg, patterns
 from isaaclab.utils import configclass
 
 #  from isaaclab.utils.assets import ISAAC_NUCLEUS_DIR
-from locolab.utils.physics import use_locomotion_physics
+from locolab.utils.physics import set_self_collisions, use_locomotion_physics
 from locolab.utils.scene import rough_terrain_visual_material_cfg, blue_sky_light_cfg
 from locolab.utils.terrains import TerrainImporterCfg
 
@@ -23,16 +23,16 @@ from locolab.utils.terrains import TerrainImporterCfg
 # Pre-defined configs
 ##
 from locolab.tasks.manager_based.locomotion.velocity.config.unitree_go2.mdp_cfg import (  # isort: skip
-    ActionsCfg_W_Symmetry,
+    ActionsCfg,
     CommandsCfg,
     EventCfg,
     RoughRewardsCfg,
-    PrivObsCfg_W_Symmetry,
-    PropObsCfg_W_Symmetry,
+    PrivObsCfg,
+    PropObsCfg,
     RoughCurriculumsCfg,
     RoughTerminationsCfg,
 )
-from locolab.assets import UNITREE_GO2_CFG  # isort: skip
+from locolab.assets.robots.unitree.Go2.go2 import UNITREE_GO2_CFG  # isort: skip
 from locolab.utils.terrains.terrains_cfg import ROUGH_TERRAINS_CFG  # isort: skip
 from locolab.utils.markers import BLUE_RAY_CASTER_MARKER_CFG  # isort: skip
 
@@ -44,8 +44,8 @@ from locolab.utils.markers import BLUE_RAY_CASTER_MARKER_CFG  # isort: skip
 class Go2RoughObservationsCfg:
     """Configuration for Go2 on flat terrain observations"""
 
-    policy: PropObsCfg_W_Symmetry = PropObsCfg_W_Symmetry()
-    critic: PrivObsCfg_W_Symmetry = PrivObsCfg_W_Symmetry()
+    policy: PropObsCfg = PropObsCfg()
+    critic: PrivObsCfg = PrivObsCfg()
 
     policy.history_length = 5
 
@@ -142,7 +142,7 @@ class Go2RoughEnvCfg(ManagerBasedRLEnvCfg):
     scene: Go2RoughSceneCfg = Go2RoughSceneCfg(num_envs=4096, env_spacing=2.5)
     # Basic settings
     observations: Go2RoughObservationsCfg = Go2RoughObservationsCfg()
-    actions: ActionsCfg_W_Symmetry = ActionsCfg_W_Symmetry()
+    actions: ActionsCfg = ActionsCfg()
     commands: CommandsCfg = CommandsCfg()
     # MDP settings
     rewards: RoughRewardsCfg = RoughRewardsCfg()
@@ -159,8 +159,13 @@ class Go2RoughEnvCfg(ManagerBasedRLEnvCfg):
         self.sim.dt = 0.005
         self.sim.render_interval = self.decimation
         self.sim.physics_material = self.scene.terrain.physics_material
-        use_locomotion_physics(self.sim, rigid_patch_count=2**16, njmax=100, nconmax=20)
+        # physics settings
+        use_locomotion_physics(self.sim, rigid_patch_count=2**16, njmax=128, nconmax=24)
+        # enable self collisions
+        set_self_collisions(self.scene.robot.spawn, True)
+
         self.scene.terrain.max_init_terrain_level = 0
+
         # update sensor update periods
         # we tick all the sensors based on the smallest update period (physics update period)
         self.scene.contact_forces.update_period = self.sim.dt

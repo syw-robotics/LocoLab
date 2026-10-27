@@ -7,8 +7,8 @@
 # Modifications are licensed under BSD-3-Clause.
 
 FOOT_LINK_NAMES = ".*ankle_roll.*"
-CONTACT_SENSOR_LINK_NAMES = ".*_(wrist_yaw|hip_roll|knee|ankle_roll)_link"
-UNDESIRED_CONTACT_LINK_NAMES = ["(?!.*ankle.*).*"]
+FOOT_CONTACT_LINK_NAMES = FOOT_LINK_NAMES
+SELF_COLLISION_LINK_NAMES = "(left_knee_link|right_knee_link|left_ankle_roll_link|right_ankle_roll_link|left_hip_roll_link|right_hip_roll_link|left_wrist_yaw_link|right_wrist_yaw_link)"
 ARM_JOINT_NAMES = [".*_shoulder_.*", ".*_elbow_.*", ".*_wrist_.*"]
 ARM_JOINT_NAMES_WO_SHOULDER_PITCH = [
     ".*_shoulder_roll_joint",
@@ -63,4 +63,5 @@ __all__ = [
     "RoughRewardsCfg",
     "FlatTerminationsCfg",
     "RoughTerminationsCfg",
+    "SELF_COLLISION_LINK_NAMES",
 ]

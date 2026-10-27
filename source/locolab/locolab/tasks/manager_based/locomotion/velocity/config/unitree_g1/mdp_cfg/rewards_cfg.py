@@ -15,7 +15,6 @@ from isaaclab.utils import configclass
 import locolab.tasks.manager_based.locomotion.velocity.mdp as mdp
 
 from . import (
-    ARM_JOINT_NAMES,
     ARM_JOINT_NAMES_WO_SHOULDER_PITCH,
     ARM_SHOULDER_PITCH_JOINT_NAME,
     COORDINATION_JOINT_NAMES,
@@ -24,8 +23,8 @@ from . import (
     HIP_YAW_JOINT_NAME,
     TORSO_LINK_NAME,
     PELVIS_LINK_NAME,
-    UNDESIRED_CONTACT_LINK_NAMES,
     WAIST_JOINT_NAMES,
+    SELF_COLLISION_LINK_NAMES,
 )
 
 
@@ -117,7 +116,7 @@ class FlatRewardsCfg:
         weight=-1.0,
         params={
             "threshold": 1.0,
-            "sensor_cfg": SceneEntityCfg("contact_forces", body_names=UNDESIRED_CONTACT_LINK_NAMES),
+            "sensor_cfg": SceneEntityCfg("self_collision_contact_forces", body_names=SELF_COLLISION_LINK_NAMES),
         },
     )
     # -- feet --
@@ -129,7 +128,7 @@ class FlatRewardsCfg:
             "offset": [0.0, 0.5],
             "threshold": 0.55,
             "command_name": "base_velocity",
-            "sensor_cfg": SceneEntityCfg("contact_forces", body_names=FOOT_LINK_NAMES),
+            "sensor_cfg": SceneEntityCfg("feet_contact_forces", body_names=FOOT_LINK_NAMES),
         },
     )
     feet_slide = RewTerm(
@@ -137,7 +136,7 @@ class FlatRewardsCfg:
         weight=-0.2,
         params={
             "asset_cfg": SceneEntityCfg("robot", body_names=FOOT_LINK_NAMES),
-            "sensor_cfg": SceneEntityCfg("contact_forces", body_names=FOOT_LINK_NAMES),
+            "sensor_cfg": SceneEntityCfg("feet_contact_forces", body_names=FOOT_LINK_NAMES),
         },
     )
     #  feet_too_near = RewTerm(
@@ -158,15 +157,15 @@ class FlatRewardsCfg:
             "asset_cfg": SceneEntityCfg("robot", body_names=FOOT_LINK_NAMES),
         },
     )
-    #  feet_air_time = RewTerm(
-    #      func=mdp.feet_air_time,
-    #      weight=0.5,
-    #      params={
-    #          "command_name": "base_velocity",
-    #          "threshold": 0.3,
-    #          "sensor_cfg": SceneEntityCfg("contact_forces", body_names=FOOT_LINK_NAMES),
-    #      },
-    #  )
+    feet_air_time = RewTerm(
+        func=mdp.feet_air_time,
+        weight=0.5,
+        params={
+            "command_name": "base_velocity",
+            "threshold": 0.5,
+            "sensor_cfg": SceneEntityCfg("feet_contact_forces", body_names=FOOT_LINK_NAMES),
+        },
+    )
 
 
 @configclass

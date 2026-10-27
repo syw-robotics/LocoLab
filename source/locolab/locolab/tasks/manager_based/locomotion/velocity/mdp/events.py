@@ -12,6 +12,7 @@
   ranges depend on the sub-terrain an environment sits on.
 * :func:`register_virtual_obstacle_to_sensor` — bind terrain virtual obstacles to a
   volume-points sensor at startup.
+* :func:`randomize_encoder_bias` — fixed joint-encoder zero calibration error.
 """
 
 from __future__ import annotations
@@ -32,6 +33,7 @@ from locolab.utils.terrains.terrain_utils import (
 )
 
 if TYPE_CHECKING:
+    from isaaclab.assets import Articulation
     from isaaclab.envs import ManagerBasedEnv
 
 logger = logging.getLogger(__name__)
@@ -234,3 +236,19 @@ def randomize_ray_offsets(
 
     sensor.ray_starts.torch[env_ids] = ray_starts
     sensor.ray_directions.torch[env_ids] = ray_directions
+
+
+def randomize_encoder_bias(
+    env: ManagerBasedEnv,
+    env_ids: torch.Tensor | None,
+    bias_range: tuple[float, float] = (-0.01, 0.01),
+    asset_cfg: SceneEntityCfg = SceneEntityCfg("robot"),
+) -> None:
+    """Sample one fixed encoder zero-offset [rad] per joint. It stays constant across resets."""
+    asset: Articulation = env.scene[asset_cfg.name]
+    bias = asset.encoder_bias
+    if env_ids is None:
+        env_ids = torch.arange(env.num_envs, device=bias.device)
+    else:
+        env_ids = env_ids.to(device=bias.device)
+    bias[env_ids] = math_utils.sample_uniform(bias_range[0], bias_range[1], (len(env_ids), bias.shape[1]), bias.device)

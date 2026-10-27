@@ -12,6 +12,7 @@ from isaaclab.assets import ArticulationCfg, AssetBaseCfg
 from isaaclab.envs import ManagerBasedRLEnvCfg
 from isaaclab.scene import InteractiveSceneCfg
 from isaaclab.sensors import ContactSensorCfg
+from isaaclab.sim.schemas import UsdPhysicsCollisionCfg
 from isaaclab.utils import configclass
 
 from locolab.utils.physics import set_self_collisions, use_locomotion_physics
@@ -26,18 +27,15 @@ from locolab.utils.terrains import TerrainImporterCfg
 ##
 from locolab.tasks.manager_based.locomotion.velocity.config.unitree_go2.mdp_cfg import (  # isort: skip
     ActionsCfg,
-    ActionsCfg_W_Symmetry,
     CommandsCfg,
     EventCfg,
     FlatRewardsCfg,
     PrivObsCfg,
     PropObsCfg,
-    PropObsCfg_W_Symmetry,
-    PrivObsCfg_W_Symmetry,
     FlatTerminationsCfg,
     FLAT_CONTACT_SENSOR_LINK_NAMES,
 )
-from locolab.assets import UNITREE_GO2_CFG  # isort: skip
+from locolab.assets.robots.unitree.Go2.go2 import UNITREE_GO2_CFG  # isort: skip
 from locolab.utils.terrains.terrains_cfg import FLAT_ROUGH_TERRAINS_CFG  # isort: skip
 
 
@@ -48,10 +46,8 @@ from locolab.utils.terrains.terrains_cfg import FLAT_ROUGH_TERRAINS_CFG  # isort
 class Go2FlatObservationsCfg:
     """Configuration for Go2 on flat terrain observations"""
 
-    # policy: PropObsCfg = PropObsCfg()
-    # critic: PrivObsCfg = PrivObsCfg().replace(height_scan=None)
-    policy: PropObsCfg_W_Symmetry = PropObsCfg_W_Symmetry()
-    critic: PrivObsCfg_W_Symmetry = PrivObsCfg_W_Symmetry().replace(height_scan=None)
+    policy: PropObsCfg = PropObsCfg()
+    critic: PrivObsCfg = PrivObsCfg().replace(height_scan=None)
 
     policy.history_length = 5
 
@@ -107,7 +103,7 @@ class Go2FlatEnvCfg(ManagerBasedRLEnvCfg):
     scene: Go2FlatSceneCfg = Go2FlatSceneCfg(num_envs=4096, env_spacing=2.5)
     # Basic settings
     observations: Go2FlatObservationsCfg = Go2FlatObservationsCfg()
-    actions: ActionsCfg_W_Symmetry = ActionsCfg_W_Symmetry()
+    actions: ActionsCfg = ActionsCfg()
     commands: CommandsCfg = CommandsCfg()
     # MDP settings
     rewards: FlatRewardsCfg = FlatRewardsCfg()
@@ -123,12 +119,17 @@ class Go2FlatEnvCfg(ManagerBasedRLEnvCfg):
         self.sim.dt = 0.005
         self.sim.render_interval = self.decimation
         self.sim.physics_material = self.scene.terrain.physics_material
-        use_locomotion_physics(self.sim, rigid_patch_count=2**16, njmax=50, nconmax=25)
+        # physics settings
+        use_locomotion_physics(self.sim, rigid_patch_count=2**16, njmax=128, nconmax=24)
+        # disable self collisions
+        set_self_collisions(self.scene.robot.spawn, False)
+        # keep foot collisions only
+        self.scene.robot.spawn.collision_props["/(?!.*foot).*"] = [UsdPhysicsCollisionCfg(collision_enabled=False)]
+
         # update sensor update periods
         # we tick all the sensors based on the smallest update period (physics update period)
         self.scene.contact_forces.update_period = self.sim.dt
         # disable self collisions for flat terrain
-        set_self_collisions(self.scene.robot.spawn, False)
 
 @configclass
 class Go2FlatEnvCfg_PLAY(Go2FlatEnvCfg):

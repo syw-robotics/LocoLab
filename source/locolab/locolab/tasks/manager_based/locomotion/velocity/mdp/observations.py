@@ -87,6 +87,36 @@ def joint_acc(env: ManagerBasedRLEnv, asset_cfg: SceneEntityCfg = SceneEntityCfg
     return joint_acc
 
 
+class joint_pos_rel_biased(ManagerTermBase):
+    """Joint position relative to default, plus the fixed encoder zero-offset.
+
+    The offset tensor is checked once here. The step path only reads it.
+    """
+
+    def __init__(self, cfg: ManagerTermBaseCfg, env: ManagerBasedRLEnv):
+        super().__init__(cfg, env)
+        asset_cfg: SceneEntityCfg = cfg.params["asset_cfg"]
+        self._asset: Articulation = env.scene[asset_cfg.name]
+        bias = getattr(self._asset, "encoder_bias", None)
+        if not isinstance(bias, torch.Tensor):
+            raise RuntimeError(
+                f"Articulation '{asset_cfg.name}' has no encoder_bias. "
+                "The position action must be EncoderBiasJointPositionAction."
+            )
+        self._bias = bias
+
+    def __call__(
+        self, env: ManagerBasedRLEnv, asset_cfg: SceneEntityCfg = SceneEntityCfg("robot")
+    ) -> torch.Tensor:
+        joint_ids = asset_cfg.joint_ids
+        data = self._asset.data
+        return (
+            data.joint_pos.torch[:, joint_ids] + self._bias[:, joint_ids]  # add bias in obs
+            - data.default_joint_pos.torch[:, joint_ids]  # hence, subtract bias in action
+        )
+
+
+
 # =====  gait  =====
 def gait_phase(env: ManagerBasedRLEnv, period: float) -> torch.Tensor:
     if not hasattr(env, "episode_length_buf"):

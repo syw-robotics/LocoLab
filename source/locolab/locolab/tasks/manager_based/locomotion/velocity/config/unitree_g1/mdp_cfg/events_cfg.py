@@ -19,7 +19,7 @@ from . import FOOT_LINK_NAMES, TORSO_LINK_NAME
 class EventCfg:
     """Configuration for events."""
 
-    # ===== startup ===== (2 events)
+    # ===== startup ===== (4 events)
     # 1.
     randomize_feet_material = EventTerm(
         func=mdp.randomize_rigid_body_material,
@@ -47,16 +47,33 @@ class EventCfg:
         },
     )
     # 3.
+    randomize_other_bodies_mass = EventTerm(
+        func=mdp.randomize_rigid_body_mass,
+        mode="startup",
+        params={
+            "asset_cfg": SceneEntityCfg("robot", body_names=OTHER_BODY_LINK_NAMES),
+            "mass_distribution_params": (0.95, 1.05),
+            "operation": "scale",
+            "recompute_inertia": True,
+        },
+    )
+    # 4.
     randomize_base_com = EventTerm(
         func=mdp.randomize_rigid_body_com,
         mode="startup",
         params={
             "asset_cfg": SceneEntityCfg("robot", body_names=TORSO_LINK_NAME),
-            "com_range": {"x": (-0.05, 0.05), "y": (-0.05, 0.05), "z": (-0.05, 0.05)},
+            "com_range": {"x": (-0.025, 0.025), "y": (-0.05, 0.05), "z": (-0.05, 0.05)},
         },
     )
+    # 5.
+    randomize_joint_encoder_bias = EventTerm(
+        func=mdp.randomize_encoder_bias,
+        mode="startup",
+        params={"asset_cfg": SceneEntityCfg("robot"), "bias_range": (-0.01, 0.01)},
+    )
 
-    # ===== reset ===== (3 events)
+    # ===== reset ===== (2 events)
     # 1.
     reset_base = EventTerm(
         func=mdp.reset_root_state_uniform,
@@ -78,7 +95,7 @@ class EventCfg:
         func=mdp.reset_joints_by_offset,
         mode="reset",
         params={
-            "position_range": (-0.2, 0.2),
+            "position_range": (-0.25, 0.25),
             "velocity_range": (0.0, 0.0),
         },
     )

@@ -94,17 +94,17 @@ We introduce **LocoLab**, a RL locomotion **env benchmark** with sim2real robust
         python scripts/random_agent.py --task=<TASK_NAME>
         ```
 
-    - Fetch a training logging from remote server:
-        ```bash
-        ./scripts/sync_logs.sh --help  # check this script for usage
-        ```
+    <!-- - Fetch a training logging from remote server: -->
+    <!--     ```bash -->
+    <!--     ./scripts/sync_logs.sh --help  # check this script for usage -->
+    <!--     ``` -->
 
 - **Preset terrains:**
 
     LocoLab provides additional preset terrain types beyond IsaacLab's defaults, including custom height-field and mesh terrains. See the [terrain README](source/locolab/locolab/utils/terrains/locolab_terrains/README.md).
 
 
-## Create an external project
+## Create an external project (TBD)
 
 LocoLab sits on Isaac Lab the same way your own project can sit on LocoLab:
 
@@ -140,110 +140,38 @@ python scripts/z_rl/play.py --task=Velocity-Flat-<ConfigName>
 The generated `env_cfg.py` is a placeholder: it registers with Gym so `list_envs` works, but you must fill in scene and MDP terms before training.
 
 
-## 📂 Task Organization
-
-The tasks are organized in the following hierarchy:
-
-```
-tasks
-├── manager_based
-│   ├── locomotion
-│   │   ├── velocity
-│   │   │   ├── config
-│   │   │   │   ├── unitree_go2
-│   │   │   │   │   ├── agents
-│   │   │   │   │   │   ├── z_rl_ppo_cfg.py
-│   │   │   │   │   │   └── ...
-│   │   │   │   │   ├── mdp_cfg (mdp configurations)
-│   │   │   │   │   ├── flat_env_cfg.py
-│   │   │   │   │   ├── rough_env_cfg.py
-│   │   │   │   │   └── __init__.py (register the environment cfgs)
-│   │   │   └── mdp (mdp components)
-│   │   └── ...
-│   └── ...
-└── ...
-```
-
-Different types of tasks are organized in different sub-directories, such that tasks are clearly separated and mdp components are easily reusable.
+<!-- ## 📂 Task Organization -->
+<!--  -->
+<!-- The tasks are organized in the following hierarchy: -->
+<!--  -->
+<!-- ``` -->
+<!-- tasks -->
+<!-- ├── manager_based -->
+<!-- │   ├── locomotion -->
+<!-- │   │   ├── velocity -->
+<!-- │   │   │   ├── config -->
+<!-- │   │   │   │   ├── unitree_go2 -->
+<!-- │   │   │   │   │   ├── agents -->
+<!-- │   │   │   │   │   │   ├── z_rl_ppo_cfg.py -->
+<!-- │   │   │   │   │   │   └── ... -->
+<!-- │   │   │   │   │   ├── mdp_cfg (mdp configurations) -->
+<!-- │   │   │   │   │   ├── flat_env_cfg.py -->
+<!-- │   │   │   │   │   ├── rough_env_cfg.py -->
+<!-- │   │   │   │   │   └── __init__.py (register the environment cfgs) -->
+<!-- │   │   │   └── mdp (mdp components) -->
+<!-- │   │   └── ... -->
+<!-- │   └── ... -->
+<!-- └── ... -->
+<!-- ``` -->
+<!--  -->
+<!-- Different types of tasks are organized in different sub-directories, such that tasks are clearly separated and mdp components are easily reusable. -->
 
 ## 📝 TODO
 - [x] **Symmetry Config Definition**: Alongside with which in Z RL
 - [x] **Muon Optimizer Support**: Alongside with which in Z RL
-- [ ] **G1**: Add Velocity-Flat-AMP-G1 and Velocity-Rough-G1
+- [ ] **G1**: Add Velocity-Flat-AMP-G1 and Velocity-Rough-G1, G1 tracking task, G1 supermimic implementation
 - [ ] **Go2**: Refine Velocity-Rough-Go2
 - [ ] **B2**: Add Velocity-Rough-B2
-- [ ] **Active Adaptation Port**: Migrate LocoLab tasks to (AA)[https://github.com/Agent-3154/active-adaptation]
+<!-- - [ ] **Active Adaptation Port**: Migrate LocoLab tasks to (AA)[https://github.com/Agent-3154/active-adaptation] -->
 
 
-<!-- ### Set up IDE (Optional)
-
-To setup the IDE, please follow these instructions:
-
-- Run VSCode Tasks, by pressing `Ctrl+Shift+P`, selecting `Tasks: Run Task` and running the `setup_python_env` in the drop down menu.
-  When running this task, you will be prompted to add the absolute path to your Isaac Sim installation.
-
-If everything executes correctly, it should create a file .python.env in the `.vscode` directory.
-The file contains the python paths to all the extensions provided by Isaac Sim and Omniverse.
-This helps in indexing all the python modules for intelligent suggestions while writing code. -->
-
-<!-- ### Setup as Omniverse Extension (Optional)
-
-We provide an example UI extension that will load upon enabling your extension defined in `source/locolab/locolab/ui_extension_example.py`.
-
-To enable your extension, follow these steps:
-
-1. **Add the search path of this project/repository** to the extension manager:
-    - Navigate to the extension manager using `Window` -> `Extensions`.
-    - Click on the **Hamburger Icon**, then go to `Settings`.
-    - In the `Extension Search Paths`, enter the absolute path to the `source` directory of this project/repository.
-    - If not already present, in the `Extension Search Paths`, enter the path that leads to Isaac Lab's extension directory directory (`IsaacLab/source`)
-    - Click on the **Hamburger Icon**, then click `Refresh`.
-
-2. **Search and enable your extension**:
-    - Find your extension under the `Third Party` category.
-    - Toggle it to enable your extension. -->
-
-<!-- ## Code formatting -->
-<!--  -->
-<!-- We have a pre-commit template to automatically format your code. -->
-<!-- To install pre-commit: -->
-<!--  -->
-<!-- ```bash -->
-<!-- pip install pre-commit -->
-<!-- ``` -->
-<!--  -->
-<!-- Then you can run pre-commit with: -->
-<!--  -->
-<!-- ```bash -->
-<!-- pre-commit run --all-files -->
-<!-- ``` -->
-
-<!-- ### Troubleshooting -->
-<!--  -->
-<!-- #### Pylance Missing Indexing of Extensions -->
-<!--  -->
-<!-- In some VsCode versions, the indexing of part of the extensions is missing. -->
-<!-- In this case, add the path to your extension in `.vscode/settings.json` under the key `"python.analysis.extraPaths"`. -->
-<!--  -->
-<!-- ```json -->
-<!-- { -->
-<!--     "python.analysis.extraPaths": [ -->
-<!--         "<path-to-ext-repo>/source/locolab" -->
-<!--     ] -->
-<!-- } -->
-<!-- ``` -->
-<!--  -->
-<!-- #### Pylance Crash -->
-<!--  -->
-<!-- If you encounter a crash in `pylance`, it is probable that too many files are indexed and you run out of memory. -->
-<!-- A possible solution is to exclude some of omniverse packages that are not used in your project. -->
-<!-- To do so, modify `.vscode/settings.json` and comment out packages under the key `"python.analysis.extraPaths"` -->
-<!-- Some examples of packages that can likely be excluded are: -->
-<!--  -->
-<!-- ```json -->
-<!-- "<path-to-isaac-sim>/extscache/omni.anim.*"         // Animation packages -->
-<!-- "<path-to-isaac-sim>/extscache/omni.kit.*"          // Kit UI tools -->
-<!-- "<path-to-isaac-sim>/extscache/omni.graph.*"        // Graph UI tools -->
-<!-- "<path-to-isaac-sim>/extscache/omni.services.*"     // Services tools -->
-<!-- ... -->
-<!-- ``` -->
