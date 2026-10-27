@@ -17,6 +17,10 @@
 
 </div>
 
+### 🔔 This branch is built on IsaacLab 2.3.2, which is deprecated
+
+> We recommend to use LocoLab on IsaacLab 3.0.0 to enjoy more features
+
 ## 🎯 Overview
 To develop high-performance locomotion algorithms, a well-configured and stable RL environment is essential.
 
