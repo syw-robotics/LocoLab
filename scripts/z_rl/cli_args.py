@@ -29,20 +29,25 @@ def add_z_rl_args(parser: argparse.ArgumentParser):
     # -- load arguments
     arg_group.add_argument("--resume", action="store_true", default=False, help="Whether to resume from a checkpoint.")
     arg_group.add_argument("--load_run", type=str, default=None, help="Name of the run folder to resume from.")
-    arg_group.add_argument("--checkpoint", type=str, default=None, help="Checkpoint file to resume from.")
+    arg_group.add_argument(
+        "--checkpoint",
+        type=str,
+        default=None,
+        help="Checkpoint path or W&B/Comet/Neptune run URL (play downloads latest; append #model_1000.pt to pin).",
+    )
     # -- logger arguments
     arg_group.add_argument(
         "--logger",
         type=str,
         default=None,
-        choices={"wandb", "tensorboard", "neptune", "swanlab"},
+        choices={"wandb", "tensorboard", "neptune", "swanlab", "comet"},
         help="Logger module to use.",
     )
     arg_group.add_argument(
         "--log_project_name",
         type=str,
         default=None,
-        help="Name of the logging project when using wandb, neptune, or swanlab.",
+        help="Name of the logging project when using wandb, neptune, swanlab, or comet.",
     )
 
 
@@ -92,10 +97,11 @@ def update_z_rl_cfg(agent_cfg: ZRlBaseRunnerCfg, args_cli: argparse.Namespace):
         agent_cfg.run_name = args_cli.run_name
     if args_cli.logger is not None:
         agent_cfg.logger = args_cli.logger
-    # set the project name for wandb, neptune, and swanlab
-    if agent_cfg.logger in {"wandb", "neptune", "swanlab"} and args_cli.log_project_name:
+    # set the project name for remote loggers
+    if agent_cfg.logger in {"wandb", "neptune", "swanlab", "comet"} and args_cli.log_project_name:
         agent_cfg.wandb_project = args_cli.log_project_name
         agent_cfg.neptune_project = args_cli.log_project_name
+        agent_cfg.comet_project = args_cli.log_project_name
         agent_cfg.swanlab_project = args_cli.log_project_name
 
     return agent_cfg

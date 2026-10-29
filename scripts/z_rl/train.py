@@ -8,7 +8,17 @@
 import argparse
 import sys
 
+from locolab.utils.startup import (
+    TRAIN_NUM_STAGES,
+    add_motion_file_arg,
+    apply_motion_file_override,
+    loading_screen,
+    prepend_motion_file_hydra_override,
+    report_run_summary,
+)
+
 from isaaclab.app import add_launcher_args, launch_simulation
+from isaaclab.app.loading_screen import LoadingScreen
 
 # local imports
 import cli_args  # isort: skip
@@ -38,6 +48,7 @@ parser.add_argument(
 )
 parser.add_argument("--debug", action="store_true", default=False, help="Enable debug mode.")
 parser.add_argument("--cprofile", action="store_true", default=False, help="Enable cProfile.")
+add_motion_file_arg(parser)
 
 # append Z-RL cli arguments
 cli_args.add_z_rl_args(parser)
@@ -96,7 +107,8 @@ torch.backends.cudnn.benchmark = False
 
 def main():
     """Train with Z-RL agent."""
-    env_cfg, agent_cfg = resolve_task_config(args_cli.task, args_cli.agent, overrides=hydra_args)
+    motion_overrides = prepend_motion_file_hydra_override(args_cli.motion_file, hydra_args)
+    env_cfg, agent_cfg = resolve_task_config(args_cli.task, args_cli.agent, overrides=motion_overrides)
     # override configurations with non-hydra CLI arguments
     agent_cfg = cli_args.update_z_rl_cfg(agent_cfg, args_cli)
 
@@ -107,6 +119,7 @@ def main():
         raise ValueError("New distillation runs require --teacher_checkpoint; use --resume to restore a student.")
 
     env_cfg.scene.num_envs = args_cli.num_envs if args_cli.num_envs is not None else env_cfg.scene.num_envs
+    apply_motion_file_override(env_cfg, args_cli.motion_file)
     agent_cfg.max_iterations = (
         args_cli.max_iterations if args_cli.max_iterations is not None else agent_cfg.max_iterations
     )
@@ -170,20 +183,23 @@ def main():
     if agent_cfg.resume:
         resume_path = get_checkpoint_path(log_root_path, agent_cfg.load_run, agent_cfg.load_checkpoint)
 
-    with launch_simulation(env_cfg, args_cli):
-        if args_cli.distributed:
-            agent_cfg.device = env_cfg.sim.device
-        _train(env_cfg, agent_cfg, log_dir, resume_path)
+    with loading_screen(args_cli, num_stages=TRAIN_NUM_STAGES) as screen:
+        screen.stage("Launching simulation")
+        with launch_simulation(env_cfg, args_cli):
+            if args_cli.distributed:
+                agent_cfg.device = env_cfg.sim.device
+            report_run_summary(screen, args_cli, env_cfg, library="z_rl", action="train")
+            _train(env_cfg, agent_cfg, log_dir, resume_path, screen)
 
 
-def _train(env_cfg, agent_cfg, log_dir, resume_path):
+def _train(env_cfg, agent_cfg, log_dir, resume_path, screen: LoadingScreen):
     """Run training after the simulation runtime has started."""
     start_time = time.time()
+    screen.stage("Creating environment")
     env = gym.make(args_cli.task, cfg=env_cfg)
-
-    # wrap around environment for z-rl
     env = ZRlVecEnvWrapper(env, clip_actions=agent_cfg.clip_actions)
 
+    screen.stage("Preparing agent")
     # create runner from z-rl
     if agent_cfg.class_name == "OnPolicyRunner":
         runner = OnPolicyRunner(env, agent_cfg.to_dict(), log_dir=log_dir, device=agent_cfg.device)
@@ -238,7 +254,7 @@ def _train(env_cfg, agent_cfg, log_dir, resume_path):
         )
         cprofile.enable()
 
-    # run training
+    screen.close()
     runner.learn(num_learning_iterations=agent_cfg.max_iterations, init_at_random_ep_len=True)
 
     print(f"Training time: {round(time.time() - start_time, 2)} seconds")

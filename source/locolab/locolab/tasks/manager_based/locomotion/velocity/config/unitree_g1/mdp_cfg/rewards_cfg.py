@@ -75,10 +75,10 @@ class FlatRewardsCfg:
     joint_acc = RewTerm(func=mdp.joint_acc_l2, weight=-2.5e-7)
     joint_pos_limits = RewTerm(func=mdp.joint_pos_limits, weight=-10.0)
     joint_power_l1 = RewTerm(func=mdp.joint_power_l1, weight=-2.0e-5)
-    joint_torques_l2 = RewTerm(
-        func=mdp.joint_torques_l2,
-        weight=-1.0e-4,
-        params={"asset_cfg": SceneEntityCfg("robot", joint_names=JOINT_NAMES)},
+    joint_vel_l2 = RewTerm(
+        func=mdp.joint_vel_l2,
+        weight=-1.0e-3,
+        params={"asset_cfg": SceneEntityCfg("robot", joint_names=[".*"])},
     )
     joint_deviation_arms_l1 = RewTerm(
         func=mdp.joint_deviation_l1,
@@ -169,14 +169,14 @@ class FlatRewardsCfg:
     #      },
     #  )
     # -- stand still --
-    stand_still = RewTerm(
-        func=mdp.stand_still,
-        weight=-0.25,
-        params={
-            "command_name": "base_velocity",
-            "asset_cfg": SceneEntityCfg("robot", joint_names=JOINT_NAMES),
-        },
-    )
+    #  stand_still = RewTerm(
+    #      func=mdp.stand_still,
+    #      weight=-0.25,
+    #      params={
+    #          "command_name": "base_velocity",
+    #          "asset_cfg": SceneEntityCfg("robot", joint_names=JOINT_NAMES),
+    #      },
+    #  )
 
 @configclass
 class RoughRewardsCfg:

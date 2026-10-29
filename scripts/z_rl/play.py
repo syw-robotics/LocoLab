@@ -8,9 +8,19 @@
 import argparse
 import sys
 
+from locolab.utils.remote_checkpoint import download_remote_checkpoint
+from locolab.utils.startup import (
+    PLAY_NUM_STAGES,
+    add_motion_file_arg,
+    apply_motion_file_override,
+    loading_screen,
+    prepend_motion_file_hydra_override,
+    report_run_summary,
+)
 from locolab.utils.viewer import add_play_viewer_args, open_play_viewer, prepare_play_viewer
 
 from isaaclab.app import add_launcher_args, launch_simulation
+from isaaclab.app.loading_screen import LoadingScreen
 
 # local imports
 import cli_args  # isort: skip
@@ -38,6 +48,8 @@ parser.add_argument(
 parser.add_argument("--realtime", action="store_true", default=False, help="Run in real time, if possible.")
 # for viser remote web viewer
 add_play_viewer_args(parser)
+# for selecting any4hdmi motion file
+add_motion_file_arg(parser)
 # append Z-RL cli arguments
 cli_args.add_z_rl_args(parser)
 # append simulation launcher cli args
@@ -75,7 +87,8 @@ from isaaclab_tasks.utils.hydra import resolve_task_config
 
 def main():
     """Play with Z-RL agent."""
-    env_cfg, agent_cfg = resolve_task_config(args_cli.task, args_cli.agent, overrides=hydra_args)
+    motion_overrides = prepend_motion_file_hydra_override(args_cli.motion_file, hydra_args)
+    env_cfg, agent_cfg = resolve_task_config(args_cli.task, args_cli.agent, overrides=motion_overrides)
     # grab task name for checkpoint path
     task_name = args_cli.task.split(":")[-1]
     train_task_name = task_name.replace("-Play", "")
@@ -83,6 +96,7 @@ def main():
     # override configurations with non-hydra CLI arguments
     agent_cfg: ZRlBaseRunnerCfg = cli_args.update_z_rl_cfg(agent_cfg, args_cli)
     env_cfg.scene.num_envs = args_cli.num_envs if args_cli.num_envs is not None else 10
+    apply_motion_file_override(env_cfg, args_cli.motion_file)
 
     # set the environment seed
     # note: certain randomizations occur in the environment initialization so we set the seed here
@@ -108,6 +122,11 @@ def main():
         if not resume_path:
             print("[INFO] Unfortunately a pre-trained checkpoint is currently unavailable for this task.")
             return
+    elif args_cli.checkpoint and (
+        remote_path := download_remote_checkpoint(args_cli.checkpoint, os.path.join(log_root_path, "remote"))
+    ):
+        # Run URLs select the latest uploaded model; append #model_1000.pt to pin one.
+        resume_path = remote_path
     elif args_cli.load_run:
         checkpoint = args_cli.checkpoint if args_cli.checkpoint is not None else "model_.*.pt"
         if os.path.isabs(args_cli.load_run) or os.sep in args_cli.load_run:
@@ -147,18 +166,20 @@ def main():
         ]
         print("[INFO] Recording a video during playback.")
 
-    with launch_simulation(env_cfg, args_cli):
-        _play(env_cfg, agent_cfg, resume_path, load_cfg)
+    with loading_screen(args_cli, num_stages=PLAY_NUM_STAGES) as screen:
+        screen.stage("Launching simulation")
+        with launch_simulation(env_cfg, args_cli):
+            report_run_summary(screen, args_cli, env_cfg, library="z_rl", action="play")
+            _play(env_cfg, agent_cfg, resume_path, load_cfg, screen)
 
 
-def _play(env_cfg, agent_cfg, resume_path, load_cfg):
+def _play(env_cfg, agent_cfg, resume_path, load_cfg, screen: LoadingScreen):
     """Play a checkpoint after the simulation runtime has started."""
-    # create isaac environment
+    screen.stage("Creating environment")
     env = gym.make(args_cli.task, cfg=env_cfg)
-
-    # wrap around environment for z-rl
     env = ZRlVecEnvWrapper(env, clip_actions=agent_cfg.clip_actions)
 
+    screen.stage("Loading policy")
     print(f"[INFO]: Loading model checkpoint from: {resume_path}")
     # load previously trained model
     if agent_cfg.class_name == "OnPolicyRunner":
@@ -192,9 +213,8 @@ def _play(env_cfg, agent_cfg, resume_path, load_cfg):
             torch.set_default_device(default_device)
 
     dt = env.unwrapped.step_dt
-
-    # for viser remote web viewer
     viewer = open_play_viewer(env, args_cli)
+    screen.close()
 
     # reset environment
     obs = env.get_observations()
@@ -219,13 +239,13 @@ def _play(env_cfg, agent_cfg, resume_path, load_cfg):
 
             # -------------------- Print Data for Debugging --------------------
             # example:
-            robot = env.unwrapped.scene["robot"]
-            torso_body_id = robot.body_names.index("torso_link")
+            #  robot = env.unwrapped.scene["robot"]
+            #  torso_body_id = robot.body_names.index("torso_link")
             #  base_body_id = robot.body_names.index("base_link")
-            pelvis_body_id = robot.body_names.index("pelvis")
+            #  pelvis_body_id = robot.body_names.index("pelvis")
             #  print("base_link height (env 0-10):", robot.data.body_pos_w[:11, base_body_id, 2])
-            print("torso_link height (env 0-10):", robot.data.body_pos_w[:11, torso_body_id, 2])
-            print("pelvis height (env 0-10):", robot.data.body_pos_w[:11, pelvis_body_id, 2])
+            #  print("torso_link height (env 0-10):", robot.data.body_pos_w[:11, torso_body_id, 2])
+            #  print("pelvis height (env 0-10):", robot.data.body_pos_w[:11, pelvis_body_id, 2])
             # -------------------- Print Data for Debugging --------------------
 
             if args_cli.video:

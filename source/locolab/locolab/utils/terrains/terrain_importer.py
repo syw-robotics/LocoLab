@@ -14,6 +14,7 @@
 from __future__ import annotations
 
 import logging
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 import numpy as np
@@ -218,13 +219,14 @@ class TerrainImporter:
     Operations - Import.
     """
 
-    def import_ground_plane(self, name: str, size: tuple[float, float] = (2.0e6, 2.0e6)):
+    def import_ground_plane(self, name: str, size: tuple[float, float] | None = None):
         """Add a plane to the terrain importer.
 
         Args:
             name: The name of the imported terrain. This name is used to create the USD prim
                 corresponding to the terrain.
-            size: The size of the plane. Defaults to (2.0e6, 2.0e6).
+            size: The visual size of the plane [m]. If None, extends 50 m beyond each side
+                of the environment grid. The collision plane remains infinite.
 
         Raises:
             ValueError: If a terrain with the same name already exists.
@@ -238,6 +240,13 @@ class TerrainImporter:
             )
         # store the mesh name
         self.terrain_prim_paths.append(prim_path)
+
+        if size is None:
+            # Match Isaac Lab: oversized visual triangles lose precision in Newton GL.
+            num_rows = int(np.ceil(self.cfg.num_envs / np.sqrt(self.cfg.num_envs)))
+            num_cols = int(np.ceil(self.cfg.num_envs / num_rows))
+            spacing = self.cfg.env_spacing or 0.0
+            size = ((num_rows - 1) * spacing + 100.0, (num_cols - 1) * spacing + 100.0)
 
         # obtain ground plane color from the configured visual material
         color = (0.0, 0.0, 0.0)
@@ -253,8 +262,29 @@ class TerrainImporter:
                 )
 
         # get the mesh
-        ground_plane_cfg = sim_utils.GroundPlaneCfg(physics_material=self.cfg.physics_material, size=size, color=color)
+        ground_plane_cfg = sim_utils.GroundPlaneCfg(
+            usd_path=str(Path(__file__).resolve().parents[2] / "assets/terrains/checker_ground/default_ground_plane.usda"),
+            physics_material=self.cfg.physics_material,
+            size=size,
+            color=color,
+        )
         ground_plane_cfg.func(prim_path, ground_plane_cfg)
+
+        # Isaac Lab only rescales UVs for its remote default asset; keep our local copy metric too.
+        from pxr import Gf, UsdGeom
+
+        from isaaclab.sim import get_current_stage
+
+        mesh = UsdGeom.Mesh(get_current_stage().GetPrimAtPath(f"{prim_path}/Environment/Geometry"))
+        half_u, half_v = size[0] / 4.0, size[1] / 4.0
+        UsdGeom.PrimvarsAPI(mesh).GetPrimvar("st").Set(
+            [
+                Gf.Vec2f(-half_u, -half_v),
+                Gf.Vec2f(half_u, -half_v),
+                Gf.Vec2f(half_u, half_v),
+                Gf.Vec2f(-half_u, half_v),
+            ]
+        )
 
     def import_mesh(self, name: str, mesh: trimesh.Trimesh, terrain_generator=None):
         """Import a mesh into the simulator.

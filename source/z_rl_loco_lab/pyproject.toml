@@ -8,7 +8,7 @@ version = "0.1.0"
 description = "External plugin package for z_rl"
 readme = "README.md"
 requires-python = ">=3.9"
-dependencies = ["z_rl==0.0.3"]
+dependencies = ["z_rl"]
 
 [tool.setuptools.packages.find]
 where = ["."]

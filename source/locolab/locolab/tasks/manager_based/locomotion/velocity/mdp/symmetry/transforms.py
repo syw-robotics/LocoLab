@@ -18,6 +18,15 @@ def identity(*, term_shape, **_) -> MirrorTransform:
     return _sign_transform(term_shape, (1.0,) * prod(term_shape))
 
 
+def biped_gait_phase(*, term_shape, **_) -> MirrorTransform:
+    """Shift ``[sin(phase), cos(phase)]`` half a cycle when swapping feet.
+
+    For biped foot offsets ``[0.0, 0.5]``, this preserves the expected
+    stance/swing states under left-right reflection.
+    """
+    return _sign_transform(term_shape, (-1.0, -1.0))
+
+
 def polar_vector(*, term_shape, **_) -> MirrorTransform:
     """Reflect a polar vector as ``[x, -y, z]``."""
     return _sign_transform(term_shape, (1.0, -1.0, 1.0))

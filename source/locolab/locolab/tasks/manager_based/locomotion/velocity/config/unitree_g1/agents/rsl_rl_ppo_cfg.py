@@ -25,13 +25,13 @@ class G1FlatPPORunnerCfg(RslRlOnPolicyRunnerCfg):
     actor = RslRlMLPModelCfg(
         hidden_dims=[512, 256, 128],
         activation="elu",
-        obs_normalization=False,
+        obs_normalization=True,
         distribution_cfg=RslRlMLPModelCfg.GaussianDistributionCfg(init_std=1.0),
     )
     critic = RslRlMLPModelCfg(
         hidden_dims=[512, 256, 128],
         activation="elu",
-        obs_normalization=False,
+        obs_normalization=True,
     )
     algorithm = RslRlPpoAlgorithmCfg(
         num_learning_epochs=5,

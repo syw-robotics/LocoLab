@@ -15,16 +15,25 @@ from __future__ import annotations
 import numpy as np
 import trimesh
 
+from locolab.utils.markers import BLUE_RAY_CASTER_MARKER_CFG
+
 from .utils import as_numpy, rotate_wxyz, xyzw_to_wxyz
+
+if (hit := BLUE_RAY_CASTER_MARKER_CFG.markers.get("hit")) is not None:
+    _BLUE_RAY_HIT_RADIUS = float(getattr(hit, "radius", 0.02))
+    diffuse = getattr(getattr(hit, "visual_material", None), "diffuse_color", (0.2, 0.2, 0.9))
+    _BLUE_RAY_HIT_COLOR = tuple(int(np.clip(float(c), 0.0, 1.0) * 255.0) for c in diffuse[:3])
+else:
+    _BLUE_RAY_HIT_RADIUS = 0.02
+    _BLUE_RAY_HIT_COLOR = (51, 51, 230)
 
 _SHAFT_RADIUS = 0.05
 _HEAD_RADIUS = 0.10
 _HEAD_FRACTION = 0.30
 _MIN_ARROW_LENGTH = 0.05
-_MAX_RAY_POINTS = 1000
+_MAX_RAY_POINTS = 10000
 _GOAL_COLOR = (40, 170, 60)
 _CURRENT_COLOR = (210, 50, 40)
-_RAY_COLOR = (240, 170, 40)
 # ``FRAME_MARKER_CFG`` uses scale 0.5 on a unit frame, so the axes are half a meter.
 _FRAME_LENGTH_M = 0.5
 _FRAME_RADIUS_M = 0.012
@@ -242,14 +251,14 @@ def _draw_rays(scene: DebugScene, label: str, obj, selector) -> None:
         scene.clear(label)
         return
     count = len(points)
-    radius = 0.025
+    radius, ray_color = _ray_hit_style(obj)
     scene.show(
         f"{label}/points",
         "point",
         points.astype(np.float32),
         np.tile(np.array([1.0, 0.0, 0.0, 0.0], dtype=np.float32), (count, 1)),
         np.full((count, 3), radius, dtype=np.float32),
-        _RAY_COLOR,
+        ray_color,
     )
 
 
@@ -269,6 +278,29 @@ def _length_gain(obj) -> float:
     arrow = markers.get("arrow") if isinstance(markers, dict) else None
     scale = getattr(arrow, "scale", (0.5, 0.5, 0.5))
     return float(scale[0])
+
+
+def _ray_hit_style(obj) -> tuple[float, tuple[int, int, int]]:
+    cfg = getattr(obj, "cfg", None)
+    vis = getattr(cfg, "visualizer_cfg", None)
+    return _sphere_style_from_marker_cfg(vis, "hit", _BLUE_RAY_HIT_RADIUS, _BLUE_RAY_HIT_COLOR)
+
+
+def _sphere_style_from_marker_cfg(
+    visualizer_cfg,
+    marker_name: str,
+    default_radius: float,
+    default_color: tuple[int, int, int],
+) -> tuple[float, tuple[int, int, int]]:
+    markers = getattr(visualizer_cfg, "markers", None)
+    marker = markers.get(marker_name) if isinstance(markers, dict) else None
+    radius = float(getattr(marker, "radius", default_radius))
+    material = getattr(marker, "visual_material", None)
+    diffuse = getattr(material, "diffuse_color", None)
+    if diffuse is None or len(diffuse) < 3:
+        return radius, default_color
+    color = tuple(int(np.clip(float(channel), 0.0, 1.0) * 255.0) for channel in diffuse[:3])
+    return radius, color
 
 
 def _marker_color(obj, attr: str, default: tuple[int, int, int]) -> tuple[int, int, int]:

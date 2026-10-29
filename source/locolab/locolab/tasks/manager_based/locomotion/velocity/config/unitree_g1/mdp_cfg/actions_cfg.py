@@ -9,7 +9,8 @@
 from isaaclab.utils import configclass
 
 import locolab.tasks.manager_based.locomotion.velocity.mdp as mdp
-from locolab.assets.actuators.g1_beyondmimic import beyondmimic_g1_action_scale
+from locolab.assets.robots.unitree.G1.g1_actuators import mimic_g1_action_scale
+from locolab.assets.robots.unitree.G1.g1_actuators import locomotion_g1_action_scale
 from locolab.tasks.manager_based.locomotion.velocity.mdp import symmetry
 
 from . import JOINT_NAMES, PRESERVE_ORDER
@@ -23,7 +24,8 @@ class ActionsCfg:
         action=mdp.JointPositionActionCfg(
             asset_name="robot",
             joint_names=JOINT_NAMES,
-            scale=beyondmimic_g1_action_scale,
+            scale=mimic_g1_action_scale,
+            #  scale=locomotion_g1_action_scale,
             use_default_offset=True,
             clip={".*": (-10.0, 10.0)},
             preserve_order=PRESERVE_ORDER,

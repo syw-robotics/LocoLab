@@ -54,14 +54,14 @@ class G1RoughPPORunnerCfg(G1RoughPPOBaseRunnerCfg):
     actor = ZRlMLPModelCfg(
         hidden_dims=[512, 256, 128],
         activation="elu",
-        obs_normalization=False,
+        obs_normalization=True,
         distribution_cfg=ZRlMLPModelCfg.GaussianDistributionCfg(init_std=1.0),
         init_weights=0.01,  # Use orthogonal init, which helps symmetry learning
     )
     critic = ZRlMLPModelCfg(
         hidden_dims=[512, 256, 128],
         activation="elu",
-        obs_normalization=False,
+        obs_normalization=True,
         init_weights=0.01,  # Use orthogonal init, which helps symmetry learning
     )
 

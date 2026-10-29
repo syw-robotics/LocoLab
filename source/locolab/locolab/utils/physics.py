@@ -14,7 +14,6 @@ from __future__ import annotations
 from isaaclab_newton.physics import (
     MJWarpSolverCfg,
     NewtonCfg,
-    NewtonCollisionPipelineCfg,
     NewtonShapeCfg,
 )
 from isaaclab_ov.physics import OvPhysxCfg
@@ -42,7 +41,8 @@ class LocomotionPhysicsCfg(PresetCfg):
             cone="pyramidal",  # The type of contact friction cone, "pyramidal" or "elliptic"
             impratio=1.0,
             integrator="implicitfast",  # "implicitfast" is recommended in mjlab
-            use_mujoco_contacts=False,  # whether to use MuJoCo's internal contact solver
+            use_mujoco_contacts=True,  # whether to use MuJoCo's internal contact solver
+            #  ls_iterations=24,
         ),
         num_substeps=1,
         debug_mode=False,
@@ -59,6 +59,7 @@ def set_locomotion_physics(
     *,
     njmax: int = 256,
     nconmax: int = 64,
+    ls_iterations: int = 50,
 ) -> None:
     """Install the locomotion physics preset on a simulation config.
 
@@ -74,6 +75,7 @@ def set_locomotion_physics(
     solver_cfg = physics.newton_mjwarp.solver_cfg
     solver_cfg.njmax = njmax
     solver_cfg.nconmax = nconmax
+    solver_cfg.ls_iterations = ls_iterations
     sim.physics = physics
     # ImplicitActuatorCfg ignores this flag and keeps its drive on the solver. The flag enables
     # native Newton actuators for explicit configs such as DCMotorCfg and IdealPDActuatorCfg.

@@ -145,7 +145,7 @@ def _geoms(model: mujoco.MjModel, *, collision: bool) -> tuple[list[trimesh.Trim
             continue
         _apply_geom_pose(mesh, model.geom_pos[geom_id], model.geom_quat[geom_id])
         if not collision:
-            _paint(mesh, model.geom_rgba[geom_id])
+            _paint(mesh, _geom_rgba(model, geom_id))
         meshes.append(mesh)
         links.append(body_id - 1)
     return meshes, np.asarray(links, dtype=np.int64)
@@ -191,6 +191,19 @@ def _apply_geom_pose(mesh: trimesh.Trimesh, pos, quat_wxyz) -> None:
     transform[:3, 3] = np.asarray(pos, dtype=np.float64)
     if not np.allclose(transform, np.eye(4)):
         mesh.apply_transform(transform)
+
+
+def _geom_rgba(model: mujoco.MjModel, geom_id: int) -> np.ndarray:
+    """Resolved albedo for a visual geom (MJCF ``material`` refs, not raw geom defaults)."""
+    rgba = np.asarray(model.geom_rgba[geom_id], dtype=np.float64)
+    mat_id = int(model.geom_matid[geom_id])
+    if mat_id < 0:
+        return rgba
+    material = np.asarray(model.mat_rgba[mat_id], dtype=np.float64)
+    # MuJoCo leaves geom rgba at 0.5 when color comes from a material; use the material then.
+    if np.allclose(rgba[:3], 0.5, atol=1e-3) and rgba[3] >= 0.999:
+        return material
+    return rgba * material
 
 
 def _paint(mesh: trimesh.Trimesh, rgba) -> None:

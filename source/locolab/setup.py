@@ -50,7 +50,10 @@ setup(
     install_requires=INSTALL_REQUIRES,
     license="Apache License 2.0",
     include_package_data=True,
-    package_data={"locolab.template": _template_package_data()},
+    package_data={
+        "locolab.template": _template_package_data(),
+        "locolab": ["assets/terrains/checker_ground/*.usda", "assets/terrains/checker_ground/Materials/Textures/*.png"],
+    },
     python_requires=">=3.10",
     entry_points={
         "locolab.tasks": [

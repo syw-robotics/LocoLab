@@ -6,7 +6,7 @@
 # All rights reserved.
 # Modifications are licensed under BSD-3-Clause.
 
-"""BeyondMimic-style implicit actuator groups for the Unitree G1 29-DOF model."""
+"""Implicit actuator groups for the Unitree G1 29-DOF model."""
 
 from isaaclab.actuators import ImplicitActuatorCfg
 
@@ -30,7 +30,8 @@ DAMPING_7520_14 = 2.0 * DAMPING_RATIO * ARMATURE_7520_14 * NATURAL_FREQ
 DAMPING_7520_22 = 2.0 * DAMPING_RATIO * ARMATURE_7520_22 * NATURAL_FREQ
 DAMPING_4010 = 2.0 * DAMPING_RATIO * ARMATURE_4010 * NATURAL_FREQ
 
-beyondmimic_g1_29dof_actuators = {
+# Motion Tracking PD gains
+mimic_g1_29dof_actuators = {
     "legs": ImplicitActuatorCfg(
         joint_names_expr=[
             ".*_hip_yaw_joint",
@@ -152,8 +153,8 @@ beyondmimic_g1_29dof_actuators = {
 }
 
 
-beyondmimic_g1_action_scale = {}
-for a in beyondmimic_g1_29dof_actuators.values():
+mimic_g1_action_scale = {}
+for a in mimic_g1_29dof_actuators.values():
     e = a.joint_effort_limit
     s = a.stiffness
     names = a.joint_names_expr
@@ -163,4 +164,71 @@ for a in beyondmimic_g1_29dof_actuators.values():
         s = {n: s for n in names}
     for n in names:
         if n in e and n in s and s[n]:
-            beyondmimic_g1_action_scale[n] = 0.25 * e[n] / s[n]
+            mimic_g1_action_scale[n] = 0.25 * e[n] / s[n]
+
+
+# Locomotion PD gains
+locomotion_g1_29dof_actuators = {
+    "N7520-14.3": ImplicitActuatorCfg(
+        joint_names_expr=[".*_hip_pitch_.*", ".*_hip_yaw_.*", "waist_yaw_joint"],
+        joint_effort_limit=88,
+        joint_velocity_limit=32.0,
+        stiffness={
+            ".*_hip_.*": 100.0,
+            "waist_yaw_joint": 200.0,
+        },
+        damping={
+            ".*_hip_.*": 2.0,
+            "waist_yaw_joint": 5.0,
+        },
+        armature=0.01,
+    ),
+    "N7520-22.5": ImplicitActuatorCfg(
+        joint_names_expr=[".*_hip_roll_.*", ".*_knee_.*"],
+        joint_effort_limit=139,
+        joint_velocity_limit=20.0,
+        stiffness={
+            ".*_hip_roll_.*": 100.0,
+            ".*_knee_.*": 150.0,
+        },
+        damping={
+            ".*_hip_roll_.*": 2.0,
+            ".*_knee_.*": 4.0,
+        },
+        armature=0.01,
+    ),
+    "N5020-16": ImplicitActuatorCfg(
+        joint_names_expr=[
+            ".*_shoulder_.*",
+            ".*_elbow_.*",
+            ".*_wrist_roll.*",
+            ".*_ankle_.*",
+            "waist_roll_joint",
+            "waist_pitch_joint",
+        ],
+        joint_effort_limit=25,
+        joint_velocity_limit=37,
+        stiffness=40.0,
+        damping={
+            ".*_shoulder_.*": 1.0,
+            ".*_elbow_.*": 1.0,
+            ".*_wrist_roll.*": 1.0,
+            ".*_ankle_.*": 2.0,
+            "waist_.*_joint": 5.0,
+        },
+        armature=0.01,
+    ),
+    "W4010-25": ImplicitActuatorCfg(
+        joint_names_expr=[".*_wrist_pitch.*", ".*_wrist_yaw.*"],
+        joint_effort_limit=5,
+        joint_velocity_limit=22,
+        stiffness=40.0,
+        damping=1.0,
+        armature=0.01,
+    ),
+}
+
+
+# Matches unitree_rl_lab g1 velocity ``JointPositionActionCfg(scale=0.25)``.
+locomotion_g1_action_scale = 0.25
+

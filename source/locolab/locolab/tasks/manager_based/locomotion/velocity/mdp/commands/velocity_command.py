@@ -42,7 +42,7 @@ class UniformVelocityCommand(CommandTerm):
 
     .. math::
 
-        \omega_z = \frac{1}{2} \text{wrap_to_pi}(\theta_{\text{target}} - \theta_{\text{current}})
+        \omega_z = k \, \text{wrap_to_pi}(\theta_{\text{target}} - \theta_{\text{current}})
 
     """
 
@@ -82,7 +82,6 @@ class UniformVelocityCommand(CommandTerm):
             if not 0.0 <= probability <= 1.0:
                 raise ValueError(f"Expected {name} to be in [0, 1], got {probability}.")
         mode_probability = sum(mode_probabilities.values())
-        self._use_command_modes = mode_probability > 0.0
         if mode_probability > 1.0:
             raise ValueError(
                 "Expected the standing, in-place, and x-only probabilities to sum to at most 1, "
@@ -94,23 +93,12 @@ class UniformVelocityCommand(CommandTerm):
                 f"got {self.cfg.metrics_update_interval}."
             )
 
-        # obtain the robot asset
-        # -- robot
         self.robot: Articulation = env.scene[cfg.asset_name]
 
-        # crete buffers to store the command
-        # -- command: x vel, y vel, yaw vel, heading
+        # command: x vel, y vel, yaw vel
         self.vel_command_b = torch.zeros(self.num_envs, 3, device=self.device)
         self.heading_target = torch.zeros(self.num_envs, device=self.device)
         self.is_heading_env = torch.zeros(self.num_envs, dtype=torch.bool, device=self.device)
-        self._vel_bounds = torch.tensor(
-            [self.cfg.ranges.lin_vel_x, self.cfg.ranges.lin_vel_y, self.cfg.ranges.ang_vel_z],
-            device=self.device,
-            dtype=torch.float32,
-        )
-        # commands are set to zero if the velocity xy is below the threshold
-        self.zero_velocity_threshold = self.cfg.zero_velocity_threshold
-        # -- metrics
         self.metrics["error_vel_xy"] = torch.zeros(self.num_envs, device=self.device)
         self.metrics["error_vel_yaw"] = torch.zeros(self.num_envs, device=self.device)
         self._metrics_update_counter = 0
@@ -129,8 +117,7 @@ class UniformVelocityCommand(CommandTerm):
         msg += f"\tStanding probability: {self.cfg.rel_standing_envs}\n"
         msg += f"\tIn-place probability: {self.cfg.rel_zero_lin_vel_envs}\n"
         msg += f"\tOnly lin_vel_x probability: {self.cfg.rel_only_lin_vel_x_envs}\n"
-        if self.zero_velocity_threshold is not None:
-            msg += f"\tVelocity threshold: {self.zero_velocity_threshold}\n"
+        msg += f"\tVelocity threshold: {self.cfg.zero_velocity_threshold}\n"
         msg += f"\tMetrics update interval: {self.cfg.metrics_update_interval} control steps\n"
         return msg
 
@@ -164,42 +151,47 @@ class UniformVelocityCommand(CommandTerm):
 
     def _resample_command(self, env_ids: Sequence[int] | slice):
         num_envs = len(range(self.num_envs)[env_ids]) if isinstance(env_ids, slice) else len(env_ids)
-        rand = torch.rand(num_envs, 3, device=self.device)
-        commands = self._vel_bounds[:, 0] + (self._vel_bounds[:, 1] - self._vel_bounds[:, 0]) * rand
+        # Read ranges here so a curriculum that mutates cfg.ranges changes the next sample.
+        ranges = self.cfg.ranges
+        bounds = torch.tensor(
+            [ranges.lin_vel_x, ranges.lin_vel_y, ranges.ang_vel_z],
+            device=self.device,
+            dtype=torch.float32,
+        )
+        commands = bounds[:, 0] + (bounds[:, 1] - bounds[:, 0]) * torch.rand(num_envs, 3, device=self.device)
         r = torch.empty(num_envs, device=self.device)
         if self.cfg.heading_command:
-            self.heading_target[env_ids] = r.uniform_(*self.cfg.ranges.heading)
+            self.heading_target[env_ids] = r.uniform_(*ranges.heading)
             self.is_heading_env[env_ids] = r.uniform_(0.0, 1.0) <= self.cfg.rel_heading_envs
-        self._assign_resampled_command(env_ids, commands, r)
+        self._apply_command_modes(env_ids, commands, r)
 
-    def _assign_resampled_command(self, env_ids: Sequence[int], commands: torch.Tensor, r: torch.Tensor) -> None:
-        """Apply standing / in-place / x-only modes and write the command once."""
+    def _apply_command_modes(self, env_ids: Sequence[int] | slice, commands: torch.Tensor, r: torch.Tensor) -> None:
+        """Zero small planar commands, then apply standing / in-place / x-only modes."""
         commands[:, :2] *= (torch.norm(commands[:, :2], dim=1) > self.cfg.zero_velocity_threshold).unsqueeze(1)
-        if self._use_command_modes:
-            mode_sample = r.uniform_(0.0, 1.0)
-            standing_end = self.cfg.rel_standing_envs
-            in_place_end = standing_end + self.cfg.rel_zero_lin_vel_envs
-            only_lin_vel_x_end = in_place_end + self.cfg.rel_only_lin_vel_x_envs
-            is_standing = mode_sample < standing_end
-            is_zero_lin_vel = (mode_sample >= standing_end) & (mode_sample < in_place_end)
-            is_only_lin_vel_x = (mode_sample >= in_place_end) & (mode_sample < only_lin_vel_x_end)
 
-            # Standing and x-only modes never need per-step heading updates.
-            if self.cfg.heading_command:
-                self.is_heading_env[env_ids] = self.is_heading_env[env_ids] & ~(is_standing | is_only_lin_vel_x)
+        mode_sample = r.uniform_(0.0, 1.0)
+        standing_end = self.cfg.rel_standing_envs
+        in_place_end = standing_end + self.cfg.rel_zero_lin_vel_envs
+        only_lin_vel_x_end = in_place_end + self.cfg.rel_only_lin_vel_x_envs
+        is_standing = mode_sample < standing_end
+        is_zero_lin_vel = (mode_sample >= standing_end) & (mode_sample < in_place_end)
+        is_only_lin_vel_x = (mode_sample >= in_place_end) & (mode_sample < only_lin_vel_x_end)
 
-            commands[is_zero_lin_vel, :2] = 0.0
-            commands[is_standing] = 0.0
-            commands[is_only_lin_vel_x, 1:] = 0.0
+        # Standing and x-only modes do not track a heading target.
+        if self.cfg.heading_command:
+            self.is_heading_env[env_ids] = self.is_heading_env[env_ids] & ~(is_standing | is_only_lin_vel_x)
+
+        commands[is_zero_lin_vel, :2] = 0.0
+        commands[is_standing] = 0.0
+        commands[is_only_lin_vel_x, 1:] = 0.0
         self.vel_command_b[env_ids] = commands
 
     def _update_command(self):
-        """Compute yaw rate from heading error for heading environments."""
-        if self.cfg.heading_command:
-            self._update_heading_velocity(self.cfg.ranges.ang_vel_z[0], self.cfg.ranges.ang_vel_z[1])
-
-    def _update_heading_velocity(self, ang_min: float | torch.Tensor, ang_max: float | torch.Tensor) -> None:
+        """Turn heading error into a yaw-rate command."""
+        if not self.cfg.heading_command:
+            return
         heading_error = math_utils.wrap_to_pi(self.heading_target - self.robot.data.heading_w.torch)
+        ang_min, ang_max = self.cfg.ranges.ang_vel_z
         ang_vel = (self.cfg.heading_control_stiffness * heading_error).clamp(min=ang_min, max=ang_max)
         self.vel_command_b[:, 2] = torch.where(self.is_heading_env, ang_vel, self.vel_command_b[:, 2])
 
@@ -348,8 +340,13 @@ class UniformVelocityCommandByTerrain(UniformVelocityCommand):
         if self.cfg.heading_command:
             self.heading_target[env_ids] = samples[:, 3]
             self.is_heading_env[env_ids] = r.uniform_(0.0, 1.0) <= self.cfg.rel_heading_envs
-        self._assign_resampled_command(env_ids, samples[:, :3], r)
+        self._apply_command_modes(env_ids, samples[:, :3], r)
 
     def _update_command(self):
-        if self.cfg.heading_command:
-            self._update_heading_velocity(self._ang_vel_min, self._ang_vel_max)
+        if not self.cfg.heading_command:
+            return
+        heading_error = math_utils.wrap_to_pi(self.heading_target - self.robot.data.heading_w.torch)
+        ang_vel = (self.cfg.heading_control_stiffness * heading_error).clamp(
+            min=self._ang_vel_min, max=self._ang_vel_max
+        )
+        self.vel_command_b[:, 2] = torch.where(self.is_heading_env, ang_vel, self.vel_command_b[:, 2])

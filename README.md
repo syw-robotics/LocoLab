@@ -39,48 +39,169 @@ We introduce **LocoLab**, a RL locomotion **env benchmark** with sim2real robust
 
 ## 📦 Installation
 
-- Install Isaac Lab 3.0 with uv by following the [installation guide](https://isaac-sim.github.io/IsaacLab/main/source/setup/installation/index.html).
-  From the Isaac Lab checkout, `uv sync --extra isaacsim` creates the environment. `isaaclab.sh` and the conda installer are no longer part of Isaac Lab 3.0.
+Clone [Isaac Lab 3.0](https://github.com/isaac-sim/IsaacLab), [Z-RL](https://github.com/syw-robotics/z_rl), and LocoLab into separate directories. Install [uv](https://docs.astral.sh/uv/getting-started/installation/), then create and activate a Python 3.12 environment (or activate an existing one):
 
-- Clone `LocoLab` separately from the Isaac Lab installation (i.e. outside the `IsaacLab` directory):
+```bash
+uv venv --python 3.12 /path/to/venv
+source /path/to/venv/bin/activate
+cd /path/to/LocoLab
+```
 
-    ```bash
-    git clone https://github.com/syw-robotics/LocoLab.git
-    ```
+**Required stack — one command:**
 
-- Using the Isaac Lab 3.0 interpreter, install the library in editable mode. This also installs [`assetx`](https://github.com/syw-robotics/assetx.git) from git (URDF/MJCF → USD):
+```bash
+bash scripts/install.sh /path/to/IsaacLab /path/to/z_rl
+```
 
-    ```bash
-    uv run --project /path/to/IsaacLab python -m pip install -e source/locolab
-    # Go2 / B2 DAE visuals:
-    uv run --project /path/to/IsaacLab python -m pip install pycollada
-    ```
+Both local checkout paths are required. This installs Isaac Lab into the activated environment, with **Newton MJWarp + OV PhysX** physics and **Newton GL + Viser** visualization available.
 
-- Install [`Z RL`](https://github.com/syw-robotics/z_rl.git), which is built on [`RSL-RL`](https://github.com/leggedrobotics/rsl_rl) but more flexible for developing algorithms.
-    ```bash
-    git clone https://github.com/syw-robotics/z_rl.git
-    cd z_rl
-    uv run --project /path/to/IsaacLab python -m pip install -e .
-    ```
+It also installs the supplied Z-RL checkout, LocoLab in editable mode, including LocoLab's [assetx](https://github.com/syw-robotics/assetx) dependency.
+
+**Optional stack — one command:**
+
+```bash
+bash scripts/install.sh /path/to/IsaacLab /path/to/z_rl --all
+```
+
+This installs the required stack plus **Newton RTX** and **Isaac Sim / Kit**. It can be run directly on a fresh environment or after the required installation.
+
+| Capability | Required installation | With `--all` |
+|------------|-----------------------|--------------|
+| Newton MJWarp physics (`--physics newton_mjwarp`) | Included | Included |
+| OV PhysX physics (`--physics ovphysx`) | Included | Included |
+| Newton GL visualizer (`--viz newton_gl`) | Included | Included |
+| Viser (`--viz viser` or LocoLab play's `--viser`) | Included | Included |
+| Newton RTX visualizer (`--viz newton_rtx`) | | Included |
+| Isaac Sim PhysX / Kit (`--physics isaacsim_physx`, `--viz kit`) | | Included |
+
+<!-- The installer uses Isaac Lab's uv workspace configuration and preserves unrelated installed packages with `--inexact`; conflicting dependency versions may still change. `--all` refers to the optional stack above, not every Isaac Lab extra. GPU and driver requirements follow the selected backends; see the installation guide in your Isaac Lab checkout (`docs/source/isaaclab/installation.rst`). -->
+
+<!-- Keep the environment activated and run scripts directly with `python`; `uv run` is not prefered. Installing a visualizer does not enable it: training remains headless unless selected with `--viz`. -->
+
+Check the installation and start a small training run:
+
+```bash
+python scripts/list_envs.py
+
+# train example
+python scripts/z_rl/train.py --task=Velocity-Flat-Go2 --physics ovphysx --num_envs 16 --max_iterations 50 agent.save_interval=50
+
+# play example
+python scripts/z_rl/play.py --task=Velocity-Flat-Go2 --physics newton_mjwarp --num_envs 16 --viz newton_gl  # `--viz viser` for isaaclab viser viewer; barely `--viser` for locolab viser simplied viewer  
+```
 
 ## 🚀 Usage
+
 - **Training:**
 
     ```bash
     python scripts/z_rl/train.py --task=<TASK_NAME>
     ```
 
-    - Isaac Lab 3.0 no longer accepts `--headless`;
-    - The default backend is PhysX (`--physics physx`). `--physics newton_mjwarp` runs the same task on Newton with MJWarp. Presets are defined in [`physics.py`](source/locolab/locolab/utils/physics.py).
+    Same flags work with `scripts/rsl_rl/train.py`. Isaac Lab 3.0 no longer accepts `--headless`; omit `--viz` for a headless run.
 
 - **Playing:**
+
     ```bash
     python scripts/z_rl/play.py --task=<TASK_NAME>
     ```
 
-    - Add `--viz xxx` to use xxx front end viewer. A run without `--viz` stays headless.
-    - Still keeps `--viser`, this is a previous implemented viser viewer option.
-    - `--video` records through `VideoRecorderCfg` with the Kit visualizer (`viz:kit`).
+    <!-- Use `scripts/rsl_rl/play.py` for RSL-RL checkpoints. Play tasks are usually `<TASK_NAME>-Play`; `z_rl/play.py` appends `-Play` when missing. -->
+
+### Common CLI options (train & play)
+
+Run `python scripts/z_rl/train.py --help` (or `play.py`) for every flag. The table below covers the options people use most often.
+
+| Option | Purpose |
+|--------|---------|
+| `--task` | Registered Gym task id (required). |
+| `--num_envs` | Number of parallel environments. |
+| `--device` | Simulation device, e.g. `cuda:0` or `cpu` (default `cuda:0` on Linux). |
+| `--physics` | Physics preset: `newton_mjwarp` (env default), `physx`, `ovphysx`, `isaacsim_physx`. Aliases and Hydra overrides are described in [`physics.py`](source/locolab/locolab/utils/physics.py). |
+| `--viz NAME` / `--visualizer NAME` | Isaac Lab visualizer preset(s). See [**`--viz` presets**](#viz--visualizer-presets) below. Comma-separated names run multiple viewers (e.g. `--viz kit,rerun`). Omit `--viz` for the task default (LocoLab velocity tasks: headless). `--video` still pulls in Kit recording via `viz:kit`. |
+| `--info` | Print startup logs to the terminal and skip hiding them behind the Loco Lab startup banner; also enables INFO-level SimulationApp logging. |
+| `--verbose` | Same banner behavior as `--info`, plus DEBUG-level SimulationApp logs. |
+| `--video` | Record video via Kit (`viz:kit`). |
+| `--video_length` | Steps per recorded clip (play; train also uses `--video_interval`). |
+
+**Play-only**
+
+| Option | Purpose |
+|--------|---------|
+| `--viser` | Browser-based Viser viewer for headless play ([details](source/locolab/locolab/utils/viewer/README.md)). Independent of `--viz`. |
+| `--viser-port`, `--viser-host` | Viser bind port and address (defaults `8080`, `0.0.0.0`). |
+| `--realtime` | Sleep so wall time matches sim step time (ignored while Viser pacing is active). |
+| `--checkpoint`, `--load_run` | Which run/checkpoint to load (see Z-RL/RSL-RL groups in `--help`). |
+| `--use_pretrained_checkpoint` | Load published Nucleus checkpoint when available. |
+
+#### `--viz` / `--visualizer` presets
+
+These names come from Isaac Lab’s `MultiBackendVisualizerCfg` (Hydra alias: `visualizer=NAME`, CLI alias: `--viz NAME` or `--visualizer NAME`).
+
+| Preset | Viewer |
+|--------|--------|
+| `kit` | Omniverse Kit viewport (Isaac Sim window; used automatically when recording with `--video`). |
+| `newton_gl` | Newton OpenGL interactive window. |
+| `newton_rtx` | Newton RTX interactive window. |
+| `rerun` | [Rerun](https://rerun.io/) viewer. |
+| `viser` | Isaac Lab’s Viser **backend** (integrated with the sim visualizer stack). Not the same as LocoLab play’s [`--viser`](#play-only) flag. |
+| `none` | Explicitly disable all visualizers. |
+| `default` | Task preset default (LocoLab locomotion envs: headless / no viewer). |
+
+**Alias:** `newton` → `newton_gl` (deprecated name, still accepted).
+
+**Examples:**
+
+```bash
+python scripts/z_rl/play.py --task=... --viz kit
+python scripts/z_rl/train.py --task=... --viz newton_gl
+python scripts/z_rl/play.py --task=... --viz kit,rerun
+python scripts/z_rl/train.py --task=... visualizer=rerun   # Hydra-style override
+```
+
+**Z-RL train** (see `scripts/z_rl/cli_args.py`): `--resume`, `--load_run`, `--checkpoint`, `--experiment_name`, `--run_name`, `--max_iterations`, `--logger`, `--distributed`, `--teacher_checkpoint` (distillation).
+
+Comet logging (optional): install `pip install comet-ml`, set `COMET_API_KEY` (and optionally `COMET_WORKSPACE`), then train with `--logger comet --log_project_name <project>`. Local TensorBoard logs are retained. Agent configs also accept `logger = {"class_name": "CometLogWriter", "project_name": "<project>"}`.
+
+### Play checkpoints trained on a server
+
+Pass the experiment's browser URL directly to `--checkpoint`; no manual checkpoint copy or
+`--logger` selection is required. The task and local agent configuration must match training.
+
+```bash
+# Copy the run URL from W&B or Comet. Automatically downloads the highest model_<iteration>.pt.
+python scripts/z_rl/play.py --task <task> --checkpoint "https://wandb.ai/<team>/<project>/runs/<run-id>"
+python scripts/z_rl/play.py --task <task> --checkpoint "https://www.comet.com/<workspace>/<project>/<experiment-key>"
+
+# Pin a particular checkpoint by appending a fragment (quote the URL).
+python scripts/z_rl/play.py --task <task> --checkpoint "comet://<workspace>/<project>/<experiment-key>#model_1000.pt"
+python scripts/z_rl/play.py --task <task> --checkpoint "neptune://<workspace>/<project>/<run-id>"
+```
+
+Supported short references: `wandb://team/project/run-id`, `comet://workspace/project/experiment-key`,
+and `neptune://workspace/project/run-id`. Neptune browser links of the form
+`https://app.neptune.ai/workspace/project/e/RUN-123` also work. Omit the fragment or use `#latest`
+for the latest uploaded checkpoint; `#model_1000.pt` selects an exact iteration.
+
+Install and authenticate only the SDK you use, on the local machine:
+
+| Service | Install | Authentication |
+| --- | --- | --- |
+| W&B | `pip install wandb` | `wandb login` or `WANDB_API_KEY` |
+| Comet | `pip install comet-ml` | `COMET_API_KEY` or existing Comet SDK configuration |
+| Neptune (legacy writer) | `pip install 'neptune<2'` | `NEPTUNE_API_TOKEN` |
+
+The training logger must have uploaded the checkpoints, and the local account must have read access.
+Downloads are cached under `logs/z_rl/<experiment>/remote/<service>/<run-hash>/`.
+Each invocation queries the remote run again to discover new iterations, while already cached
+checkpoint files are reused. Interrupted downloads are not cached. An explicit remote `--checkpoint`
+takes precedence over `--load_run`; local paths and ordinary HTTP checkpoint file URLs retain
+existing behavior. The downloaded model uses the local task configuration; remote environment
+configuration is not automatically applied. TensorBoard and SwanLab remote run downloads are
+not supported by this entry point.
+
+
+**Startup banner:** In an interactive terminal, train/play show a **Loco Lab · train/play** summary while the sim starts. Until `screen.close()`, stdout from Kit and env creation is buffered and then summarized; use **`--info`** to see all of it.
 
 - **Helpful scripts:**
 

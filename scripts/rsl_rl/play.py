@@ -12,9 +12,18 @@ import argparse
 import os
 import sys
 
+from locolab.utils.startup import (
+    PLAY_NUM_STAGES,
+    add_motion_file_arg,
+    apply_motion_file_override,
+    loading_screen,
+    prepend_motion_file_hydra_override,
+    report_run_summary,
+)
 from locolab.utils.viewer import add_play_viewer_args, open_play_viewer, prepare_play_viewer
 
 from isaaclab.app import add_launcher_args, launch_simulation  # isort: skip
+from isaaclab.app.loading_screen import LoadingScreen
 
 # local imports
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
@@ -42,6 +51,7 @@ parser.add_argument("--realtime", action="store_true", default=False, help="Run 
 
 # for viser remote web viewer
 add_play_viewer_args(parser)
+add_motion_file_arg(parser)
 # append RSL-RL cli arguments
 cli_args.add_rsl_rl_args(parser)
 # append simulation launcher cli args
@@ -90,7 +100,8 @@ from isaaclab_tasks.utils.hydra import resolve_task_config
 
 def main():
     """Play with RSL-RL agent."""
-    env_cfg, agent_cfg = resolve_task_config(args_cli.task, args_cli.agent, overrides=hydra_args)
+    motion_overrides = prepend_motion_file_hydra_override(args_cli.motion_file, hydra_args)
+    env_cfg, agent_cfg = resolve_task_config(args_cli.task, args_cli.agent, overrides=motion_overrides)
     # grab task name for checkpoint path
     task_name = args_cli.task.split(":")[-1]
     train_task_name = task_name.replace("-Play", "")
@@ -98,6 +109,7 @@ def main():
     # override configurations with non-hydra CLI arguments
     agent_cfg: RslRlBaseRunnerCfg = cli_args.update_rsl_rl_cfg(agent_cfg, args_cli)
     env_cfg.scene.num_envs = args_cli.num_envs if args_cli.num_envs is not None else env_cfg.scene.num_envs
+    apply_motion_file_override(env_cfg, args_cli.motion_file)
 
     # handle deprecated configurations
     agent_cfg = handle_deprecated_rsl_rl_cfg(agent_cfg, installed_version)
@@ -140,22 +152,24 @@ def main():
         ]
         print("[INFO] Recording a video during playback.")
 
-    with launch_simulation(env_cfg, args_cli):
-        _play(env_cfg, agent_cfg, resume_path)
+    with loading_screen(args_cli, num_stages=PLAY_NUM_STAGES) as screen:
+        screen.stage("Launching simulation")
+        with launch_simulation(env_cfg, args_cli):
+            report_run_summary(screen, args_cli, env_cfg, library="rsl_rl", action="play")
+            _play(env_cfg, agent_cfg, resume_path, screen)
 
 
-def _play(env_cfg, agent_cfg, resume_path):
+def _play(env_cfg, agent_cfg, resume_path, screen: LoadingScreen):
     """Play a checkpoint after the simulation runtime has started."""
-    # create isaac environment
+    screen.stage("Creating environment")
     env = gym.make(args_cli.task, cfg=env_cfg)
 
-    # convert to single-agent instance if required by the RL algorithm
     if isinstance(env.unwrapped, DirectMARLEnv):
         env = multi_agent_to_single_agent(env)
 
-    # wrap around environment for rsl-rl
     env = RslRlVecEnvWrapper(env, clip_actions=agent_cfg.clip_actions)
 
+    screen.stage("Loading policy")
     print(f"[INFO]: Loading model checkpoint from: {resume_path}")
     # load previously trained model
     if agent_cfg.class_name == "OnPolicyRunner":
@@ -203,10 +217,9 @@ def _play(env_cfg, agent_cfg, resume_path):
         else:
             policy_nn.reset(done_mask)
 
-    # for viser remote web viewer
     viewer = open_play_viewer(env, args_cli)
+    screen.close()
 
-    # reset environment
     obs = env.get_observations()
     timestep = 0
     # simulate environment
