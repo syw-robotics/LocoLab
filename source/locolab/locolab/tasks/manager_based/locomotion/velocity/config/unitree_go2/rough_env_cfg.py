@@ -15,7 +15,7 @@ from isaaclab.sensors import ContactSensorCfg, RayCasterCfg, patterns
 from isaaclab.utils import configclass
 
 #  from isaaclab.utils.assets import ISAAC_NUCLEUS_DIR
-from locolab.utils.physics import set_self_collisions, use_locomotion_physics
+from locolab.utils.physics import set_self_collisions, set_locomotion_physics
 from locolab.utils.scene import rough_terrain_visual_material_cfg, blue_sky_light_cfg
 from locolab.utils.terrains import TerrainImporterCfg
 
@@ -138,6 +138,8 @@ class Go2RoughSceneCfg(InteractiveSceneCfg):
 class Go2RoughEnvCfg(ManagerBasedRLEnvCfg):
     """Configuration for the Go2 flat environment."""
 
+    seed: int = 42
+
     # Scene settings
     scene: Go2RoughSceneCfg = Go2RoughSceneCfg(num_envs=4096, env_spacing=2.5)
     # Basic settings
@@ -160,7 +162,7 @@ class Go2RoughEnvCfg(ManagerBasedRLEnvCfg):
         self.sim.render_interval = self.decimation
         self.sim.physics_material = self.scene.terrain.physics_material
         # physics settings
-        use_locomotion_physics(self.sim, rigid_patch_count=2**16, njmax=128, nconmax=24)
+        set_locomotion_physics(self.sim, rigid_patch_count=2**16, njmax=128, nconmax=24)
         # enable self collisions
         set_self_collisions(self.scene.robot.spawn, True)
 

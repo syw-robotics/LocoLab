@@ -37,8 +37,8 @@ class LocomotionPhysicsCfg(PresetCfg):
     # newton mjwarp
     newton_mjwarp: NewtonCfg = NewtonCfg(
         solver_cfg=MJWarpSolverCfg(
-            njmax=60,  # Number of constraints per environment (world)
-            nconmax=25,  # Number of contact points per environment (world)
+            njmax=256,  # Number of constraints per environment (world)
+            nconmax=64,  # Number of contact points per environment (world)
             cone="pyramidal",  # The type of contact friction cone, "pyramidal" or "elliptic"
             impratio=1.0,
             integrator="implicitfast",  # "implicitfast" is recommended in mjlab
@@ -49,16 +49,16 @@ class LocomotionPhysicsCfg(PresetCfg):
         default_shape_cfg=NewtonShapeCfg(margin=0.0, ke=160000.0, kd=1100.0),
     )
 
-    # use physx by default
-    default = physx
+    # use mjwarp by default
+    default = newton_mjwarp
 
 
-def use_locomotion_physics(
+def set_locomotion_physics(
     sim,
     rigid_patch_count: int = 2**16,
     *,
-    njmax: int = 60,
-    nconmax: int = 25,
+    njmax: int = 256,
+    nconmax: int = 64,
 ) -> None:
     """Install the locomotion physics preset on a simulation config.
 

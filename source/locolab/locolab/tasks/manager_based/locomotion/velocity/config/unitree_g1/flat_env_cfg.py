@@ -12,9 +12,10 @@ from isaaclab.assets import ArticulationCfg, AssetBaseCfg
 from isaaclab.envs import ManagerBasedRLEnvCfg
 from isaaclab.scene import InteractiveSceneCfg
 from isaaclab.sensors import ContactSensorCfg
+from isaaclab.sim.schemas import UsdPhysicsCollisionCfg
 from isaaclab.utils import configclass
 
-from locolab.utils.physics import set_self_collisions, use_locomotion_physics
+from locolab.utils.physics import set_self_collisions, set_locomotion_physics
 from locolab.utils.scene import blue_sky_light_cfg, flat_terrain_visual_material_cfg
 from locolab.utils.terrains import TerrainImporterCfg
 
@@ -34,7 +35,7 @@ from locolab.tasks.manager_based.locomotion.velocity.config.unitree_g1.mdp_cfg i
     FOOT_CONTACT_LINK_NAMES,
     SELF_COLLISION_LINK_NAMES,
 )
-from locolab.assets import UNITREE_G1_29DOF_BEYONDMIMIC_PELVIS_BASE_CFG  # isort: skip
+from locolab.assets.robots.unitree.G1.g1 import UNITREE_G1_29DOF_TORSO_BASE_CFG  # isort: skip
 
 
 ##
@@ -72,32 +73,18 @@ class G1FlatSceneCfg(InteractiveSceneCfg):
     )
 
     # =====  robots  =====
-    # Self-collisions stay off, matching the Isaac Lab G1 asset. Filtered contact
-    # sensors still record knee, ankle, and torso pairs when collisions are enabled.
-    robot: ArticulationCfg = UNITREE_G1_29DOF_BEYONDMIMIC_PELVIS_BASE_CFG.replace(
+    robot: ArticulationCfg = UNITREE_G1_29DOF_TORSO_BASE_CFG.replace(
         prim_path="{ENV_REGEX_NS}/Robot",
     )
 
     # =====  sensors  =====
-    # Feet-ground contact: feet only, history for feet_slide / feet_gait
     feet_contact_forces: ContactSensorCfg = ContactSensorCfg(
         prim_path=f"{{ENV_REGEX_NS}}/Robot/{FOOT_CONTACT_LINK_NAMES}",
         history_length=3,
         track_air_time=True,
     )
-    # Self-collision: knee vs knee, ankle vs ankle
     self_collision_contact_forces: ContactSensorCfg = ContactSensorCfg(
         prim_path=f"{{ENV_REGEX_NS}}/Robot/{SELF_COLLISION_LINK_NAMES}",
-        filter_prim_paths_expr=[
-            "{ENV_REGEX_NS}/Robot/right_knee_link",
-            "{ENV_REGEX_NS}/Robot/left_knee_link",
-            "{ENV_REGEX_NS}/Robot/right_ankle_roll_link",
-            "{ENV_REGEX_NS}/Robot/left_ankle_roll_link",
-            "{ENV_REGEX_NS}/Robot/right_hip_roll_link",
-            "{ENV_REGEX_NS}/Robot/left_hip_roll_link",
-            "{ENV_REGEX_NS}/Robot/right_wrist_yaw_link",
-            "{ENV_REGEX_NS}/Robot/left_wrist_yaw_link",
-        ],
         history_length=3,
         track_air_time=False,
     )
@@ -112,6 +99,8 @@ class G1FlatSceneCfg(InteractiveSceneCfg):
 @configclass
 class G1FlatEnvCfg(ManagerBasedRLEnvCfg):
     """Configuration for the G1 flat environment."""
+
+    seed: int = 42
 
     # Scene settings
     scene: G1FlatSceneCfg = G1FlatSceneCfg(num_envs=4096, env_spacing=2.5)
@@ -134,12 +123,19 @@ class G1FlatEnvCfg(ManagerBasedRLEnvCfg):
         self.sim.dt = 0.005
         self.sim.render_interval = self.decimation
         self.sim.physics_material = self.scene.terrain.physics_material
-        use_locomotion_physics(self.sim, rigid_patch_count=2**16, njmax=70, nconmax=10)
-        set_self_collisions(self.scene.robot.spawn, True)
+        # physics settings
+        set_locomotion_physics(self.sim, rigid_patch_count=2**16, njmax=250, nconmax=70)
+        # disable self collisions
+        set_self_collisions(self.scene.robot.spawn, False)
+        self.self_collision_contact_forces = None
+        # only keep foot collisions
+        self.scene.robot.spawn.collision_props["/(?!.*_ankle_roll_link).*"] = [
+            UsdPhysicsCollisionCfg(collision_enabled=False)
+        ]
 
         # update sensor update periods
         self.scene.feet_contact_forces.update_period = self.sim.dt
-        self.scene.self_collision_contact_forces.update_period = self.sim.dt
+        #  self.scene.self_collision_contact_forces.update_period = self.sim.dt
 
 
 def _configure_play_env(cfg: G1FlatEnvCfg) -> None:

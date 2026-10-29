@@ -152,7 +152,7 @@ beyondmimic_g1_29dof_actuators = {
 }
 
 
-beyondmimic_action_scale = {}
+beyondmimic_g1_action_scale = {}
 for a in beyondmimic_g1_29dof_actuators.values():
     e = a.joint_effort_limit
     s = a.stiffness
@@ -163,4 +163,4 @@ for a in beyondmimic_g1_29dof_actuators.values():
         s = {n: s for n in names}
     for n in names:
         if n in e and n in s and s[n]:
-            beyondmimic_action_scale[n] = 0.25 * e[n] / s[n]
+            beyondmimic_g1_action_scale[n] = 0.25 * e[n] / s[n]

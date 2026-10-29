@@ -14,6 +14,8 @@ import torch
 
 from isaaclab.managers import ManagerTermBase, ManagerTermBaseCfg, SceneEntityCfg
 
+from .rewards import _command_is_moving
+
 if TYPE_CHECKING:
     from isaaclab.assets import Articulation
     from isaaclab.envs import ManagerBasedRLEnv
@@ -118,7 +120,12 @@ class joint_pos_rel_biased(ManagerTermBase):
 
 
 # =====  gait  =====
-def gait_phase(env: ManagerBasedRLEnv, period: float) -> torch.Tensor:
+def gait_phase(
+    env: ManagerBasedRLEnv,
+    period: float,
+    command_name: str | None = None,
+    command_threshold: float = 0.1,
+) -> torch.Tensor:
     if not hasattr(env, "episode_length_buf"):
         env.episode_length_buf = torch.zeros(env.num_envs, device=env.device, dtype=torch.long)
 
@@ -127,6 +134,8 @@ def gait_phase(env: ManagerBasedRLEnv, period: float) -> torch.Tensor:
     phase = torch.zeros(env.num_envs, 2, device=env.device)
     phase[:, 0] = torch.sin(global_phase * torch.pi * 2.0)
     phase[:, 1] = torch.cos(global_phase * torch.pi * 2.0)
+    if command_name is not None:
+        phase *= _command_is_moving(env, command_name, command_threshold).unsqueeze(1)
     return phase
 
 

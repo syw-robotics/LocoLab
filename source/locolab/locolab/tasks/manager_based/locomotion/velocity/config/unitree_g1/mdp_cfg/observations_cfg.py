@@ -139,7 +139,11 @@ class PrivObsCfg(ObsGroup):
         params={"sensor_cfg": SceneEntityCfg("feet_contact_forces", body_names=FOOT_LINK_NAMES)},
         symmetry_transform=symmetry.body_scalar,
     )
-    gait_phase = SymmObsTerm(func=mdp.gait_phase, params={"period": 0.8}, symmetry_transform=symmetry.identity)
+    gait_phase = SymmObsTerm(
+        func=mdp.gait_phase,
+        params={"period": 0.8, "command_name": "base_velocity"},
+        symmetry_transform=symmetry.identity,
+    )
 
     def __post_init__(self):
         self.enable_corruption = False

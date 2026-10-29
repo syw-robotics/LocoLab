@@ -4,15 +4,16 @@
 
 """Browser viewer for headless play.
 
-The simulation keeps running in Isaac Sim. The robot is the same URDF Isaac
-spawned, posed from the articulation root and joint state. Nothing here starts
-unless a play script constructs :class:`ViserPlayViewer`.
+The simulation keeps running in Isaac Sim. The robot drawn here is
+``source_asset``: the MJCF when that is what the task spawns, otherwise the
+URDF. Nothing here starts unless a play script constructs :class:`ViserPlayViewer`.
 """
 
 from __future__ import annotations
 
 import io
 import logging
+import re
 import threading
 import time
 from contextlib import suppress
@@ -23,7 +24,7 @@ from ._viser import viser
 from .browser import VIEWER_KEYS_JS, run_javascript, widen_broadcast_window
 from .debug_vis import DebugScene, debug_sources, draw_debug
 from .terrain import HEIGHT_COLOR_SCALE_M, SOLID_COLOR, paint_terrain
-from .urdf import RobotBodies, load_urdf, urdf_joint_ids
+from .urdf import load_robot, urdf_joint_ids
 from .utils import select_rows, xyzw_to_wxyz
 
 
@@ -48,8 +49,8 @@ def _quiet_probe_handshakes() -> None:
         logger.addFilter(_ProbeHandshakeFilter())
 
 
-# 25Hz by default.
-UPDATE_INTERVAL_S = 1.0 / 25.0
+# 50Hz by default.
+UPDATE_INTERVAL_S = 1.0 / 50.0
 # Viser's built-in WASDQE handler moves the camera at this many meters per second.
 DEFAULT_MOVE_SPEED_M_S = 10.0
 # Close third-person offset applied when tracking starts or the tracked env changes.
@@ -58,6 +59,11 @@ TRACK_OFFSET = np.array([1.8, -1.8, 1.1])
 SPEEDS = (1 / 8, 1 / 4, 1 / 2, 1.0, 2.0, 4.0, 8.0)
 # Viser's own default vertical field of view, in degrees.
 DEFAULT_FOV_DEG = 75.0
+# Green: this link's collider is enabled. Gray: the source asset has it, this env turned it off.
+ENABLED_COLLISION_RGBA = np.array([40, 200, 90, 120], dtype=np.uint8)
+DISABLED_COLLISION_RGBA = np.array([170, 176, 184, 70], dtype=np.uint8)
+# A client echo of a pose we sent stays within this; a left-drag does not.
+_CAMERA_MATCH_M = 5e-3
 
 
 def _glb_bytes(mesh) -> bytes:
@@ -65,6 +71,62 @@ def _glb_bytes(mesh) -> bytes:
     with io.BytesIO() as buffer:
         mesh.export(buffer, file_type="glb")
         return buffer.getvalue()
+
+
+def _collision_mesh(mesh, rgba: np.ndarray):
+    """Copy a collision mesh with a flat translucent color."""
+    import trimesh
+
+    painted = mesh.copy()
+    painted.visual = trimesh.visual.TextureVisuals(
+        material=trimesh.visual.material.PBRMaterial(
+            baseColorFactor=rgba,
+            alphaMode="BLEND",
+            doubleSided=True,
+        )
+    )
+    return painted
+
+
+def _enabled_collision_links(spawn, link_names: list[str]) -> set[str]:
+    """Links whose collider survives ``spawn.collision_props``.
+
+    Patterns are the same suffixes Isaac appends to the robot prim and matches
+    against the whole collider path. A link with no ``collision_enabled`` override stays on.
+    """
+    enabled = set(link_names)
+    props = getattr(spawn, "collision_props", None)
+    if not isinstance(props, dict):
+        return enabled
+    for pattern, fragments in props.items():
+        if not isinstance(fragments, (list, tuple)):
+            fragments = (fragments,)
+        flag = None
+        for fragment in fragments:
+            value = getattr(fragment, "collision_enabled", None)
+            if value is not None:
+                flag = bool(value)
+        if flag is None:
+            continue
+        try:
+            regex = re.compile("/Robot" + pattern)
+        except re.error:
+            continue
+        for name in link_names:
+            probes = (f"/Robot/{name}", f"/Robot/{name}/collisions")
+            if any(regex.fullmatch(probe) for probe in probes):
+                if flag:
+                    enabled.add(name)
+                else:
+                    enabled.discard(name)
+    return enabled
+
+
+def _seen_camera(position: np.ndarray, look_at: np.ndarray, history: list[tuple[np.ndarray, np.ndarray]]) -> bool:
+    return any(
+        np.allclose(position, sent_pos, atol=_CAMERA_MATCH_M) and np.allclose(look_at, sent_look, atol=_CAMERA_MATCH_M)
+        for sent_pos, sent_look in history
+    )
 
 
 def _robot_arrays(position, orientation, joints):
@@ -121,17 +183,25 @@ class ViserPlayViewer:
             available = ", ".join(scene.keys()) if hasattr(scene, "keys") else "unknown"
             raise KeyError(f"Scene has no '{robot_name}' entity. Available entities: {available}") from exc
 
-        spawn = self._robot.cfg.spawn
-        asset_path = getattr(spawn, "asset_path", None)
+        asset_path = getattr(self._robot.cfg, "source_asset", None) or getattr(
+            self._robot.cfg.spawn, "asset_path", None
+        )
         if not asset_path:
             raise ValueError(
-                "Viser play needs the robot URDF from spawn.asset_path. "
-                f"This robot was spawned from {type(spawn).__name__}."
+                "Viser play needs robot.cfg.source_asset "
+                "(the spawned MJCF or URDF, or the legacy spawn.asset_path)."
             )
-        urdf = load_urdf(asset_path)
-        self._bodies = RobotBodies(urdf)
+        self._bodies, actuated_names = load_robot(asset_path)
         self._body_glb = [_glb_bytes(mesh) for mesh in self._bodies.meshes]
-        self._joint_ids = urdf_joint_ids(list(self._robot.joint_names), list(urdf.actuated_joint_names))
+        enabled_links = _enabled_collision_links(self._robot.cfg.spawn, self._bodies.link_names)
+        self._collision_glb = []
+        for mesh, link in zip(self._bodies.collision_meshes, self._bodies.collision_mesh_links):
+            name = self._bodies.link_names[int(link)]
+            rgba = ENABLED_COLLISION_RGBA if name in enabled_links else DISABLED_COLLISION_RGBA
+            self._collision_glb.append(_glb_bytes(_collision_mesh(mesh, rgba)))
+        self._show_visual = bool(self._body_glb)
+        self._show_collision = not self._show_visual and bool(self._collision_glb)
+        self._joint_ids = urdf_joint_ids(list(self._robot.joint_names), actuated_names)
 
         self._num_envs = int(unwrapped.num_envs)
         self._env_idx = 0
@@ -139,13 +209,10 @@ class ViserPlayViewer:
         self._visible_signature: tuple | None = None
 
         self._track = False
-        self._track_env: int | None = None
-        self._track_anchor: np.ndarray | None = None
-        # Per client: view offset from the robot, and the pose we last sent.
-        self._track_offsets: dict[int, tuple[np.ndarray, np.ndarray]] = {}
-        self._track_commanded: dict[int, tuple[np.ndarray, np.ndarray]] = {}
+        # Per client: (position offset, look offset, recent poses we already accepted).
+        self._track_view: dict[int, tuple] = {}
         self._camera_pose: np.ndarray | None = None
-        self._camera_offset = np.array([2.5, -2.5, 1.5])
+        self._camera_offset = TRACK_OFFSET.copy()
         self._framed_clients: set[int] = set()
         self._move_speed = DEFAULT_MOVE_SPEED_M_S
         self._fov_deg = DEFAULT_FOV_DEG
@@ -179,7 +246,8 @@ class ViserPlayViewer:
         self._link_wxyz = np.zeros((self._num_envs, len(self._bodies.link_names), 4), dtype=np.float32)
         self._link_wxyz[..., 0] = 1.0
         self._body_scales = np.ones(self._num_envs, dtype=np.float32)
-        self._body_handles: list = []
+        self._visual_handles: list = []
+        self._collision_handles: list = []
         self._prepare_ground(scene)
 
         _quiet_probe_handshakes()
@@ -218,7 +286,7 @@ class ViserPlayViewer:
         """Push the latest pose to the browser. Return True while playback is paused.
 
         While running, sleep so the loop matches ``step_dt / speed``. The play
-        script should skip its own ``--real-time`` sleep when ``paces`` is true.
+        script should skip its own ``--realtime`` sleep when ``paces`` is true.
         """
         self.update()
         if self.paused:
@@ -266,11 +334,11 @@ class ViserPlayViewer:
             self._sync_robots(env_ids, position, orientation, joints, show_scales)
             draw_debug(self._debug_scene, self._debug_terms, self._debug_enabled, selector)
 
-        if self._camera_pose is None:
-            self._frame_camera(position)
-        self._offer_initial_camera()
         tracked = position[env_idx] if show_all else position[0]
-        self._follow_camera(tracked, env_idx)
+        if self._camera_pose is None:
+            self._frame_camera(tracked)
+        self._offer_initial_camera()
+        self._follow_camera(tracked)
 
         shown = f"all {self._num_envs}" if show_all else f"{env_idx} / {self._num_envs - 1}"
         tracking = f"env {env_idx}" if self._track else "off"
@@ -306,22 +374,32 @@ class ViserPlayViewer:
 
     def _add_robots(self) -> None:
         """Upload each link mesh once, with one instance per environment."""
+        self._visual_handles = self._add_mesh_layer("/robots/visual", self._body_glb, self._show_visual)
+        self._collision_handles = self._add_mesh_layer(
+            "/robots/collision", self._collision_glb, self._show_collision
+        )
+        self._body_glb = []
+        self._collision_glb = []
+
+    def _add_mesh_layer(self, prefix: str, payloads: list[bytes], visible: bool) -> list:
         count = self._num_envs
         identity = np.zeros((count, 4), dtype=np.float32)
         identity[:, 0] = 1.0
         origin = np.zeros((count, 3), dtype=np.float32)
-        for index, payload in enumerate(self._body_glb):
-            self._body_handles.append(
+        handles = []
+        for index, payload in enumerate(payloads):
+            handles.append(
                 self._server.scene.add_batched_glb(
-                    f"/robots/mesh/{index}",
+                    f"{prefix}/{index}",
                     payload,
                     identity,
                     origin,
                     batched_scales=self._body_scales,
                     lod="off",
+                    visible=visible,
                 )
             )
-        self._body_glb = []
+        return handles
 
     def _sync_robots(self, env_ids, position, orientation, joints, show_scales: bool) -> None:
         """Write instance poses. Hidden environments keep scale 0, so their mesh stays put."""
@@ -332,12 +410,17 @@ class ViserPlayViewer:
         if show_scales:
             self._body_scales[:] = 0.0
             self._body_scales[ids] = 1.0
-        for handle, link in zip(self._body_handles, self._bodies.mesh_links):
-            # Copy: the websocket thread serializes this array after the next pose overwrites the buffer.
-            handle.batched_positions = self._link_pos[:, link].copy()
-            handle.batched_wxyzs = self._link_wxyz[:, link].copy()
-            if show_scales:
-                handle.batched_scales = self._body_scales.copy()
+        layers = (
+            (self._visual_handles, self._bodies.mesh_links),
+            (self._collision_handles, self._bodies.collision_mesh_links),
+        )
+        for handles, links in layers:
+            for handle, link in zip(handles, links):
+                # Copy: the websocket thread serializes this array after the next pose overwrites the buffer.
+                handle.batched_positions = self._link_pos[:, link].copy()
+                handle.batched_wxyzs = self._link_wxyz[:, link].copy()
+                if show_scales:
+                    handle.batched_scales = self._body_scales.copy()
 
     def _prepare_ground(self, scene) -> None:
         """Color the terrain before the server prints its URL."""
@@ -451,8 +534,9 @@ class ViserPlayViewer:
 
             self._build_scene_gui()
 
-        if self._terrain_mesh is not None:
-            with tabs.add_tab("Visualization", icon=viser.Icon.EYE):
+        with tabs.add_tab("Visualization", icon=viser.Icon.EYE):
+            self._build_robot_vis_gui()
+            if self._terrain_mesh is not None:
                 self._build_terrain_gui()
         self._apply_fov(self._fov_deg)
         run_javascript(self._server, VIEWER_KEYS_JS.replace("__MOVE_SPEED__", f"{self._move_speed:g}"))
@@ -490,6 +574,34 @@ class ViserPlayViewer:
                     @checkbox.on_update
                     def _(event, key=label) -> None:
                         self._debug_enabled[key] = bool(event.target.value)
+
+    def _build_robot_vis_gui(self) -> None:
+        if not self._visual_handles and not self._collision_handles:
+            return
+        with self._server.gui.add_folder("Robot"):
+            if self._visual_handles:
+                visual = self._server.gui.add_checkbox("Visual", initial_value=self._show_visual)
+
+                @visual.on_update
+                def _(event) -> None:
+                    self._show_visual = bool(event.target.value)
+                    self._set_layer_visible(self._visual_handles, self._show_visual)
+
+            if self._collision_handles:
+                collision = self._server.gui.add_checkbox(
+                    "Collision",
+                    initial_value=self._show_collision,
+                    hint="Green: enabled in this env. Gray: in the URDF/MJCF, but disabled.",
+                )
+
+                @collision.on_update
+                def _(event) -> None:
+                    self._show_collision = bool(event.target.value)
+                    self._set_layer_visible(self._collision_handles, self._show_collision)
+
+    def _set_layer_visible(self, handles, visible: bool) -> None:
+        for handle in handles:
+            handle.visible = visible
 
     def _build_terrain_gui(self) -> None:
         with self._server.gui.add_folder("Terrain"):
@@ -612,15 +724,13 @@ class ViserPlayViewer:
         self._offer_initial_camera()
         self._release_if_waiting()
 
-    def _frame_camera(self, positions: np.ndarray) -> None:
-        """Record the opening view. ``initial_camera`` only affects clients that connect later."""
-        center = positions.mean(axis=0)
-        spread = float(np.linalg.norm(positions - center, axis=1).max()) if len(positions) > 1 else 0.0
-        distance = max(3.0, spread * 1.8 + 1.5)
-        self._camera_pose = center.copy()
-        self._camera_offset = np.array([distance, -distance, max(1.5, distance * 0.45)])
-        self._server.initial_camera.position = center + self._camera_offset
-        self._server.initial_camera.look_at = center
+    def _frame_camera(self, target: np.ndarray) -> None:
+        """Record a close view of one robot. ``initial_camera`` only affects clients that connect later."""
+        target = np.asarray(target, dtype=np.float64).reshape(3)
+        self._camera_pose = target.copy()
+        self._camera_offset = TRACK_OFFSET.copy()
+        self._server.initial_camera.position = target + self._camera_offset
+        self._server.initial_camera.look_at = target
 
     def _offer_initial_camera(self) -> None:
         """Move each browser onto the opening view once. Later orbit and track are left alone."""
@@ -641,63 +751,46 @@ class ViserPlayViewer:
             return False
         return True
 
-    def _follow_camera(self, target: np.ndarray, env_idx: int) -> None:
-        """Translate the view with the robot, and leave it alone while the user orbits.
+    def _follow_camera(self, target: np.ndarray) -> None:
+        """Keep the robot in frame, and keep a left-drag as the new orbit.
 
-        Opening track, or changing the env index, frames the robot once. Mouse
-        and WASD updates stay on the browser. Writing the camera during that
-        change snaps the orbit back to a pose from the previous sample.
+        Poses we already sent are ignored, so a late camera echo is not a drag.
+        A pose we did not send is the mouse; it becomes the offset and is not overwritten.
         """
         if not self._track:
-            self._track_anchor = None
-            self._track_env = None
-            self._track_offsets.clear()
-            self._track_commanded.clear()
+            self._track_view.clear()
             return
-
         target = np.asarray(target, dtype=np.float64).reshape(3)
-        if self._track_env != env_idx or self._track_anchor is None:
-            moved = False
-            for client in self._server.get_clients().values():
-                position = target + TRACK_OFFSET
-                if not self._place_camera(client, position, target):
-                    continue
-                self._track_offsets[client.client_id] = (position - target, np.zeros(3))
-                self._track_commanded[client.client_id] = (position.copy(), target.copy())
-                moved = True
-            if moved:
-                self._track_env = env_idx
-                self._track_anchor = target.copy()
-            return
-
-        delta = target - self._track_anchor
         for client in self._server.get_clients().values():
-            client_id = client.client_id
-            try:
-                reported_pos = np.asarray(client.camera.position, dtype=np.float64)
-                reported_look = np.asarray(client.camera.look_at, dtype=np.float64)
-            except AssertionError:
-                continue
-            commanded = self._track_commanded.get(client_id)
-            if commanded is None:
-                position = target + TRACK_OFFSET
-                if self._place_camera(client, position, target):
-                    self._track_offsets[client_id] = (position - target, np.zeros(3))
-                    self._track_commanded[client_id] = (position.copy(), target.copy())
-                continue
-            user_moved = not (
-                np.allclose(reported_pos, commanded[0], atol=5e-3)
-                and np.allclose(reported_look, commanded[1], atol=5e-3)
+            self._follow_client(client, target)
+
+    def _follow_client(self, client, target: np.ndarray) -> None:
+        client_id = client.client_id
+        view = self._track_view.get(client_id)
+        if view is None:
+            self._write_track_view(client, target, TRACK_OFFSET, np.zeros(3), [])
+            return
+        pos_off, look_off, history = view
+        try:
+            reported_pos = np.asarray(client.camera.position, dtype=np.float64)
+            reported_look = np.asarray(client.camera.look_at, dtype=np.float64)
+        except AssertionError:
+            self._write_track_view(client, target, pos_off, look_off, history)
+            return
+        if not _seen_camera(reported_pos, reported_look, history):
+            self._track_view[client_id] = (
+                reported_pos - target,
+                reported_look - target,
+                [(reported_pos.copy(), reported_look.copy())],
             )
-            if user_moved:
-                self._track_offsets[client_id] = (reported_pos - target, reported_look - target)
-                self._track_commanded[client_id] = (reported_pos.copy(), reported_look.copy())
-                continue
-            if float(np.linalg.norm(delta)) < 1e-4:
-                continue
-            new_pos = reported_pos + delta
-            new_look = reported_look + delta
-            if self._place_camera(client, new_pos, new_look):
-                self._track_offsets[client_id] = (new_pos - target, new_look - target)
-                self._track_commanded[client_id] = (new_pos.copy(), new_look.copy())
-        self._track_anchor = target.copy()
+            return
+        self._write_track_view(client, target, pos_off, look_off, history)
+
+    def _write_track_view(self, client, target, pos_off, look_off, history: list) -> None:
+        position = target + pos_off
+        look_at = target + look_off
+        if not self._place_camera(client, position, look_at):
+            return
+        history.append((position.copy(), look_at.copy()))
+        del history[:-6]
+        self._track_view[client.client_id] = (np.array(pos_off, copy=True), np.array(look_off, copy=True), history)

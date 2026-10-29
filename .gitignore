@@ -19,7 +19,7 @@
 **/*.egg-info/
 **/__pycache__/
 **/.pytest_cache/
-**/.locolab_urdf_cache/
+**/.locolab_usd_cache/
 **/*.pyc
 **/*.pb
 

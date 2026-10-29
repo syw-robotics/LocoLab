@@ -16,11 +16,11 @@ import os
 from isaaclab.actuators import ImplicitActuatorCfg
 from isaaclab.assets.articulation import ArticulationCfg
 
-from locolab.assets.robots.common import LocoLabArticulationCfg, quadruped_urdf_cfg
+from locolab.assets.robots.common import LocoLabArticulationCfg, assetx_export_usd_cfg
 from locolab.utils.symmetry import complete_symmetry_mapping
 
 _GO2_DIR = os.path.dirname(os.path.abspath(__file__))
-_GO2_SOURCE_URDF = os.path.join(_GO2_DIR, "urdf", "go2_description", "urdf", "go2_description.urdf")
+_GO2_SOURCE_URDF = os.path.join(_GO2_DIR, "urdf", "go2_description.urdf")
 
 # fmt: off
 GO2_JOINT_SDK_NAMES = [
@@ -57,10 +57,14 @@ GO2_SPATIAL_SYMMETRY_MAPPING = complete_symmetry_mapping(
 )
 
 UNITREE_GO2_CFG = LocoLabArticulationCfg(
-    spawn=quadruped_urdf_cfg(
-        _GO2_SOURCE_URDF,
-        "/.*_foot/sphere.*",
+    spawn=assetx_export_usd_cfg(
+        asset_path=_GO2_SOURCE_URDF,
+        foot_expression="/.*_foot/collisions.*",
+        merge_fixed_joints=True,
+        keep_fixed_pattern=r".*_foot_joint$",
+        honor_dont_collapse=False,  # we kept fixed joint pattern explicitly already
     ),
+    source_asset=_GO2_SOURCE_URDF,
     init_state=ArticulationCfg.InitialStateCfg(
         pos=(0.0, 0.0, 0.4),
         joint_pos={

@@ -24,6 +24,7 @@ INSTALL_REQUIRES = [
     "psutil",
     # Optional at runtime: play imports it only when --viser is set.
     "viser>=1.0.0",
+    "assetx @ git+https://github.com/syw-robotics/assetx.git",
 ]
 
 

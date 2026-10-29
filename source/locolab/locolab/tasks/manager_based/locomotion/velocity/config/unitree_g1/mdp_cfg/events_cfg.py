@@ -12,7 +12,7 @@ from isaaclab.utils import configclass
 
 import locolab.tasks.manager_based.locomotion.velocity.mdp as mdp
 
-from . import FOOT_LINK_NAMES, TORSO_LINK_NAME
+from . import FOOT_LINK_NAMES, OTHER_BODY_LINK_NAMES, TORSO_LINK_NAME
 
 
 @configclass
@@ -52,7 +52,7 @@ class EventCfg:
         mode="startup",
         params={
             "asset_cfg": SceneEntityCfg("robot", body_names=OTHER_BODY_LINK_NAMES),
-            "mass_distribution_params": (0.95, 1.05),
+            "mass_distribution_params": (0.96, 1.04),
             "operation": "scale",
             "recompute_inertia": True,
         },

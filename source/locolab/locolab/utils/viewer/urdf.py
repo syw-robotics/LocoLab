@@ -4,7 +4,7 @@
 
 """Load the spawned URDF and pose its links without copying the meshes.
 
-:class:`RobotBodies` keeps one visual mesh per link, in that link's frame.
+:class:`RobotBodies` keeps visual and collision meshes in each link's frame.
 The viewer instances those meshes, so a second environment costs a pose,
 not another copy of the vertices.
 """
@@ -22,28 +22,32 @@ from viser.transforms import SO3
 from .utils import rotate_wxyz
 
 
+def load_robot(asset_path: str | Path) -> tuple[RobotBodies, list[str]]:
+    """Load the file the task actually spawns.
+
+    ``.xml`` / ``.mjcf`` use MuJoCo geoms: visual meshes and the collision
+    primitives (capsules, spheres, boxes). Anything else is a URDF.
+    """
+    path = Path(asset_path)
+    if path.suffix.lower() in {".xml", ".mjcf"}:
+        from .mjcf import load_mjcf
+
+        return load_mjcf(path)
+    urdf = load_urdf(path)
+    return RobotBodies(urdf), list(urdf.actuated_joint_names)
+
+
 def load_urdf(urdf_path: str | Path) -> yourdfpy.URDF:
     """Load a URDF and resolve ``package://`` or relative mesh paths."""
     path = Path(urdf_path).expanduser().resolve()
     if not path.is_file():
         raise FileNotFoundError(f"Robot URDF not found: {path}")
     handler = partial(yourdfpy.filename_handler_magic, dir=str(path.parent))
-    urdf = yourdfpy.URDF.load(
+    return yourdfpy.URDF.load(
         path,
         filename_handler=handler,
         build_scene_graph=True,
         load_meshes=True,
-        build_collision_scene_graph=False,
-        load_collision_meshes=False,
-    )
-    geometry = urdf.scene.geometry if urdf.scene is not None else None
-    if geometry:
-        return urdf
-    return yourdfpy.URDF.load(
-        path,
-        filename_handler=handler,
-        build_scene_graph=False,
-        load_meshes=False,
         build_collision_scene_graph=True,
         load_collision_meshes=True,
     )
@@ -134,6 +138,41 @@ class JointMotion:
         self._prismatic_scale = np.asarray(prismatic_scale, dtype=np.float64)
         self._prismatic_offset = np.asarray(prismatic_offset, dtype=np.float64)
 
+    @classmethod
+    def from_parts(
+        cls,
+        rest_wxyz: np.ndarray,
+        rest_position: np.ndarray,
+        revolute_ids: np.ndarray,
+        revolute_rotation: np.ndarray,
+        revolute_axis: np.ndarray,
+        revolute_source: np.ndarray,
+        prismatic_ids: np.ndarray,
+        prismatic_rotation: np.ndarray,
+        prismatic_translation: np.ndarray,
+        prismatic_axis: np.ndarray,
+        prismatic_source: np.ndarray,
+    ) -> JointMotion:
+        """Build motion from arrays already in the parent-to-child convention."""
+        self = cls.__new__(cls)
+        self.num_joints = int(len(rest_wxyz))
+        self.rest_wxyz = np.asarray(rest_wxyz, dtype=np.float64)
+        self.rest_position = np.asarray(rest_position, dtype=np.float64)
+        self.revolute_ids = np.asarray(revolute_ids, dtype=np.int64)
+        self.prismatic_ids = np.asarray(prismatic_ids, dtype=np.int64)
+        self._revolute_rotation = np.asarray(revolute_rotation, dtype=np.float64)
+        self._revolute_axis = np.asarray(revolute_axis, dtype=np.float64)
+        self._revolute_source = np.asarray(revolute_source, dtype=np.int64)
+        self._revolute_scale = np.ones(len(self.revolute_ids), dtype=np.float64)
+        self._revolute_offset = np.zeros(len(self.revolute_ids), dtype=np.float64)
+        self._prismatic_rotation = np.asarray(prismatic_rotation, dtype=np.float64)
+        self._prismatic_translation = np.asarray(prismatic_translation, dtype=np.float64)
+        self._prismatic_axis = np.asarray(prismatic_axis, dtype=np.float64)
+        self._prismatic_source = np.asarray(prismatic_source, dtype=np.int64)
+        self._prismatic_scale = np.ones(len(self.prismatic_ids), dtype=np.float64)
+        self._prismatic_offset = np.zeros(len(self.prismatic_ids), dtype=np.float64)
+        return self
+
     def revolute_wxyz(self, configuration: np.ndarray) -> np.ndarray:
         """Orientations, shape ``(N, M, 4)``, for moving revolute joints."""
         angles = configuration[:, self._revolute_source] * self._revolute_scale + self._revolute_offset
@@ -218,9 +257,9 @@ def _stack_rows(rows: list[np.ndarray], shape: tuple[int, ...]) -> np.ndarray:
 
 
 class RobotBodies:
-    """One mesh per visual, plus the world pose of every link.
+    """Visual and collision meshes, plus the world pose of every link.
 
-    Meshes are baked into the link frame, including a fixed visual origin.
+    Meshes are baked into the link frame, including a fixed geometry origin.
     :meth:`poses` composes the root pose with each joint's local pose.
     """
 
@@ -248,19 +287,32 @@ class RobotBodies:
             self.parent[link] = index[parent_name[name]]
             self.joint[link] = joint_index[name]
 
-        meshes: list[trimesh.Trimesh] = []
-        mesh_links: list[int] = []
-        scene = _body_scene(urdf)
-        if scene is not None:
-            for geom_name, mesh in scene.geometry.items():
-                baked = _mesh_in_link(scene, index, geom_name, mesh)
-                if baked is None:
-                    continue
-                link, posed = baked
-                meshes.append(posed)
-                mesh_links.append(link)
+        self.meshes, self.mesh_links = _meshes_in_links(urdf.scene, index)
+        self.collision_meshes, self.collision_mesh_links = _meshes_in_links(urdf.collision_scene, index)
+
+    @classmethod
+    def from_kinematics(
+        cls,
+        motion: JointMotion,
+        link_names: list[str],
+        parent: np.ndarray,
+        joint: np.ndarray,
+        meshes: list[trimesh.Trimesh],
+        mesh_links: np.ndarray,
+        collision_meshes: list[trimesh.Trimesh],
+        collision_mesh_links: np.ndarray,
+    ) -> RobotBodies:
+        """Assemble a body graph that :meth:`poses` can drive without a URDF."""
+        self = cls.__new__(cls)
+        self.motion = motion
+        self.link_names = link_names
+        self.parent = parent
+        self.joint = joint
         self.meshes = meshes
-        self.mesh_links = np.asarray(mesh_links, dtype=np.int64)
+        self.mesh_links = mesh_links
+        self.collision_meshes = collision_meshes
+        self.collision_mesh_links = collision_mesh_links
+        return self
 
     def poses(
         self,
@@ -297,15 +349,22 @@ class RobotBodies:
         return world_position, world_wxyz
 
 
-def _body_scene(urdf: yourdfpy.URDF):
-    scene = urdf.scene
-    if scene is not None and scene.geometry:
-        return scene
-    return urdf.collision_scene
+def _meshes_in_links(scene, link_index: dict[str, int]) -> tuple[list[trimesh.Trimesh], np.ndarray]:
+    meshes: list[trimesh.Trimesh] = []
+    mesh_links: list[int] = []
+    if scene is not None:
+        for geom_name, mesh in scene.geometry.items():
+            baked = _mesh_in_link(scene, link_index, geom_name, mesh)
+            if baked is None:
+                continue
+            link, posed = baked
+            meshes.append(posed)
+            mesh_links.append(link)
+    return meshes, np.asarray(mesh_links, dtype=np.int64)
 
 
 def _mesh_in_link(scene, link_index: dict[str, int], geom_name: str, mesh: trimesh.Trimesh):
-    """Bake a visual into its link frame. Return ``(link, mesh)`` or None."""
+    """Bake a geometry into its link frame. Return ``(link, mesh)`` or None."""
     if len(mesh.faces) == 0:
         return None
     transforms = scene.graph.transforms

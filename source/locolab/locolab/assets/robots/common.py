@@ -13,69 +13,37 @@ from isaaclab_physx.sim.schemas import PhysxArticulationCfg, PhysxRigidBodyCfg
 
 import isaaclab.sim as sim_utils
 from isaaclab.assets.articulation import ArticulationCfg
-from isaaclab.sim.schemas import UsdPhysicsCollisionCfg
 from isaaclab.utils import configclass
 
 
-def mujoco_foot_collision_props(foot_expression: str) -> dict[str, list]:
-    """Foot friction on MJWarp; other colliders stay frictionless.
 
-    ``condim=3`` enables tangential friction for locomotion;
-    ``condim=1`` is contact only and suitable for self-collisions;
+def assetx_export_usd_cfg(
+    asset_path: str,
+    foot_expression: str,
+    *,
+    merge_fixed_joints: bool,
+    replace_cylinders_with_capsules: bool = True,
+    keep_fixed_pattern: str | None = None,
+    honor_dont_collapse: bool = True,
+) -> sim_utils.UsdFileCfg:
+    """Export a URDF or MJCF with assetx and return a ``UsdFileCfg``.
+
+    ``.xml`` / ``.mjcf`` are exported as written. See ``locolab/utils/urdf/README.md``.
     """
-    return {
-        "/.*": [MujocoCollisionCfg(condim=1, priority=0)],
-        foot_expression: [MujocoCollisionCfg(condim=3, priority=1)],
-    }
+    from locolab.utils.urdf.assetx_export import assetx_export_usd
 
-
-def g1_mujoco_collision_props() -> dict[str, list]:
-    """mjlab G1 contacts, thinned to fit typical MJWarp budgets (e.g. ``njmax=100``,
-    ``nconmax`` in the low tens from ``use_locomotion_physics``).
-
-    Same ``condim`` / ``priority`` idea as :func:`mujoco_foot_collision_props`, but
-    non-foot links use ``priority=2`` so they still win over feet when the robot is
-    on the ground; feet at ``priority=1`` beat Newton's ``priority=0`` ground, so only
-    foot–ground stays ``condim=3``. mjlab keeps seven foot capsules at ``condim=3`` and
-    every other collider at ``condim=1``.
-    Those seven cylinders lie on one plane, so both feet already spend 14 * 4 rows. The sole
-    keeps the outer, center, and outer bars (``cylinder_1``, ``cylinder_3``, ``cylinder_5``).
-    The four overlapping bars are turned off. Later entries override earlier ones.
-    """
-    return {
-        "/.*": [MujocoCollisionCfg(condim=1, priority=2)],
-        "/.*ankle_roll_link/cylinder.*": [MujocoCollisionCfg(condim=3, priority=1)],
-        "/.*ankle_roll_link/cylinder(_[246])?$": [UsdPhysicsCollisionCfg(collision_enabled=False)],
-    }
-
-
-def articulation_fragments(
-    self_collisions: bool,
-    position_iterations: int = 4,
-    velocity_iterations: int = 2,
-) -> list:
-    """PhysX and Newton articulation settings for one robot.
-
-    A bare PhysX fragment is ignored when the simulation runs on Newton, so
-    self-collision is written into both backends.
-    """
-    return [
-        PhysxArticulationCfg(
-            enabled_self_collisions=self_collisions,
-            solver_position_iteration_count=position_iterations,
-            solver_velocity_iteration_count=velocity_iterations,
-        ),
-        NewtonArticulationCfg(self_collision_enabled=self_collisions),
-    ]
-
-
-def locolab_urdf_cfg(asset_path: str, foot_expression: str, *, merge_fixed_joints: bool) -> sim_utils.UrdfFileCfg:
-    """Build the URDF spawn shared by the Unitree robots."""
-    return sim_utils.UrdfFileCfg(
-        fix_base=False,
-        asset_path=asset_path,
-        activate_contact_sensors=True,
+    usd_path = assetx_export_usd(
+        asset_path,
         merge_fixed_joints=merge_fixed_joints,
+        replace_cylinders_with_capsules=replace_cylinders_with_capsules,
+        fix_base=False,
+        keep_fixed_pattern=keep_fixed_pattern,
+        honor_dont_collapse=honor_dont_collapse,
+    )
+
+    return sim_utils.UsdFileCfg(
+        usd_path=str(usd_path),
+        activate_contact_sensors=True,
         rigid_props=PhysxRigidBodyCfg(
             disable_gravity=False,
             retain_accelerations=False,
@@ -85,19 +53,19 @@ def locolab_urdf_cfg(asset_path: str, foot_expression: str, *, merge_fixed_joint
             max_angular_velocity=1000.0,
             max_depenetration_velocity=1.0,
         ),
-        articulation_props=articulation_fragments(self_collisions=False),
-        joint_drive=sim_utils.UrdfConverterCfg.JointDriveCfg(
-            gains=sim_utils.UrdfConverterCfg.JointDriveCfg.PDGainsCfg(stiffness=0, damping=0)
-        ),
-        collision_props=mujoco_foot_collision_props(foot_expression),
+        articulation_props=[  # disable self-collisions by default; override later
+            PhysxArticulationCfg(
+                enabled_self_collisions=False,
+                solver_position_iteration_count=4,
+                solver_velocity_iteration_count=2,
+            ),
+            NewtonArticulationCfg(self_collision_enabled=False),
+        ],
+        collision_props={  # Foot friction on MJWarp; other colliders stay frictionless.
+            "/.*": [MujocoCollisionCfg(condim=1, priority=0)],  # ``condim=3`` enables tangential friction
+            foot_expression: [MujocoCollisionCfg(condim=3, priority=1)],  # ``condim=1`` is contact only and suitable for self-collisions;
+        },
     )
-
-
-def quadruped_urdf_cfg(source_urdf: str, foot_expression: str) -> sim_utils.UrdfFileCfg:
-    """Spawn URDF for Unitree quadrupeds: merge rotors/sensors in Python, keep foot fixed."""
-    from locolab.utils.urdf import urdf_for_spawn
-
-    return locolab_urdf_cfg(urdf_for_spawn(source_urdf), foot_expression, merge_fixed_joints=False)
 
 
 @configclass
@@ -108,5 +76,8 @@ class LocoLabArticulationCfg(ArticulationCfg):
 
     joint_symmetry_mapping: dict[str, tuple[float, str]] | None = None
     spatial_symmetry_mapping: dict[str, str] | None = None
+
+    source_asset: str | None = None
+    """Description Viser draws. The MJCF when that is the spawned robot, otherwise the URDF."""
 
     soft_joint_pos_limit_factor = 0.9

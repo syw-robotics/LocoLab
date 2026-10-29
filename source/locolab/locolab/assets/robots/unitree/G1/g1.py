@@ -6,7 +6,7 @@
 # All rights reserved.
 # Modifications are licensed under BSD-3-Clause.
 
-"""Configuration for the Unitree G1 29-DOF humanoid (BeyondMimic URDFs).
+"""Configuration for the Unitree G1 29-DOF humanoid.
 
 Reference: https://github.com/unitreerobotics/unitree_rl_lab
 """
@@ -18,15 +18,16 @@ from isaaclab.assets.articulation import ArticulationCfg
 from locolab.assets.actuators.g1_beyondmimic import beyondmimic_g1_29dof_actuators
 from locolab.assets.robots.common import (
     LocoLabArticulationCfg,
-    g1_mujoco_collision_props,
-    locolab_urdf_cfg,
+    assetx_export_usd_cfg,
 )
 from locolab.utils.symmetry import complete_symmetry_mapping
 
 _G1_DIR = os.path.dirname(os.path.abspath(__file__))
-_G1_URDF_DIR = os.path.join(_G1_DIR, "urdf", "g1_description")
-_G1_PELVIS_BASE_URDF = os.path.join(_G1_URDF_DIR, "g1_29dof_beyondmimic_pelvis_base.urdf")
-_G1_TORSO_BASE_URDF = os.path.join(_G1_URDF_DIR, "g1_29dof_beyondmimic_torso_base.urdf")
+
+_G1_XML_DIR = os.path.join(_G1_DIR, "xml")
+_G1_PELVIS_BASE_XML = os.path.join(_G1_XML_DIR, "g1_29dof_pelvis_base.xml")
+_G1_TORSO_BASE_XML = os.path.join(_G1_XML_DIR, "g1_29dof_torso_base.xml")
+
 
 G1_JOINT_SYMMETRY_MAPPING = complete_symmetry_mapping(
     {
@@ -103,12 +104,13 @@ _G1_SDK_JOINT_NAMES = [
     "right_wrist_yaw_joint",
 ]
 
-UNITREE_G1_29DOF_BEYONDMIMIC_PELVIS_BASE_CFG = LocoLabArticulationCfg(
-    spawn=locolab_urdf_cfg(
-        asset_path=_G1_PELVIS_BASE_URDF,
-        foot_expression="/.*ankle_roll_link/cylinder.*",
+UNITREE_G1_29DOF_PELVIS_BASE_CFG = LocoLabArticulationCfg(
+    spawn=assetx_export_usd_cfg(
+        asset_path=_G1_PELVIS_BASE_XML,
+        foot_expression="/.*ankle_roll_link/collisions.*",
         merge_fixed_joints=True,
-    ).replace(collision_props=g1_mujoco_collision_props()),
+    ),
+    source_asset=_G1_PELVIS_BASE_XML,
     init_state=ArticulationCfg.InitialStateCfg(
         pos=(0.0, 0.0, 0.88),
         joint_pos={
@@ -129,7 +131,12 @@ UNITREE_G1_29DOF_BEYONDMIMIC_PELVIS_BASE_CFG = LocoLabArticulationCfg(
 )
 """Configuration for the pelvis-base Unitree G1 29DOF humanoid robot."""
 
-UNITREE_G1_29DOF_BEYONDMIMIC_TORSO_BASE_CFG = UNITREE_G1_29DOF_BEYONDMIMIC_PELVIS_BASE_CFG.replace(
-    spawn=UNITREE_G1_29DOF_BEYONDMIMIC_PELVIS_BASE_CFG.spawn.replace(asset_path=_G1_TORSO_BASE_URDF)
+UNITREE_G1_29DOF_TORSO_BASE_CFG = UNITREE_G1_29DOF_PELVIS_BASE_CFG.replace(
+    spawn=assetx_export_usd_cfg(
+        asset_path=_G1_TORSO_BASE_XML,
+        foot_expression="/.*ankle_roll_link/collisions.*",
+        merge_fixed_joints=True,
+    ),
+    source_asset=_G1_TORSO_BASE_XML,
 )
 """Configuration for the torso-base Unitree G1 29DOF humanoid robot."""

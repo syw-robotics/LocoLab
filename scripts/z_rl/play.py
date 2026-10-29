@@ -35,7 +35,7 @@ parser.add_argument(
     action="store_true",
     help="Use the pre-trained checkpoint from Nucleus.",
 )
-parser.add_argument("--real-time", action="store_true", default=False, help="Run in real-time, if possible.")
+parser.add_argument("--realtime", action="store_true", default=False, help="Run in real time, if possible.")
 # for viser remote web viewer
 add_play_viewer_args(parser)
 # append Z-RL cli arguments
@@ -219,13 +219,13 @@ def _play(env_cfg, agent_cfg, resume_path, load_cfg):
 
             # -------------------- Print Data for Debugging --------------------
             # example:
-            #  robot = env.unwrapped.scene["robot"]
-            #  torso_body_id = robot.body_names.index("torso_link")
+            robot = env.unwrapped.scene["robot"]
+            torso_body_id = robot.body_names.index("torso_link")
             #  base_body_id = robot.body_names.index("base_link")
-            #  pelvis_body_id = robot.body_names.index("pelvis")
+            pelvis_body_id = robot.body_names.index("pelvis")
             #  print("base_link height (env 0-10):", robot.data.body_pos_w[:11, base_body_id, 2])
-            #  print("torso_link height (env 0-10):", robot.data.body_pos_w[:11, torso_body_id, 2])
-            #  print("pelvis height (env 0-10):", robot.data.body_pos_w[:11, pelvis_body_id, 2])
+            print("torso_link height (env 0-10):", robot.data.body_pos_w[:11, torso_body_id, 2])
+            print("pelvis height (env 0-10):", robot.data.body_pos_w[:11, pelvis_body_id, 2])
             # -------------------- Print Data for Debugging --------------------
 
             if args_cli.video:
@@ -234,9 +234,9 @@ def _play(env_cfg, agent_cfg, resume_path, load_cfg):
                 if timestep == args_cli.video_length:
                     break
 
-            # time delay for real-time evaluation
+            # time delay for real time evaluation
             sleep_time = dt - (time.time() - start_time)
-            if args_cli.real_time and not viewer.paces and sleep_time > 0:
+            if args_cli.realtime and not viewer.paces and sleep_time > 0:
                 time.sleep(sleep_time)
     finally:
         viewer.close()

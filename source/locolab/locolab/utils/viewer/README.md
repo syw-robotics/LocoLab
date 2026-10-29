@@ -1,6 +1,6 @@
 # Viewer
 
-Optional browser view for headless play. Isaac Sim keeps simulating. This package poses the same URDF from the articulation state and serves it with [Viser](https://github.com/nerfstudio-project/viser).
+Optional browser view for headless play. Isaac Sim keeps simulating. This package poses `source_asset` — the spawned MJCF, or the URDF — from the articulation state and serves it with [Viser](https://github.com/nerfstudio-project/viser).
 
 **This package is fully vibe coded.**
 
@@ -10,14 +10,15 @@ Play scripts call three functions:
 
 - `prepare_play_viewer` before `gym.make`, so the terrain mesh is kept for the browser.
 - `open_play_viewer` after the env exists. Without `--viser` this returns an idle object.
-- `viewer.after_step()` in the loop. When `viewer.paces` is true, skip the script's own `--real-time` sleep.
+- `viewer.after_step()` in the loop. When `viewer.paces` is true, skip the script's own `--realtime` sleep.
 
 | File | Role |
 | --- | --- |
 | `play.py` | CLI flags and the idle stand-in |
 | `viser_play.py` | Server, GUI, camera follow, playback pace |
 | `_viser.py` | Import Viser with the environment's `websockets`. Kit's fast importer otherwise keeps Isaac Sim's older copy |
-| `urdf.py` | Load the robot once and pose every environment from the same meshes |
+| `urdf.py` | Load a URDF once and pose every environment from the same meshes |
+| `mjcf.py` | Load an MJCF: visual meshes and the collision primitives MuJoCo simulates |
 | `terrain.py` | Keep and color the terrain mesh |
 | `debug_vis.py` | Velocity arrows, ray hits, and terrain-origin frames in the browser |
 | `browser.py` | Page script for camera keys and shortcuts |

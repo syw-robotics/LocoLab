@@ -15,7 +15,7 @@ from isaaclab.sensors import ContactSensorCfg
 from isaaclab.sim.schemas import UsdPhysicsCollisionCfg
 from isaaclab.utils import configclass
 
-from locolab.utils.physics import set_self_collisions, use_locomotion_physics
+from locolab.utils.physics import set_self_collisions, set_locomotion_physics
 from locolab.utils.scene import flat_rough_terrain_visual_material_cfg, blue_sky_light_cfg
 from locolab.utils.terrains import TerrainImporterCfg
 
@@ -99,6 +99,8 @@ class Go2FlatSceneCfg(InteractiveSceneCfg):
 class Go2FlatEnvCfg(ManagerBasedRLEnvCfg):
     """Configuration for the Go2 flat environment."""
 
+    seed: int = 42
+
     # Scene settings
     scene: Go2FlatSceneCfg = Go2FlatSceneCfg(num_envs=4096, env_spacing=2.5)
     # Basic settings
@@ -120,11 +122,16 @@ class Go2FlatEnvCfg(ManagerBasedRLEnvCfg):
         self.sim.render_interval = self.decimation
         self.sim.physics_material = self.scene.terrain.physics_material
         # physics settings
-        use_locomotion_physics(self.sim, rigid_patch_count=2**16, njmax=128, nconmax=24)
+        set_locomotion_physics(self.sim, rigid_patch_count=2**16, njmax=128, nconmax=24)
         # disable self collisions
         set_self_collisions(self.scene.robot.spawn, False)
-        # keep foot collisions only
-        self.scene.robot.spawn.collision_props["/(?!.*foot).*"] = [UsdPhysicsCollisionCfg(collision_enabled=False)]
+        # barely keeping feet only goes faster; keeping calf is for safety
+        self.scene.robot.spawn.collision_props["/(?!.*foot).*"] = [
+            UsdPhysicsCollisionCfg(collision_enabled=False)
+        ]
+        #  self.scene.robot.spawn.collision_props["/(?!.*(foot|calf)).*"] = [
+        #      UsdPhysicsCollisionCfg(collision_enabled=False)
+        #  ]
 
         # update sensor update periods
         # we tick all the sensors based on the smallest update period (physics update period)

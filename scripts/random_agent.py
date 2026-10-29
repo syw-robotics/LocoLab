@@ -9,6 +9,9 @@
 """Script to an environment with random action agent."""
 
 import argparse
+import sys
+
+from locolab.utils.viewer import add_play_viewer_args, open_play_viewer, prepare_play_viewer
 
 from isaaclab.app import add_launcher_args, launch_simulation
 
@@ -19,18 +22,25 @@ parser.add_argument(
 )
 parser.add_argument("--num_envs", type=int, default=1, help="Number of environments to simulate.")
 parser.add_argument("--task", type=str, default=None, help="Name of the task.")
+parser.add_argument("--realtime", action="store_true", default=False, help="Run in real time, if possible.")
+add_play_viewer_args(parser)
 # append simulation launcher cli args
 add_launcher_args(parser)
-# parse the arguments
-args_cli = parser.parse_args()
+parser.set_defaults(device=None)
+from isaaclab_tasks.utils.hydra import resolve_task_config, setup_preset_cli
+
+args_cli, hydra_args = setup_preset_cli(parser)
+
+# clear out sys.argv for Hydra
+sys.argv = [sys.argv[0]] + hydra_args
 
 """Rest everything follows."""
 
 import gymnasium as gym
 import locolab.tasks  # noqa: F401
-import torch
+import time
 
-from isaaclab_tasks.utils import parse_env_cfg
+import torch
 
 
 def print_joint_order(env):
@@ -85,12 +95,19 @@ def print_joint_order(env):
     print("\n" + "=" * 80)
 
 
+def _noop_policy_reset(_dones) -> None:
+    """Viser reset button hook; random agent has no policy state to clear."""
+
+
 def main():
     """Random actions agent with Isaac Lab environment."""
-    # create environment configuration
-    env_cfg = parse_env_cfg(
-        args_cli.task, device=args_cli.device, num_envs=args_cli.num_envs, use_fabric=not args_cli.disable_fabric
-    )
+    env_cfg, _ = resolve_task_config(args_cli.task, "", overrides=hydra_args)
+    if args_cli.num_envs is not None:
+        env_cfg.scene.num_envs = args_cli.num_envs
+    if args_cli.disable_fabric:
+        env_cfg.sim.use_fabric = False
+    if args_cli.device is not None:
+        env_cfg.sim.device = args_cli.device
     if hasattr(env_cfg.curriculum, "terrain_levels"):
         env_cfg.curriculum.terrain_levels.params["log_by_terrain_type"] = False
         env_cfg.scene.terrain.max_init_terrain_level = None
@@ -101,27 +118,35 @@ def main():
         for terrain_cfg in env_cfg.scene.terrain.terrain_generator.sub_terrains.values():
             terrain_cfg.proportion = equal_proportion
 
-    with launch_simulation(env_cfg, args_cli):
-        # create environment
-        env = gym.make(args_cli.task, cfg=env_cfg)
+    prepare_play_viewer(args_cli, env_cfg)
 
-        # print info (this is vectorized environment)
+    with launch_simulation(env_cfg, args_cli):
+        env = gym.make(args_cli.task, cfg=env_cfg)
+        viewer = open_play_viewer(env, args_cli)
+
         print_joint_order(env)
         print(f"[INFO]: Gym observation space: {env.observation_space}")
         print(f"[INFO]: Gym action space: {env.action_space}")
-        # reset environment
-        env.reset()
-        # simulate environment
-        while env.unwrapped.sim.is_running():
-            # run everything in inference mode
-            with torch.inference_mode():
-                # sample actions from -1 to 1
-                actions = 2 * torch.rand(env.action_space.shape, device=env.unwrapped.device) - 1
-                # apply actions
-                env.step(actions)
 
-        # close the simulator
-        env.close()
+        try:
+            env.reset()
+            dt = env.unwrapped.step_dt
+            while env.unwrapped.sim.is_running():
+                start_time = time.time()
+                with torch.inference_mode():
+                    viewer.apply_reset(env, _noop_policy_reset)
+                    if not viewer.paused:
+                        actions = 2 * torch.rand(env.action_space.shape, device=env.unwrapped.device) - 1
+                        env.step(actions)
+                if viewer.after_step():
+                    continue
+                if args_cli.realtime and not viewer.paces:
+                    sleep_time = dt - (time.time() - start_time)
+                    if sleep_time > 0:
+                        time.sleep(sleep_time)
+        finally:
+            viewer.close()
+            env.close()
 
 
 if __name__ == "__main__":

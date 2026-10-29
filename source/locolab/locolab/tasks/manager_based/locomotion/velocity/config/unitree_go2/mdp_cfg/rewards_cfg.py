@@ -78,14 +78,14 @@ class FlatRewardsCfg:
     action_smoothness_l2 = RewTerm(func=mdp.action_smoothness_l2, weight=-0.01)
 
     # -- collision --
-    undesired_contacts = RewTerm(
-        func=mdp.undesired_contacts,
-        weight=-1.0,
-        params={
-            "sensor_cfg": SceneEntityCfg("contact_forces", body_names=UNDESIRED_CONTACT_LINK_NAMES),
-            "threshold": 1.0,
-        },
-    )
+    #  undesired_contacts = RewTerm(
+    #      func=mdp.undesired_contacts,
+    #      weight=-1.0,
+    #      params={
+    #          "sensor_cfg": SceneEntityCfg("contact_forces", body_names=UNDESIRED_CONTACT_LINK_NAMES),
+    #          "threshold": 1.0,
+    #      },
+    #  )
     # -- feet --
     feet_air_time = RewTerm(
         func=mdp.feet_air_time,

@@ -14,7 +14,7 @@ from isaaclab.scene import InteractiveSceneCfg
 from isaaclab.sensors import ContactSensorCfg, RayCasterCfg, patterns
 from isaaclab.utils import configclass
 
-from locolab.utils.physics import use_locomotion_physics
+from locolab.utils.physics import set_locomotion_physics
 from locolab.utils.scene import rough_terrain_visual_material_cfg, blue_sky_light_cfg
 from locolab.utils.terrains import TerrainImporterCfg
 
@@ -35,7 +35,7 @@ from locolab.tasks.manager_based.locomotion.velocity.config.unitree_g1.mdp_cfg i
     RoughCurriculumsCfg,
     CONTACT_SENSOR_LINK_NAMES,
 )
-from locolab.assets import UNITREE_G1_29DOF_BEYONDMIMIC_TORSO_BASE_CFG  # isort: skip
+from locolab.assets import UNITREE_G1_29DOF_TORSO_BASE_CFG  # isort: skip
 from locolab.utils.terrains.terrains_cfg import ROUGH_TERRAINS_CFG  # isort: skip
 from locolab.utils.markers import BLUE_RAY_CASTER_MARKER_CFG  # isort: skip
 
@@ -76,7 +76,7 @@ class G1RoughSceneCfg(InteractiveSceneCfg):
     )
 
     # =====  robots  =====
-    robot: ArticulationCfg = UNITREE_G1_29DOF_BEYONDMIMIC_TORSO_BASE_CFG.replace(prim_path="{ENV_REGEX_NS}/Robot")
+    robot: ArticulationCfg = UNITREE_G1_29DOF_TORSO_BASE_CFG.replace(prim_path="{ENV_REGEX_NS}/Robot")
 
     # =====  sensors  =====
     height_scanner: RayCasterCfg = RayCasterCfg(
@@ -104,6 +104,8 @@ class G1RoughSceneCfg(InteractiveSceneCfg):
 class G1RoughEnvCfg(ManagerBasedRLEnvCfg):
     """Configuration for the G1 rough environment."""
 
+    seed: int = 42
+
     # Scene settings
     scene: G1RoughSceneCfg = G1RoughSceneCfg(num_envs=4096, env_spacing=2.5)
     # Basic settings
@@ -125,7 +127,7 @@ class G1RoughEnvCfg(ManagerBasedRLEnvCfg):
         self.sim.dt = 0.005
         self.sim.render_interval = self.decimation
         self.sim.physics_material = self.scene.terrain.physics_material
-        use_locomotion_physics(self.sim, rigid_patch_count=2**16, njmax=100, nconmax=20)
+        set_locomotion_physics(self.sim, rigid_patch_count=2**16, njmax=100, nconmax=20)
         # update sensor update periods
         # we tick all the sensors based on the smallest update period (physics update period)
         self.scene.contact_forces.update_period = self.sim.dt

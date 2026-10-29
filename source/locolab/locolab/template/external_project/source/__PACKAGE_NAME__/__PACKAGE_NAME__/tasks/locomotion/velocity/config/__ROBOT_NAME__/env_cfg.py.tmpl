@@ -23,6 +23,8 @@ class __ROBOT_CLASS__FlatEnvCfg(ManagerBasedRLEnvCfg):
     TODO: curriculum (optional)
     """
 
+    seed: int = 42
+
     def __post_init__(self):
         self.decimation = 4
         self.episode_length_s = 20.0

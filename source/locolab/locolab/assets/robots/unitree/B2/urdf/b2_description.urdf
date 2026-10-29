@@ -9,7 +9,7 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
-        <mesh filename="package://b2_description/meshes/base_link.dae" />
+        <mesh filename="../meshes/base_link.dae" />
       </geometry>
       <material name="磨砂铝合金_011-effect"><color rgba="0.74876 0.74876 0.74876 1" /></material><material name="logo_001-effect"><color rgba="1 1 1 1" /></material><material name="材质_023-effect"><color rgba="0 0 0 1" /></material><material name="材质_024-effect"><color rgba="0.002853 0.002853 0.002853 1" /></material></visual>
     <collision>
@@ -125,7 +125,7 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
-        <mesh filename="package://b2_description/meshes/FL_hip.dae" />
+        <mesh filename="../meshes/FL_hip.dae" />
       </geometry>
       <material name="磨砂铝合金_008-effect"><color rgba="0.85 0.85 0.85 1" /></material></visual>
     <!-- <collision> -->
@@ -170,7 +170,7 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
-        <mesh filename="package://b2_description/meshes/FL_thigh.dae" />
+        <mesh filename="../meshes/FL_thigh.dae" />
       </geometry>
       <material name="磨砂铝合金_008-effect"><color rgba="0.85 0.85 0.85 1" /></material><material name="灰色硅胶_009-effect"><color rgba="0.6500053 0.68 0.6500053 1" /></material></visual>
     <collision>
@@ -216,7 +216,7 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
-        <mesh filename="package://b2_description/meshes/FL_calf.dae" />
+        <mesh filename="../meshes/FL_calf.dae" />
       </geometry>
       <material name="磨砂铝合金_018-effect"><color rgba="0.74876 0.74876 0.74876 1" /></material><material name="材质_005-effect"><color rgba="0.07323546 0.07323546 0.07323546 1" /></material></visual>
     <collision>
@@ -284,7 +284,7 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
-        <mesh filename="package://b2_description/meshes/FR_hip.dae" />
+        <mesh filename="../meshes/FR_hip.dae" />
       </geometry>
       <material name="磨砂铝合金_008-effect"><color rgba="0.85 0.85 0.85 1" /></material></visual>
     <!-- <collision> -->
@@ -329,7 +329,7 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
-        <mesh filename="package://b2_description/meshes/FR_thigh.dae" />
+        <mesh filename="../meshes/FR_thigh.dae" />
       </geometry>
       <material name="磨砂铝合金_008-effect"><color rgba="0.85 0.85 0.85 1" /></material><material name="灰色硅胶_009-effect"><color rgba="0.6500053 0.68 0.6500053 1" /></material></visual>
     <collision>
@@ -375,7 +375,7 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
-        <mesh filename="package://b2_description/meshes/FR_calf.dae" />
+        <mesh filename="../meshes/FR_calf.dae" />
       </geometry>
       <material name="磨砂铝合金_018-effect"><color rgba="0.74876 0.74876 0.74876 1" /></material><material name="材质_005-effect"><color rgba="0.07323546 0.07323546 0.07323546 1" /></material></visual>
     <collision>
@@ -443,7 +443,7 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
-        <mesh filename="package://b2_description/meshes/RL_hip.dae" />
+        <mesh filename="../meshes/RL_hip.dae" />
       </geometry>
       <material name="磨砂铝合金_008-effect"><color rgba="0.85 0.85 0.85 1" /></material></visual>
     <!-- <collision> -->
@@ -488,7 +488,7 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
-        <mesh filename="package://b2_description/meshes/RL_thigh.dae" />
+        <mesh filename="../meshes/RL_thigh.dae" />
       </geometry>
       <material name="磨砂铝合金_008-effect"><color rgba="0.85 0.85 0.85 1" /></material><material name="灰色硅胶_009-effect"><color rgba="0.6500053 0.68 0.6500053 1" /></material></visual>
     <collision>
@@ -534,7 +534,7 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
-        <mesh filename="package://b2_description/meshes/RL_calf.dae" />
+        <mesh filename="../meshes/RL_calf.dae" />
       </geometry>
       <material name="磨砂铝合金_018-effect"><color rgba="0.74876 0.74876 0.74876 1" /></material><material name="材质_005-effect"><color rgba="0.07323546 0.07323546 0.07323546 1" /></material></visual>
     <collision>
@@ -602,7 +602,7 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
-        <mesh filename="package://b2_description/meshes/RR_hip.dae" />
+        <mesh filename="../meshes/RR_hip.dae" />
       </geometry>
       <material name="磨砂铝合金_008-effect"><color rgba="0.85 0.85 0.85 1" /></material></visual>
     <!-- <collision> -->
@@ -647,7 +647,7 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
-        <mesh filename="package://b2_description/meshes/RR_thigh.dae" />
+        <mesh filename="../meshes/RR_thigh.dae" />
       </geometry>
       <material name="磨砂铝合金_008-effect"><color rgba="0.85 0.85 0.85 1" /></material><material name="灰色硅胶_009-effect"><color rgba="0.6500053 0.68 0.6500053 1" /></material></visual>
     <collision>
@@ -693,7 +693,7 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
-        <mesh filename="package://b2_description/meshes/RR_calf.dae" />
+        <mesh filename="../meshes/RR_calf.dae" />
       </geometry>
       <material name="磨砂铝合金_018-effect"><color rgba="0.74876 0.74876 0.74876 1" /></material><material name="材质_005-effect"><color rgba="0.07323546 0.07323546 0.07323546 1" /></material></visual>
     <collision>

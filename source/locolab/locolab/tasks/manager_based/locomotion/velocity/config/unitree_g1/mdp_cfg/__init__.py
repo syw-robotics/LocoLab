@@ -8,7 +8,14 @@
 
 FOOT_LINK_NAMES = ".*ankle_roll.*"
 FOOT_CONTACT_LINK_NAMES = FOOT_LINK_NAMES
-SELF_COLLISION_LINK_NAMES = "(left_knee_link|right_knee_link|left_ankle_roll_link|right_ankle_roll_link|left_hip_roll_link|right_hip_roll_link|left_wrist_yaw_link|right_wrist_yaw_link)"
+OTHER_BODY_LINK_NAMES = [
+    ".*_hip_.*_link",
+    ".*_knee_link",
+    ".*_shoulder_.*_link",
+    ".*_elbow_link",
+    ".*_wrist_.*_link",
+]
+SELF_COLLISION_LINK_NAMES = "(left_knee_link|right_knee_link|left_ankle_roll_link|right_ankle_roll_link|left_hip_roll_link|right_hip_roll_link|left_hip_yaw_link|right_hip_yaw_link|left_wrist_yaw_link|right_wrist_yaw_link)"
 ARM_JOINT_NAMES = [".*_shoulder_.*", ".*_elbow_.*", ".*_wrist_.*"]
 ARM_JOINT_NAMES_WO_SHOULDER_PITCH = [
     ".*_shoulder_roll_joint",

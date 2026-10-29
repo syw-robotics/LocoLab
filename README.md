@@ -48,10 +48,12 @@ We introduce **LocoLab**, a RL locomotion **env benchmark** with sim2real robust
     git clone https://github.com/syw-robotics/LocoLab.git
     ```
 
-- Using the Isaac Lab 3.0 interpreter, install the library in editable mode:
+- Using the Isaac Lab 3.0 interpreter, install the library in editable mode. This also installs [`assetx`](https://github.com/syw-robotics/assetx.git) from git (URDF/MJCF → USD):
 
     ```bash
     uv run --project /path/to/IsaacLab python -m pip install -e source/locolab
+    # Go2 / B2 DAE visuals:
+    uv run --project /path/to/IsaacLab python -m pip install pycollada
     ```
 
 - Install [`Z RL`](https://github.com/syw-robotics/z_rl.git), which is built on [`RSL-RL`](https://github.com/leggedrobotics/rsl_rl) but more flexible for developing algorithms.
