@@ -13,6 +13,7 @@ from isaaclab_physx.sim.schemas import PhysxArticulationCfg, PhysxRigidBodyCfg
 
 import isaaclab.sim as sim_utils
 from isaaclab.assets.articulation import ArticulationCfg
+from isaaclab.sim.schemas import UsdPhysicsDriveCfg
 from isaaclab.utils import configclass
 
 
@@ -44,6 +45,9 @@ def assetx_export_usd_cfg(
     return sim_utils.UsdFileCfg(
         usd_path=str(usd_path),
         activate_contact_sensors=True,
+        # OVPhysX needs an active drive when importing USD. ActuatorCfg replaces this seed gain.
+        joint_drive_props={"/.*": [UsdPhysicsDriveCfg(drive_type="force", stiffness=1.0e-3)]},
+        joint_drive_props_create_if_missing=True,
         rigid_props=PhysxRigidBodyCfg(
             disable_gravity=False,
             retain_accelerations=False,
@@ -77,7 +81,10 @@ class LocoLabArticulationCfg(ArticulationCfg):
     joint_symmetry_mapping: dict[str, tuple[float, str]] | None = None
     spatial_symmetry_mapping: dict[str, str] | None = None
 
-    source_asset: str | None = None
-    """Description Viser draws. The MJCF when that is the spawned robot, otherwise the URDF."""
+    mjcf_path: str | None = None
+    """Optional matching MJCF for USD assets without an assetx bundle.
+
+    Leave unset for assetx exports; visualization finds their bundled model.xml.
+    """
 
     soft_joint_pos_limit_factor = 0.9

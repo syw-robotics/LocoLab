@@ -5,7 +5,7 @@
 """Debug drawings for the browser viewer.
 
 Isaac's ``set_debug_vis`` updates viewport markers. Those markers are not part of
-the URDF scene, so a headless browser never sees them. This module reads the same
+the mjviser scene, so a headless browser never sees them. This module reads the same
 quantities and draws them in Viser: velocity arrows from a command term, ray-hit
 points from a caster such as a height scanner, and a frame at each terrain origin.
 """
@@ -70,6 +70,9 @@ class DebugScene:
         self._server = server
         self._batches: dict[str, _Batch] = {}
         self._frames: dict[str, object] = {}
+        self._ghosts: dict[str, tuple] = {}
+        self._ghost_hulls = False
+        self.distance_lod = True
         self._meshes = {
             "shaft": _unit_shaft(),
             "head": _unit_head(),
@@ -97,7 +100,7 @@ class DebugScene:
         if handle is None or len(handle.batched_positions) != count:
             self._drop_frame(name)
             self._frames[name] = self._server.scene.add_batched_axes(
-                f"/debug/{name}",
+                f"/fixed_bodies/debug/{name}",
                 batched_wxyzs=wxyz,
                 batched_positions=points,
                 axes_length=_FRAME_LENGTH_M,
@@ -107,7 +110,65 @@ class DebugScene:
         handle.batched_positions = points
         handle.batched_wxyzs = wxyz
 
+    def set_ghost_hulls(self, enabled: bool) -> None:
+        """Switch browser geometry only when mjviser's hull option changes."""
+        if enabled == self._ghost_hulls:
+            return
+        self._ghost_hulls = enabled
+        for _ghost, handles in self._ghosts.values():
+            for handle in handles:
+                handle.remove()
+            handles.clear()
+
+    def show_motion(self, label: str, command, selector) -> None:
+        """Instance the reference robot's meshes at its current clip poses."""
+        if label not in self._ghosts:
+            self._ghosts[label] = (command.get_motion_ghost(), [])
+        ghost, handles = self._ghosts[label]
+        meshes = ghost.bodies.hull_meshes if self._ghost_hulls else ghost.bodies.meshes
+        positions, wxyz = ghost.poses(command, selector)
+        count = len(positions)
+        if handles and len(handles[0].batched_positions) != count:
+            for handle in handles:
+                handle.remove()
+            handles.clear()
+        for index, (mesh, link) in enumerate(zip(meshes, ghost.bodies.mesh_links)):
+            # Match mjviser's visual LOD policy; hulls keep their geometry.
+            lod_ratio = 1000.0 / len(mesh.vertices)
+            lod = ((2.0, lod_ratio),) if self.distance_lod and not self._ghost_hulls and lod_ratio < 0.5 else "off"
+            if index == len(handles):
+                handles.append(self._server.scene.add_batched_meshes_simple(
+                    f"/fixed_bodies/debug/{label}/ghost/{index}",
+                    np.asarray(mesh.vertices, dtype=np.float32),
+                    np.asarray(mesh.faces, dtype=np.uint32),
+                    batched_positions=positions[:, link].astype(np.float32),
+                    batched_wxyzs=wxyz[:, link].astype(np.float32),
+                    batched_colors=tuple(int(c * 255) for c in ghost.color),
+                    opacity=ghost.opacity,
+                    cast_shadow=False,
+                    receive_shadow=False,
+                    lod=lod,
+                ))
+            else:
+                if handles[index].lod != lod:
+                    handles[index].lod = lod
+                handles[index].visible = True
+                handles[index].batched_positions = positions[:, link].astype(np.float32)
+                handles[index].batched_wxyzs = wxyz[:, link].astype(np.float32)
+
+    def hide(self, label: str) -> None:
+        """Keep ghost meshes cached while disabled; other debug primitives are discarded."""
+        if label in self._ghosts:
+            for handle in self._ghosts[label][1]:
+                handle.visible = False
+        else:
+            self.clear(label)
+
     def clear(self, label: str | None = None) -> None:
+        for name in list(self._ghosts):
+            if label is None or name == label:
+                for handle in self._ghosts.pop(name)[1]:
+                    handle.remove()
         if label is None:
             names = list(self._batches)
             frames = list(self._frames)
@@ -130,10 +191,12 @@ def draw_debug(scene: DebugScene, terms: list[tuple[str, object]], enabled: dict
     """Refresh every enabled term. ``selector`` matches the robots currently shown."""
     for label, obj in terms:
         if not enabled.get(label, False):
-            scene.clear(label)
+            scene.hide(label)
             continue
         try:
-            if hasattr(obj, "vel_command_b"):
+            if hasattr(obj, "motion") and hasattr(obj, "time_steps"):
+                scene.show_motion(label, obj, selector)
+            elif hasattr(obj, "vel_command_b"):
                 _draw_velocity(scene, label, obj, selector)
             elif hasattr(obj, "terrain_origins"):
                 _draw_terrain(scene, label, obj)
@@ -147,6 +210,8 @@ def draw_debug(scene: DebugScene, terms: list[tuple[str, object]], enabled: dict
 
 
 def _drawable(obj) -> bool:
+    if hasattr(obj, "motion") and hasattr(obj, "time_steps"):
+        return True
     if hasattr(obj, "vel_command_b"):
         robot = getattr(obj, "robot", None)
         return getattr(robot, "data", None) is not None
@@ -355,7 +420,7 @@ class _Batch:
         if self._handle is None or count != self._count:
             self.remove()
             self._handle = server.scene.add_batched_meshes_simple(
-                f"/debug/{self._name}",
+                f"/fixed_bodies/debug/{self._name}",
                 self._vertices,
                 self._faces,
                 batched_wxyzs=wxyzs,

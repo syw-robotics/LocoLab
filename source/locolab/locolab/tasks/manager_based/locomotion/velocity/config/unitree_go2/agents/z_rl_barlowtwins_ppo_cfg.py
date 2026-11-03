@@ -16,12 +16,12 @@ from .z_rl_ppo_cfg import Go2RoughPPOBaseRunnerCfg
 
 @configclass
 class Go2RoughBarlowTwinsPPORunnerCfg(Go2RoughPPOBaseRunnerCfg):
-    experiment_name = "go2_rough_barlowtwins"
+    experiment_name = "go2_rough_velocity_barlowtwins"
     obs_group_concat_mode = "history_major"
     actor = BarlowTwinsEncoderMLPModelCfg(
         hidden_dims=[256, 128],
         activation="elu",
-        obs_normalization=False,
+        obs_normalization=True,
         distribution_cfg=ZRlMLPModelCfg.GaussianDistributionCfg(init_std=1.0),
         barlowtwins_encoder_hidden_dims=[128, 64],
         barlowtwins_encoder_output_dim=32,
@@ -36,7 +36,7 @@ class Go2RoughBarlowTwinsPPORunnerCfg(Go2RoughPPOBaseRunnerCfg):
     critic = ZRlMLPModelCfg(
         hidden_dims=[512, 256, 128],
         activation="elu",
-        obs_normalization=False,
+        obs_normalization=True,
     )
     algorithm = BarlowTwinsPpoAlgorithmCfg(
         num_learning_epochs=5,

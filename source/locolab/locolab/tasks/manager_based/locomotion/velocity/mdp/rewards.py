@@ -112,7 +112,8 @@ def flat_orientation_l2(
     asset: RigidObject = env.scene[asset_cfg.name]
     if select_bodies:
         body_quat_w = asset.data.body_quat_w.torch[:, asset_cfg.body_ids]
-        gravity_w = asset.data.GRAVITY_VEC_W.torch[:, None, :].expand(*body_quat_w.shape[:-1], -1)
+        gravity_w = torch.nn.functional.normalize(asset.data.GRAVITY_VEC_W.torch, dim=-1)
+        gravity_w = gravity_w[:, None, :].expand(*body_quat_w.shape[:-1], -1)
         projected_gravity_b = quat_apply_inverse(body_quat_w, gravity_w)
         return torch.sum(torch.square(projected_gravity_b[..., :2]), dim=(1, 2))
     else:
@@ -325,6 +326,20 @@ def feet_air_time(
     return reward
 
 
+def feet_landing_vel_z_l2(
+    env: ManagerBasedRLEnv, sensor_cfg: SceneEntityCfg, asset_cfg: SceneEntityCfg
+) -> torch.Tensor:
+    """Penalize downward world-z foot speed at first contact in the control step.
+
+    Velocity is sampled after physics, so this approximates touchdown speed.
+    Asset and sensor body selections must list corresponding feet in the same order.
+    """
+    sensor: ContactSensor = env.scene.sensors[sensor_cfg.name]
+    first_contact = sensor.compute_first_contact(env.step_dt).torch[:, sensor_cfg.body_ids]
+    velocity = env.scene[asset_cfg.name].data.body_lin_vel_w.torch[:, asset_cfg.body_ids, 2]
+    return (velocity.clamp_max(0.0).square() * first_contact).sum(dim=1)
+
+
 def feet_air_time_variance(env: ManagerBasedRLEnv, sensor_cfg: SceneEntityCfg) -> torch.Tensor:
     """Penalize variance in the amount of time each foot spends in the air/on the ground relative to each other"""
     # extract the used quantities (to enable type-hinting)
@@ -375,12 +390,103 @@ def feet_too_near_bipedal(
     return torch.clamp_min(threshold - distance, 0.0)
 
 
+def feet_flight(env: ManagerBasedRLEnv, sensor_cfg: SceneEntityCfg) -> torch.Tensor:
+    """Penalize flight while allowing both single and double support."""
+    sensor: ContactSensor = env.scene.sensors[sensor_cfg.name]
+    contact = sensor.data.current_contact_time.torch[:, sensor_cfg.body_ids] > 0.0
+    return (~contact.any(dim=1)).float()
+
+
+def feet_standing_contact(
+    env: ManagerBasedRLEnv, command_name: str, sensor_cfg: SceneEntityCfg
+) -> torch.Tensor:
+    """Penalize each airborne foot only when the command is not moving."""
+    sensor: ContactSensor = env.scene.sensors[sensor_cfg.name]
+    airborne = sensor.data.current_contact_time.torch[:, sensor_cfg.body_ids] <= 0.0
+    return airborne.sum(dim=1) * ~_command_is_moving(env, command_name)
+
+
+def feet_short_swing(
+    env: ManagerBasedRLEnv, command_name: str, sensor_cfg: SceneEntityCfg, min_air_time: float
+) -> torch.Tensor:
+    """Penalize early touchdown without rewarding long swings or constraining double support."""
+    sensor: ContactSensor = env.scene.sensors[sensor_cfg.name]
+    first_contact = sensor.compute_first_contact(env.step_dt).torch[:, sensor_cfg.body_ids]
+    has_previous_stance = sensor.data.last_contact_time.torch[:, sensor_cfg.body_ids] > 0.0
+    air_time = sensor.data.last_air_time.torch[:, sensor_cfg.body_ids]
+    shortfall = (1.0 - air_time / min_air_time).clamp_min(0.0)
+    return (shortfall * first_contact * has_previous_stance).sum(dim=1) * _command_is_moving(env, command_name)
+
+
+def feet_short_single_support(
+    env: ManagerBasedRLEnv, command_name: str, sensor_cfg: SceneEntityCfg, target_time: float,
+    warmup_steps: int, ramp_steps: int,
+) -> torch.Tensor:
+    """Penalize landing before the opposite foot supported the robot long enough.
+
+    Limit support time by both the landing foot's swing and the opposite foot's
+    continuous contact. Flight and double support cannot count as single support.
+    """
+    sensor: ContactSensor = env.scene.sensors[sensor_cfg.name]
+    first_contact = sensor.compute_first_contact(env.step_dt).torch[:, sensor_cfg.body_ids]
+    # The first landing after reset has no preceding stance or deliberate step.
+    has_previous_stance = sensor.data.last_contact_time.torch[:, sensor_cfg.body_ids] > 0.0
+    air = sensor.data.last_air_time.torch[:, sensor_cfg.body_ids]
+    contact = sensor.data.current_contact_time.torch[:, sensor_cfg.body_ids]
+    support = torch.minimum(air, contact.flip(-1))
+    shortfall = (target_time - support).clamp_min(0.0)
+    # Learn to balance before applying the full landing-time constraint.
+    scale = min(max((env.common_step_counter - warmup_steps) / ramp_steps, 0.0), 1.0)
+    return (shortfall * first_contact * has_previous_stance).sum(dim=1) * _command_is_moving(env, command_name) * scale
+
+
+def feet_single_support(
+    env: ManagerBasedRLEnv, command_name: str, sensor_cfg: SceneEntityCfg, threshold: float, target_air_time: float
+) -> torch.Tensor:
+    """Reward actual single support, favoring sustained steps over rapid switching.
+
+    Keep an immediate lift-off bonus to avoid the sliding local optimum, then
+    increase the reward with the shorter of actual stance and swing duration.
+    Double support, flight and prolonged one-foot holds receive no reward.
+    Pair with feet_air_time_variance to favor balanced left/right steps.
+    """
+    sensor: ContactSensor = env.scene.sensors[sensor_cfg.name]
+    air_time = sensor.data.current_air_time.torch[:, sensor_cfg.body_ids]
+    contact = sensor.data.current_contact_time.torch[:, sensor_cfg.body_ids]
+    single_support = (contact > 0.0).sum(dim=1) == 1
+    bounded_swing = air_time.amax(dim=1) < threshold
+    duration = torch.where(contact > 0.0, contact, air_time).amin(dim=1)
+    duration_reward = 1.0 + (duration / target_air_time).clamp(max=1.0)
+    return duration_reward * (single_support & bounded_swing & _command_is_moving(env, command_name))
+
+
+def feet_swing_height_l2(
+    env: ManagerBasedRLEnv,
+    command_name: str,
+    sensor_cfg: SceneEntityCfg,
+    asset_cfg: SceneEntityCfg,
+    target_height: float,
+) -> torch.Tensor:
+    """Penalize swing-foot height error, weighted by actual horizontal foot speed.
+
+    Contact feet and standing commands are excluded. Unlike an exponential
+    clearance bonus, motionless feet do not receive a constant positive reward.
+    """
+    asset: Articulation = env.scene[asset_cfg.name]
+    sensor: ContactSensor = env.scene.sensors[sensor_cfg.name]
+    swing = sensor.data.current_air_time.torch[:, sensor_cfg.body_ids] > 0.0
+    height = asset.data.body_pos_w.torch[:, asset_cfg.body_ids, 2]
+    speed = asset.data.body_lin_vel_w.torch[:, asset_cfg.body_ids, :2].norm(dim=-1)
+    error = torch.square(height - target_height) * speed * swing
+    return error.sum(dim=1) * _command_is_moving(env, command_name)
+
+
 def feet_clearance_flat(
     env: ManagerBasedRLEnv, asset_cfg: SceneEntityCfg, target_height: float, std: float, tanh_mult: float
 ) -> torch.Tensor:
-    """Reward the swinging feet for clearing a specified height off the flat ground"""
+    """Reward feet reaching at least the target world height, weighting shortfall by horizontal speed."""
     asset: RigidObject = env.scene[asset_cfg.name]
-    feet_z_target_error = torch.square(asset.data.body_pos_w.torch[:, asset_cfg.body_ids, 2] - target_height)
+    feet_z_target_error = (target_height - asset.data.body_pos_w.torch[:, asset_cfg.body_ids, 2]).clamp_min(0.0).square()
     feet_velocity_tanh = torch.tanh(tanh_mult * torch.norm(asset.data.body_lin_vel_w.torch[:, asset_cfg.body_ids, :2], dim=2))
     reward = feet_z_target_error * feet_velocity_tanh
     return torch.exp(-torch.sum(reward, dim=1) / std)
@@ -396,7 +502,7 @@ def feet_clearance_rough(
     """Reward swinging feet for reaching a target height above local rough terrain."""
     asset: RigidObject = env.scene[asset_cfg.name]
     feet_names = [asset.body_names[body_id] for body_id in asset_cfg.body_ids]
-    pos_z = torch.stack([env.scene.sensors[f"{name}_height_scanner"].data.pos_w.torch[:, 2] for name in feet_names], dim=1)
+    pos_z = asset.data.body_pos_w.torch[:, asset_cfg.body_ids, 2]
     ray_hits_z = torch.stack(
         [env.scene.sensors[f"{name}_height_scanner"].data.ray_hits_w.torch[..., 2] for name in feet_names], dim=1
     )

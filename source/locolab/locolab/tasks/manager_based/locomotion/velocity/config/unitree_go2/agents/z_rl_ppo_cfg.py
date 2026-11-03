@@ -25,7 +25,7 @@ class Go2RoughPPOBaseRunnerCfg(ZRlOnPolicyRunnerCfg):
     num_steps_per_env = 24
     max_iterations = 10000
     save_interval = 500
-    experiment_name = "go2_rough"
+    experiment_name = "go2_rough_velocity"
     obs_groups = {"actor": ["policy"], "critic": ["critic"]}
     algorithm = ZRlPpoAlgorithmCfg(
         num_learning_epochs=5,
@@ -146,7 +146,7 @@ class Go2RoughEncoderEstimationPPORunnerCfg(Go2RoughPPOBaseRunnerCfg):
 @configclass
 class Go2FlatPPORunnerCfg(Go2RoughPPORunnerCfg):
     max_iterations = 2000
-    experiment_name = "go2_flat"
+    experiment_name = "go2_flat_velocity"
 
     def __post_init__(self):
         super().__post_init__()

@@ -22,8 +22,9 @@ EXTENSION_TOML_DATA = toml.load(os.path.join(EXTENSION_PATH, "config", "extensio
 # Minimum dependencies required prior to installation
 INSTALL_REQUIRES = [
     "psutil",
-    # Optional at runtime: play imports it only when --viser is set.
-    "viser>=1.0.0",
+    # Imported lazily by --viser and reference motion ghosts.
+    "viser>=1.0.27",
+    "mjviser==0.0.14",
     "assetx @ git+https://github.com/syw-robotics/assetx.git",
 ]
 

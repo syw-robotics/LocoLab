@@ -1,6 +1,10 @@
 # Viewer
 
-Optional browser view for headless play. Isaac Sim keeps simulating. This package poses `source_asset` — the spawned MJCF, or the URDF — from the articulation state and serves it with [Viser](https://github.com/nerfstudio-project/viser).
+Optional browser view for headless play. Isaac Lab keeps simulating;
+[mjviser](https://github.com/mujocolab/mjviser) draws robots from simulation body
+poses. It loads the `model.xml` saved alongside the spawned USD by assetx, so
+fixed-link merges and collision-shape edits match the converted asset. For other
+USD assets, provide a matching `.xml`/`.mjcf` in `mjcf_path`.
 
 **This package is fully vibe coded.**
 
@@ -12,13 +16,32 @@ Play scripts call three functions:
 - `open_play_viewer` after the env exists. Without `--viser` this returns an idle object.
 - `viewer.after_step()` in the loop. When `viewer.paces` is true, skip the script's own `--realtime` sleep.
 
+Robot layers are **Visual** and **Collision** (green enabled, gray disabled by the
+environment). **Convex hull** selects the shared mesh mode for Visual and browser
+motion ghosts: off uses the original visual meshes with matching mjviser grouping
+and distance LOD; on replaces both with visual-only convex hulls. **Distance LOD**
+in **Visualization → Robot** defaults to on; turn it off to keep full mesh detail
+at every distance for both Visual and browser ghosts. This toggle is independent
+of the convex-hull mode. Visual primitives
+and meshes without valid hulls retain their original geometry. The collision layer
+always shows the assetx-exported simulation collision shapes and is unaffected by
+the visual mesh mode. Ghost visibility remains a separate task debug control.
+Kit/Newton ghosts always keep their original visual meshes. These controls affect
+display only; they do not change simulation.
+
+Camera tracking, FOV and environment selection use mjviser's native Scene GUI.
+Terrain and task overlays are children of its `/fixed_bodies` frame, so tracking
+moves the whole scene consistently. Playback pause/reset/speed and task-specific
+debug/terrain controls remain in LocoLab; the old injected keyboard shortcuts
+and movement-speed override have been removed.
+
 | File | Role |
 | --- | --- |
 | `play.py` | CLI flags and the idle stand-in |
-| `viser_play.py` | Server, GUI, camera follow, playback pace |
+| `viser_play.py` | Isaac play-loop adapter, playback controls and terrain/debug UI; native mjviser scene GUI |
 | `_viser.py` | Import Viser with the environment's `websockets`. Kit's fast importer otherwise keeps Isaac Sim's older copy |
-| `urdf.py` | Load a URDF once and pose every environment from the same meshes |
-| `mjcf.py` | Load an MJCF: visual meshes and the collision primitives MuJoCo simulates |
+| `assets.py` | Resolve the MJCF from the spawned assetx bundle or an explicit XML source |
+| `mjviser_robot.py` | Map simulation body poses to mjviser; reconstruct merged fixed bodies |
+| `mjcf.py` | Reference-motion poses via MuJoCo native FK; ghost geometry via mjviser's converters |
 | `terrain.py` | Keep and color the terrain mesh |
 | `debug_vis.py` | Velocity arrows, ray hits, and terrain-origin frames in the browser |
-| `browser.py` | Page script for camera keys and shortcuts |

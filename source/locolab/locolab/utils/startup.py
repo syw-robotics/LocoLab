@@ -8,7 +8,16 @@ from __future__ import annotations
 
 import argparse
 import os
+from pathlib import Path
 from typing import Any
+
+import yaml
+
+import omni.client
+
+# Set this before Isaac Lab imports can initialize OmniClient and start Hub.
+# Keep errors visible while suppressing its informational and retry-warning logs.
+omni.client.set_log_level(omni.client.LogLevel.ERROR)
 
 from isaaclab.app.loading_screen import LoadingScreen
 from isaaclab.envs import DirectMARLEnvCfg, ManagerBasedRLEnvCfg
@@ -21,6 +30,8 @@ __all__ = [
     "add_motion_file_arg",
     "prepend_motion_file_hydra_override",
     "apply_motion_file_override",
+    "set_motion_run_name",
+    "restore_motion_file",
     "loading_screen",
     "report_run_summary",
 ]
@@ -47,7 +58,7 @@ def prepend_motion_file_hydra_override(motion_file: str | None, hydra_args: list
     if motion_file is None:
         return hydra_args
     path = os.path.abspath(os.path.expanduser(motion_file))
-    return [*hydra_args, f"commands.motion.motion_file={path}"]
+    return [*hydra_args, f"env.commands.motion.motion_file={path}"]
 
 
 def apply_motion_file_override(env_cfg: Any, motion_file: str | None) -> None:
@@ -60,6 +71,40 @@ def apply_motion_file_override(env_cfg: Any, motion_file: str | None) -> None:
     path = os.path.abspath(os.path.expanduser(motion_file))
     motion.motion_file = path
     print(f"[INFO] Motion clip: {path}")
+
+
+def set_motion_run_name(env_cfg: Any, agent_cfg: Any, mdp_backend: str = "torch") -> None:
+    """Name a run after physics, optional Warp MDP, custom suffix, and motion clip."""
+    parts = [_physics_backend_name(env_cfg.sim.physics)]
+    if mdp_backend == "warp":
+        parts.append("warp")
+    if agent_cfg.run_name:
+        parts.append(agent_cfg.run_name)
+    motion = getattr(getattr(env_cfg, "commands", None), "motion", None)
+    if motion is not None and getattr(motion, "motion_file", None):
+        parts.append(Path(motion.motion_file).stem)
+    agent_cfg.run_name = "_".join(parts)
+
+
+def restore_motion_file(
+    env_cfg: Any, checkpoint: str, motion_file: str | None, hydra_args: list[str]
+) -> None:
+    """Restore the training clip for play unless the user explicitly selected one.
+
+    Read only the motion path, keeping play-specific noise and sampling settings.
+    BaseLoader reads scalar strings without constructing Python objects from YAML tags.
+    """
+    motion = getattr(getattr(env_cfg, "commands", None), "motion", None)
+    if motion is None or motion_file is not None:
+        return
+    if any(arg.lstrip("+").startswith("env.commands.motion.motion_file=") for arg in hydra_args):
+        return
+    config_path = Path(checkpoint).parent / "params" / "env.yaml"
+    if not config_path.is_file():
+        raise FileNotFoundError(f"Cannot restore the training motion: {config_path}. Specify --motion_file explicitly.")
+    with config_path.open(encoding="utf-8") as stream:
+        saved_cfg = yaml.load(stream, Loader=yaml.BaseLoader)
+    apply_motion_file_override(env_cfg, saved_cfg["commands"]["motion"]["motion_file"])
 
 
 _PHYSICS_ALIASES = {"PhysxCfg": "isaacsim_physx", "OvPhysxCfg": "ovphysx"}

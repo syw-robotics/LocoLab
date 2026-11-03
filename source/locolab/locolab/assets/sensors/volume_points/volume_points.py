@@ -40,12 +40,12 @@ def _articulation_for_bodies(prim_path: str, body_names: list[str]):
     """
     import gc
 
-    from isaaclab.assets import Articulation
+    from isaaclab.assets.articulation.base_articulation import BaseArticulation
 
     robot_path = prim_path.rsplit("/", 1)[0]
     matches = []
     for obj in gc.get_objects():
-        if not isinstance(obj, Articulation):
+        if isinstance(obj, weakref.ProxyTypes) or not isinstance(obj, BaseArticulation):
             continue
         cfg_path = getattr(getattr(obj, "cfg", None), "prim_path", None)
         names = getattr(obj, "body_names", None) or []
@@ -153,9 +153,9 @@ class VolumePoints(SensorBase):
         self._enabled_env_ids = torch.nonzero(mask, as_tuple=False).squeeze(-1)
         self._enabled_env_ids_i32 = self._enabled_env_ids.to(dtype=torch.int32)
 
-    def reset(self, env_ids: Sequence[int] | None = None):
+    def reset(self, env_ids: Sequence[int] | None = None, *, env_mask=None):
         # reset the timers and counters
-        super().reset(env_ids)
+        super().reset(env_ids, env_mask=env_mask)
         ...
 
     def find_bodies(self, name_keys: str | Sequence[str], preserve_order: bool = False) -> tuple[list[int], list[str]]:
@@ -178,7 +178,8 @@ class VolumePoints(SensorBase):
         super()._initialize_impl()
         # check that only rigid bodies are selected
         leaf_pattern = self.cfg.prim_path.rsplit("/", 1)[-1]
-        template_prim_path = self._parent_prims[0].GetPath().pathString
+        parent_pattern = self.cfg.prim_path.rsplit("/", 1)[0]
+        template_prim_path = sim_utils.find_matching_prims(parent_pattern)[0].GetPath().pathString
         body_names = list()
         for prim in sim_utils.find_matching_prims(template_prim_path + "/" + leaf_pattern):
             prim_path = prim.GetPath().pathString
@@ -222,8 +223,9 @@ class VolumePoints(SensorBase):
         self._all_env_ids_i32 = torch.arange(self._num_envs, device=self.device, dtype=torch.int32)
         self._volume_points_pattern = self._volume_points_pattern.contiguous()
 
-    def _update_buffers_impl(self, env_ids: Sequence[int]):
-        """Fills the buffers of the sensor data."""
+    def _update_buffers_impl(self, env_mask: wp.array):
+        """Fills the buffers for environments selected by the Isaac Lab mask."""
+        env_ids = wp.to_torch(env_mask).nonzero(as_tuple=False).flatten()
         # default to all sensors
         if len(env_ids) == self._num_envs:
             env_ids = slice(None)
@@ -324,33 +326,6 @@ class VolumePoints(SensorBase):
             self._data.penetration_offset.zero_()
             return
         self._data.penetration_offset[env_ids_i32] = 0
-
-    def set_debug_vis(self, debug_vis: bool) -> bool:
-        """Draw markers on the pre-update stream so they share a frame with the links.
-
-        ``SensorBase`` subscribes to post-update, which runs after the viewport has
-        already drawn. The next ``sim.render()`` is ``render_interval`` physics steps
-        later, so the spheres trail the foot meshes. Pre-update runs after
-        ``SimulationContext.forward()`` flushes the link poses and before that draw.
-        """
-        if not self.has_debug_vis_implementation:
-            return False
-        self._set_debug_vis_impl(debug_vis)
-        self._is_visualizing = debug_vis
-        if debug_vis:
-            if self._debug_vis_handle is None:
-                try:
-                    import omni.kit.app
-                except ImportError:
-                    return super().set_debug_vis(debug_vis)
-                app_interface = omni.kit.app.get_app_interface()
-                self._debug_vis_handle = app_interface.get_pre_update_event_stream().create_subscription_to_pop(
-                    lambda event, obj=weakref.proxy(self): obj._debug_vis_callback(event)
-                )
-        elif self._debug_vis_handle is not None:
-            self._debug_vis_handle.unsubscribe()
-            self._debug_vis_handle = None
-        return True
 
     def _set_debug_vis_impl(self, debug_vis: bool):
         # set visibility of markers

@@ -16,7 +16,7 @@ from .z_rl_ppo_cfg import Go2RoughPPOBaseRunnerCfg
 
 @configclass
 class Go2RoughDreamWaQPPORunnerCfg(Go2RoughPPOBaseRunnerCfg):
-    experiment_name = "go2_rough_dreamwaq"
+    experiment_name = "go2_rough_velocity_dreamwaq"
     obs_group_concat_mode = "history_major"
     actor = DreamWaQEncoderMLPModelCfg(
         hidden_dims=[512, 256, 128],

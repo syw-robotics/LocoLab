@@ -25,7 +25,29 @@ A URDF is edited, then saved:
 
 These fixed-joint children stay separate: `--keep-fixed REGEX` (full match; Go2 / B2 use `.*_foot_joint`), and joints marked `dont_collapse="true"` (`--no-honor-dont-collapse` ignores that).
 
-Collision geoms land under `{link}/collisions`, visuals under `visuals`. Foot friction should match `collisions`. Viser reads `LocoLabArticulationCfg.source_asset` (the spawned MJCF or URDF), not this USD.
+Collision geoms land under `{link}/collisions`, visuals under `visuals`. Foot friction should match `collisions`.
+
+`--viser` uses `mjviser` to render the saved `model.xml` beside the spawned
+`usd/` directory. Motion ghosts use the same XML and default to its original
+visual meshes. mjviser's explicit Convex hull option replaces both Visual and
+browser ghost meshes with visual-only hulls; Kit/Newton ghosts retain their
+original meshes. This keeps the
+visualization's fixed-link and collision-shape edits consistent with the exported
+USD. Main robot poses come from the simulation; playback, terrain and debug
+controls remain in LocoLab. Collision visibility is independent of the shared
+Visual/ghost mesh mode. Its shapes follow the simulation asset; its colors reflect
+the environment's collision enable overrides.
+
+For USD assets without this bundle layout, set
+`LocoLabArticulationCfg.mjcf_path` to a matching MJCF (`.xml` or `.mjcf`). A raw
+URDF alone is no longer a browser/ghost visualization input; export it through
+`assetx_export_usd_cfg` first. Leave `mjcf_path` unset for assetx exports;
+G1, Go2 and B2 need no duplicate declaration or hand-maintained viewer XML.
+
+G1 sphere-foot variants are selected with `g1_sphere_feet_cfg("pelvis")` or
+`g1_sphere_feet_cfg("torso")`. The factory selects the base config and matching
+XML together, exports that variant on demand and preserves its spawn settings.
+Apply task-specific overrides to the returned config with `.replace(...)`.
 
 ## Cache
 

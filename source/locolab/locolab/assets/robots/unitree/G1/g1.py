@@ -12,17 +12,15 @@ Reference: https://github.com/unitreerobotics/unitree_rl_lab
 """
 
 import os
+from typing import Literal
 
 from isaaclab.assets.articulation import ArticulationCfg
 
-from locolab.assets.robots.unitree.G1.g1_actuators import (
-    mimic_g1_29dof_actuators,
-    locomotion_g1_29dof_actuators,
-)
 from locolab.assets.robots.common import (
     LocoLabArticulationCfg,
     assetx_export_usd_cfg,
 )
+from locolab.assets.robots.unitree.G1.g1_actuators import g1_29dof_actuators
 from locolab.utils.symmetry import complete_symmetry_mapping
 
 _G1_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -31,27 +29,6 @@ _G1_XML_DIR = os.path.join(_G1_DIR, "xml")
 _G1_PELVIS_BASE_XML = os.path.join(_G1_XML_DIR, "g1_29dof_pelvis_base.xml")
 _G1_TORSO_BASE_XML = os.path.join(_G1_XML_DIR, "g1_29dof_torso_base.xml")
 
-
-UNITREE_MODEL_DIR = os.environ.get(
-    "UNITREE_MODEL_DIR", "/home/sharron/workspace/views2/unitree/unitree_model"
-)
-import isaaclab.sim as sim_utils
-from isaaclab.utils import configclass
-@configclass
-class UnitreeUsdFileCfg(sim_utils.UsdFileCfg):
-    activate_contact_sensors: bool = True
-    rigid_props = sim_utils.RigidBodyPropertiesCfg(
-        disable_gravity=False,
-        retain_accelerations=False,
-        linear_damping=0.0,
-        angular_damping=0.0,
-        max_linear_velocity=1000.0,
-        max_angular_velocity=1000.0,
-        max_depenetration_velocity=1.0,
-    )
-    articulation_props = sim_utils.ArticulationRootPropertiesCfg(
-        enabled_self_collisions=True, solver_position_iteration_count=8, solver_velocity_iteration_count=4
-    )
 
 G1_JOINT_SYMMETRY_MAPPING = complete_symmetry_mapping(
     {
@@ -128,16 +105,12 @@ _G1_SDK_JOINT_NAMES = [
     "right_wrist_yaw_joint",
 ]
 
-UNITREE_G1_29DOF_PELVIS_BASE_MIMIC_CFG = LocoLabArticulationCfg(
+UNITREE_G1_29DOF_PELVIS_BASE_CFG = LocoLabArticulationCfg(
     spawn=assetx_export_usd_cfg(
         asset_path=_G1_PELVIS_BASE_XML,
         foot_expression="/.*ankle_roll_link/collisions.*",
         merge_fixed_joints=True,
     ),
-    #  spawn=UnitreeUsdFileCfg(
-    #      usd_path=f"{UNITREE_MODEL_DIR}/G1/29dof/usd/g1_29dof_rev_1_0/g1_29dof_rev_1_0.usd",
-    #  ),
-    source_asset=_G1_PELVIS_BASE_XML,
     init_state=ArticulationCfg.InitialStateCfg(
         pos=(0.0, 0.0, 0.88),
         joint_pos={
@@ -151,53 +124,35 @@ UNITREE_G1_29DOF_PELVIS_BASE_MIMIC_CFG = LocoLabArticulationCfg(
         },
         joint_vel={".*": 0.0},
     ),
-    actuators=mimic_g1_29dof_actuators,
+    actuators=g1_29dof_actuators,
     joint_symmetry_mapping=G1_JOINT_SYMMETRY_MAPPING,
     spatial_symmetry_mapping=G1_SPATIAL_SYMMETRY_MAPPING,
     joint_sdk_names=_G1_SDK_JOINT_NAMES,
 )
-"""Configuration for the pelvis-base Unitree G1 29DOF mimic humanoid robot."""
+"""Configuration for the pelvis-base Unitree G1 29DOF humanoid robot."""
 
-UNITREE_G1_29DOF_TORSO_BASE_MIMIC_CFG = UNITREE_G1_29DOF_PELVIS_BASE_MIMIC_CFG.replace(
+UNITREE_G1_29DOF_TORSO_BASE_CFG = UNITREE_G1_29DOF_PELVIS_BASE_CFG  .replace(
     spawn=assetx_export_usd_cfg(
         asset_path=_G1_TORSO_BASE_XML,
         foot_expression="/.*ankle_roll_link/collisions.*",
         merge_fixed_joints=True,
     ),
-    source_asset=_G1_TORSO_BASE_XML,
 )
-"""Configuration for the torso-base Unitree G1 29DOF mimic humanoid robot."""
+"""Configuration for the torso-base Unitree G1 29DOF humanoid robot."""
 
 
-UNITREE_G1_29DOF_PELVIS_BASE_CFG = UNITREE_G1_29DOF_PELVIS_BASE_MIMIC_CFG.replace(
-    actuators=locomotion_g1_29dof_actuators,
-)
-"""Pelvis-base Unitree G1 29DOF for velocity locomotion.
-
-Initial pose and actuator gains follow ``UNITREE_G1_29DOF_CFG`` in unitree_rl_lab.
-"""
-
-UNITREE_G1_29DOF_TORSO_BASE_CFG = UNITREE_G1_29DOF_PELVIS_BASE_CFG.replace(
-    spawn=assetx_export_usd_cfg(
-        asset_path=_G1_TORSO_BASE_XML,
-        foot_expression="/.*ankle_roll_link/collisions.*",
-        merge_fixed_joints=True,
-    ),
-    source_asset=_G1_TORSO_BASE_XML,
-)
-"""Torso-base Unitree G1 29DOF for velocity locomotion."""
-
-
-def with_g1_sphere_feet(robot_cfg: LocoLabArticulationCfg) -> LocoLabArticulationCfg:
-    """Return a G1 config with five spheres per foot, preserving its base and spawn settings."""
-    xml_stem, _ = os.path.splitext(robot_cfg.source_asset)
-    sphere_feet_xml = f"{xml_stem.removesuffix('_sphere_feet')}_sphere_feet.xml"
+def g1_sphere_feet_cfg(base: Literal["pelvis", "torso"]) -> LocoLabArticulationCfg:
+    """Return the selected G1 base with five spheres per foot."""
+    # Select the config and XML together; export only the requested variant.
+    robot_cfg = {
+        "pelvis": UNITREE_G1_29DOF_PELVIS_BASE_CFG,
+        "torso": UNITREE_G1_29DOF_TORSO_BASE_CFG,
+    }[base]
+    sphere_feet_xml = os.path.join(_G1_XML_DIR, f"g1_29dof_{base}_base_sphere_feet.xml")
     spawn = assetx_export_usd_cfg(
         asset_path=sphere_feet_xml,
         foot_expression="/.*ankle_roll_link/collisions.*",
         merge_fixed_joints=True,
     )
-    return robot_cfg.replace(
-        spawn=robot_cfg.spawn.replace(usd_path=spawn.usd_path),
-        source_asset=sphere_feet_xml,
-    )
+    # Change the model path while keeping the base config's spawn settings.
+    return robot_cfg.replace(spawn=robot_cfg.spawn.replace(usd_path=spawn.usd_path))

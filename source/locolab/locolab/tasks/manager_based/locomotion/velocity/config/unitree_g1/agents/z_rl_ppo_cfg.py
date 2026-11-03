@@ -21,7 +21,7 @@ class G1RoughPPOBaseRunnerCfg(ZRlOnPolicyRunnerCfg):
     num_steps_per_env = 24
     max_iterations = 10000
     save_interval = 500
-    experiment_name = "g1_rough"
+    experiment_name = "g1_rough_velocity"
     obs_groups = {"actor": ["policy"], "critic": ["critic"]}
     algorithm = ZRlPpoAlgorithmCfg(
         num_learning_epochs=5,
@@ -71,5 +71,5 @@ class G1FlatPPORunnerCfg(G1RoughPPORunnerCfg):
     def __post_init__(self):
         super().__post_init__()
 
-        self.max_iterations = 6000
-        self.experiment_name = "g1_flat"
+        self.max_iterations = 3000
+        self.experiment_name = "g1_flat_velocity"

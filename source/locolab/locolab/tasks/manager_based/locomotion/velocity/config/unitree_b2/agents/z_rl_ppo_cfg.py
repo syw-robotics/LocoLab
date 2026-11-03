@@ -69,4 +69,4 @@ class B2FlatPPORunnerCfg(B2RoughPPORunnerCfg):
         super().__post_init__()
 
         self.max_iterations = 2000
-        self.experiment_name = "b2_flat"
+        self.experiment_name = "b2_flat_velocity"

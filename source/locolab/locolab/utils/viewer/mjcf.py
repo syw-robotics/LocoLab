@@ -2,240 +2,95 @@
 # All rights reserved.
 # Modifications are licensed under BSD-3-Clause.
 
-"""Pose an MJCF the way MuJoCo compiles it, for the Viser play viewer.
+"""Reference-motion geometry from mjviser and body poses from MuJoCo."""
 
-Visual geoms are the meshes (``contype == 0``). Collision geoms are the
-primitives MuJoCo actually simulates, tessellated in the link frame.
-"""
-
-from __future__ import annotations
-
+from functools import cached_property
 from pathlib import Path
 
 import mujoco
 import numpy as np
 import trimesh
 
-from .urdf import JointMotion, RobotBodies
-
-_CAPSULE = int(mujoco.mjtGeom.mjGEOM_CAPSULE)
-_SPHERE = int(mujoco.mjtGeom.mjGEOM_SPHERE)
-_BOX = int(mujoco.mjtGeom.mjGEOM_BOX)
-_CYLINDER = int(mujoco.mjtGeom.mjGEOM_CYLINDER)
-_MESH = int(mujoco.mjtGeom.mjGEOM_MESH)
-_HINGE = int(mujoco.mjtJoint.mjJNT_HINGE)
-_SLIDE = int(mujoco.mjtJoint.mjJNT_SLIDE)
+from ._viser import SO3, group_geoms_by_visual_compat, merge_geoms, merge_geoms_hull
+from .assets import load_mjcf_model
 
 
-def load_mjcf(path: str | Path) -> tuple[RobotBodies, list[str]]:
-    """Return link meshes and the actuated joint names, in tree order."""
-    xml = Path(path).expanduser().resolve()
-    if not xml.is_file():
-        raise FileNotFoundError(f"Robot MJCF not found: {xml}")
-    model = mujoco.MjModel.from_xml_path(str(xml))
-    if model.nbody < 2:
-        raise ValueError(f"{xml} has no body to draw")
-
-    link_names = [model.body(i).name for i in range(1, model.nbody)]
-    count = len(link_names)
-    parent = np.full(count, -1, dtype=np.int64)
-    joint = np.full(count, -1, dtype=np.int64)
-    for link, body_id in enumerate(range(1, model.nbody)):
-        parent_body = int(model.body_parentid[body_id])
-        if parent_body > 0:
-            parent[link] = parent_body - 1
-        if link > 0:
-            joint[link] = link - 1
-
-    motion, actuated = _link_motion(model, count)
-    visuals, visual_links = _geoms(model, collision=False)
-    collisions, collision_links = _geoms(model, collision=True)
-    bodies = RobotBodies.from_kinematics(
-        motion,
-        link_names,
-        parent,
-        joint,
-        visuals,
-        visual_links,
-        collisions,
-        collision_links,
-    )
-    return bodies, actuated
-
-
-def _link_motion(model: mujoco.MjModel, link_count: int) -> tuple[JointMotion, list[str]]:
-    """One parent-to-child joint per non-root body, at MuJoCo's q=0 pose."""
-    slots = link_count - 1
-    rest_wxyz = np.zeros((slots, 4))
-    rest_wxyz[:, 0] = 1.0
-    rest_position = np.zeros((slots, 3))
-    revolute_ids: list[int] = []
-    revolute_rotation: list[np.ndarray] = []
-    revolute_axis: list[np.ndarray] = []
-    revolute_source: list[int] = []
-    prismatic_ids: list[int] = []
-    prismatic_rotation: list[np.ndarray] = []
-    prismatic_translation: list[np.ndarray] = []
-    prismatic_axis: list[np.ndarray] = []
-    prismatic_source: list[int] = []
-    actuated: list[str] = []
-
-    for slot, body_id in enumerate(range(2, model.nbody)):
-        rotation = _quat_to_matrix(model.body_quat[body_id])
-        rest_position[slot] = model.body_pos[body_id]
-        rest_wxyz[slot] = _matrix_to_wxyz(rotation)
-        address = int(model.body_jntadr[body_id])
-        number = int(model.body_jntnum[body_id])
-        if number > 1:
-            raise ValueError(
-                f"Body '{model.body(body_id).name}' has {number} joints; "
-                "the viewer poses one joint per link."
-            )
-        if number == 0:
+def visual_meshes(model: mujoco.MjModel, *, hull: bool = False):
+    """Use the same body-local visual geometry for the robot and its ghost."""
+    by_body = {}
+    for geom_id, body_id in enumerate(model.geom_bodyid):
+        if body_id == 0 or model.geom_contype[geom_id] or model.geom_conaffinity[geom_id]:
             continue
-        kind = int(model.jnt_type[address])
-        if kind not in (_HINGE, _SLIDE):
-            continue
-        name = model.joint(address).name
-        if not name:
-            continue
-        source = len(actuated)
-        actuated.append(name)
-        axis = np.asarray(model.jnt_axis[address], dtype=np.float64)
-        if kind == _HINGE:
-            revolute_ids.append(slot)
-            revolute_rotation.append(rotation)
-            revolute_axis.append(_unit(axis))
-            revolute_source.append(source)
-        else:
-            prismatic_ids.append(slot)
-            prismatic_rotation.append(rotation)
-            prismatic_translation.append(rest_position[slot].copy())
-            prismatic_axis.append(axis)
-            prismatic_source.append(source)
-
-    motion = JointMotion.from_parts(
-        rest_wxyz,
-        rest_position,
-        np.asarray(revolute_ids, dtype=np.int64),
-        _stack(revolute_rotation, (3, 3)),
-        _stack(revolute_axis, (3,)),
-        np.asarray(revolute_source, dtype=np.int64),
-        np.asarray(prismatic_ids, dtype=np.int64),
-        _stack(prismatic_rotation, (3, 3)),
-        _stack(prismatic_translation, (3,)),
-        _stack(prismatic_axis, (3,)),
-        np.asarray(prismatic_source, dtype=np.int64),
-    )
-    return motion, actuated
-
-
-def _geoms(model: mujoco.MjModel, *, collision: bool) -> tuple[list[trimesh.Trimesh], np.ndarray]:
-    meshes: list[trimesh.Trimesh] = []
-    links: list[int] = []
-    for geom_id in range(model.ngeom):
-        body_id = int(model.geom_bodyid[geom_id])
-        if body_id <= 0:
-            continue
-        is_collision = int(model.geom_contype[geom_id]) != 0
-        if is_collision != collision:
-            continue
-        mesh = _geom_mesh(model, geom_id)
-        if mesh is None or len(mesh.faces) == 0:
-            continue
-        _apply_geom_pose(mesh, model.geom_pos[geom_id], model.geom_quat[geom_id])
-        if not collision:
-            _paint(mesh, _geom_rgba(model, geom_id))
-        meshes.append(mesh)
-        links.append(body_id - 1)
+        by_body.setdefault(int(body_id), []).append(geom_id)
+    meshes, links = [], []
+    for body_id, geom_ids in by_body.items():
+        # Match mjviser's per-body, texture-compatible visual mesh grouping.
+        for group in group_geoms_by_visual_compat(model, geom_ids):
+            if hull:
+                parts = []
+                for geom_id in group:
+                    part = merge_geoms_hull(model, [geom_id])
+                    # Preserve visual primitives and meshes without a 3D hull.
+                    if part is None:
+                        part = merge_geoms(model, [geom_id])
+                    # Hull mode uses viewer colors. Reset upstream color caches
+                    # that may still refer to vertices removed during hull creation.
+                    part.visual = trimesh.visual.ColorVisuals(mesh=part)
+                    parts.append(part)
+                mesh = trimesh.util.concatenate(parts)
+            else:
+                mesh = merge_geoms(model, group)
+            if len(mesh.faces):
+                meshes.append(mesh)
+                links.append(body_id - 1)
     return meshes, np.asarray(links, dtype=np.int64)
 
 
-def _geom_mesh(model: mujoco.MjModel, geom_id: int) -> trimesh.Trimesh | None:
-    kind = int(model.geom_type[geom_id])
-    size = np.asarray(model.geom_size[geom_id], dtype=np.float64)
-    if kind == _SPHERE:
-        return trimesh.creation.icosphere(subdivisions=2, radius=float(size[0]))
-    if kind == _CAPSULE:
-        return trimesh.creation.capsule(radius=float(size[0]), height=float(size[1]) * 2.0)
-    if kind == _CYLINDER:
-        return trimesh.creation.cylinder(radius=float(size[0]), height=float(size[1]) * 2.0)
-    if kind == _BOX:
-        return trimesh.creation.box(extents=size[:3] * 2.0)
-    if kind == _MESH:
-        return _compiled_mesh(model, geom_id)
-    return None
+class MotionBodies:
+    """Load body-local meshes once; evaluate reference poses without simulation."""
 
+    def __init__(self, path: str | Path) -> None:
+        self._path = Path(path)
+        model = mujoco.MjModel.from_xml_path(str(self._path))
+        self.model = model
+        if model.nbody < 2:
+            raise ValueError(f"{path} has no body to draw")
+        # Skip MuJoCo's world body. Mesh indices and returned poses share this order.
+        self.link_names = [model.body(i).name for i in range(1, model.nbody)]
+        joint_ids = np.flatnonzero(np.isin(model.jnt_type, (mujoco.mjtJoint.mjJNT_HINGE, mujoco.mjtJoint.mjJNT_SLIDE)))
+        self.joint_names = [model.joint(int(i)).name for i in joint_ids]
+        self._qpos_ids = model.jnt_qposadr[joint_ids].copy()
 
-def _compiled_mesh(model: mujoco.MjModel, geom_id: int) -> trimesh.Trimesh | None:
-    """Vertices in the mesh inertia frame. Geom pose puts them on the body.
+        self.meshes, self.mesh_links = visual_meshes(model)
 
-    ``mesh_vert`` is already scaled. ``mesh_scale`` records that factor, and
-    ``geom_size`` is the fitted bounding box, so neither is a second scale.
-    """
-    mesh_id = int(model.geom_dataid[geom_id])
-    if mesh_id < 0:
-        return None
-    vert_adr = int(model.mesh_vertadr[mesh_id])
-    vert_num = int(model.mesh_vertnum[mesh_id])
-    face_adr = int(model.mesh_faceadr[mesh_id])
-    face_num = int(model.mesh_facenum[mesh_id])
-    vertices = np.asarray(model.mesh_vert[vert_adr : vert_adr + vert_num], dtype=np.float64).copy()
-    faces = np.asarray(model.mesh_face[face_adr : face_adr + face_num], dtype=np.int64).copy()
-    return trimesh.Trimesh(vertices=vertices, faces=faces, process=False)
+    @cached_property
+    def hull_meshes(self):
+        """Build browser-only hulls on explicit request; keep viewport meshes intact."""
+        model = load_mjcf_model(self._path)
+        meshes, _ = visual_meshes(model, hull=True)
+        return meshes
 
+    def poses(
+        self,
+        root_position: np.ndarray,
+        root_wxyz: np.ndarray,
+        configuration: np.ndarray,
+    ) -> tuple[np.ndarray, np.ndarray]:
+        """Return world link positions (N, L, 3) and wxyz orientations (N, L, 4)."""
+        count = len(root_position)
+        positions = np.empty((count, len(self.link_names), 3))
+        orientations = np.empty((count, len(self.link_names), 4))
+        # Keep data local to this call so viewport and browser can share the model.
+        data = mujoco.MjData(self.model)
+        for env_id in range(count):
+            data.qpos[self._qpos_ids] = configuration[env_id]
+            # Native FK handles joint anchors, reference angles and multiple joints
+            # per body. No physics step or second simulated articulation is needed.
+            mujoco.mj_kinematics(self.model, data)
 
-def _apply_geom_pose(mesh: trimesh.Trimesh, pos, quat_wxyz) -> None:
-    transform = np.eye(4)
-    transform[:3, :3] = _quat_to_matrix(quat_wxyz)
-    transform[:3, 3] = np.asarray(pos, dtype=np.float64)
-    if not np.allclose(transform, np.eye(4)):
-        mesh.apply_transform(transform)
-
-
-def _geom_rgba(model: mujoco.MjModel, geom_id: int) -> np.ndarray:
-    """Resolved albedo for a visual geom (MJCF ``material`` refs, not raw geom defaults)."""
-    rgba = np.asarray(model.geom_rgba[geom_id], dtype=np.float64)
-    mat_id = int(model.geom_matid[geom_id])
-    if mat_id < 0:
-        return rgba
-    material = np.asarray(model.mat_rgba[mat_id], dtype=np.float64)
-    # MuJoCo leaves geom rgba at 0.5 when color comes from a material; use the material then.
-    if np.allclose(rgba[:3], 0.5, atol=1e-3) and rgba[3] >= 0.999:
-        return material
-    return rgba * material
-
-
-def _paint(mesh: trimesh.Trimesh, rgba) -> None:
-    color = np.clip(np.asarray(rgba, dtype=np.float64) * 255.0, 0.0, 255.0).astype(np.uint8)
-    mesh.visual = trimesh.visual.ColorVisuals(mesh=mesh, face_colors=np.tile(color, (len(mesh.faces), 1)))
-
-
-def _quat_to_matrix(quat_wxyz) -> np.ndarray:
-    w, x, y, z = (float(value) for value in quat_wxyz)
-    return np.array(
-        [
-            [1.0 - 2.0 * (y * y + z * z), 2.0 * (x * y - z * w), 2.0 * (x * z + y * w)],
-            [2.0 * (x * y + z * w), 1.0 - 2.0 * (x * x + z * z), 2.0 * (y * z - x * w)],
-            [2.0 * (x * z - y * w), 2.0 * (y * z + x * w), 1.0 - 2.0 * (x * x + y * y)],
-        ]
-    )
-
-
-def _matrix_to_wxyz(rotation: np.ndarray) -> np.ndarray:
-    from viser.transforms import SO3
-
-    return np.asarray(SO3.from_matrix(rotation).wxyz, dtype=np.float64)
-
-
-def _unit(axis: np.ndarray) -> np.ndarray:
-    norm = float(np.linalg.norm(axis))
-    if norm < 1e-12:
-        return np.array([0.0, 0.0, 1.0])
-    return axis / norm
-
-
-def _stack(rows: list[np.ndarray], shape: tuple[int, ...]) -> np.ndarray:
-    if not rows:
-        return np.zeros((0, *shape))
-    return np.stack(rows)
+            # Anchor the model's first body to the clip root. This also supports
+            # fixed-base MJCFs and models with a nonzero default root transform.
+            root_rotation = SO3(root_wxyz[env_id]) @ SO3(data.xquat[1]).inverse()
+            positions[env_id] = root_position[env_id] + root_rotation.apply(data.xpos[1:] - data.xpos[1])
+            orientations[env_id] = (root_rotation @ SO3(data.xquat[1:])).wxyz
+        return positions, orientations

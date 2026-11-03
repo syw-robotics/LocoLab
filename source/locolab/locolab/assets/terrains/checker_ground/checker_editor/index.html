@@ -1,0 +1,553 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Checker · Floor colors</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #f7f8f5;
+      --fg: #252b26;
+      --muted: #7b8179;
+      --soft: #8b9187;
+      --faint: #91978b;
+      --card: #fff;
+      --border: #e2e6dd;
+      --border-soft: #edf0e8;
+      --border-hover: #d8ded2;
+      --control-bg: #fff;
+      --control-fg: #606a59;
+      --chip: #f1f3ee;
+      --chip-active: #fff;
+      --chip-active-fg: #303a2c;
+      --chip-shadow: #25302012;
+      --canvas: #f1f3ee;
+      --hex: #858c7f;
+      --invalid: #ac4d3b;
+      --accent: #344b37;
+      --accent-hover: #263c29;
+      --focus: #9fbba4;
+      --title-slash: #a6ada0;
+      --backdrop: #25302038;
+      --dialog-bg: #fff;
+      font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", sans-serif;
+      color: var(--fg);
+      background: var(--bg);
+    }
+    html[data-theme="dark"] {
+      color-scheme: dark;
+      --bg: #171a16;
+      --fg: #e7ebe3;
+      --muted: #9aa394;
+      --soft: #8d9586;
+      --faint: #7f8779;
+      --card: #21261f;
+      --border: #333a31;
+      --border-soft: #2c332b;
+      --border-hover: #4a5346;
+      --control-bg: #2a3028;
+      --control-fg: #b7c0af;
+      --chip: #2a3028;
+      --chip-active: #384036;
+      --chip-active-fg: #eef2ea;
+      --chip-shadow: #00000040;
+      --canvas: #2a3028;
+      --hex: #a0a897;
+      --invalid: #e08a78;
+      --accent: #6f9a73;
+      --accent-hover: #84b088;
+      --focus: #6f9a73;
+      --title-slash: #7d8676;
+      --backdrop: #05070588;
+      --dialog-bg: #21261f;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--bg); color: var(--fg); }
+    button, input, select { font: inherit; }
+    button { cursor: pointer; }
+    button:focus-visible, input:focus-visible, select:focus-visible { outline: 3px solid var(--focus); outline-offset: 4px; }
+    main { max-width: 1100px; margin: 0 auto; padding: 52px 32px 28px; }
+    header { display: flex; align-items: center; gap: 14px; margin-bottom: 38px; }
+    .header-controls { margin-left: auto; display: flex; align-items: center; gap: 8px; }
+    #language, #theme-toggle {
+      border: 1px solid var(--border); border-radius: 7px; padding: 7px 10px; background: var(--control-bg); color: var(--control-fg); font-size: 12px;
+    }
+    #theme-toggle { min-width: 76px; }
+    .logo { width: 38px; height: 38px; border-radius: 9px; background: conic-gradient(#71836b 25%, #dce2d7 0 50%, #71836b 0 75%, #dce2d7 0); }
+    h1 { font-size: 23px; letter-spacing: -.7px; font-weight: 600; margin: 0 0 5px; }
+    .title-slash { color: var(--title-slash); font-weight: 400; }
+    header p { margin: 0; font-size: 13px; color: var(--muted); }
+    .workspace { display: grid; grid-template-columns: minmax(0, 1fr) 310px; gap: 26px; align-items: start; }
+    .preview-card, aside { border: 1px solid var(--border); border-radius: 16px; background: var(--card); }
+    .preview-card { padding: 22px; }
+    .preview-heading { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; gap: 10px; }
+    h2 { font-size: 14px; font-weight: 600; margin: 0; }
+    .switch { display: flex; background: var(--chip); border-radius: 7px; padding: 3px; gap: 3px; }
+    .switch button { border: 0; border-radius: 5px; background: transparent; padding: 7px 11px; font-size: 12px; color: var(--muted); }
+    .switch button[aria-pressed="true"] { background: var(--chip-active); color: var(--chip-active-fg); box-shadow: 0 1px 3px var(--chip-shadow); }
+    canvas { display: block; width: 100%; aspect-ratio: 1; border-radius: 6px; background: var(--canvas); image-rendering: pixelated; }
+    .caption { margin: 17px 0 0; display: flex; justify-content: space-between; gap: 12px; font-size: 12px; color: var(--soft); }
+    aside { padding: 25px; }
+    .intro { font-size: 12px; color: var(--soft); margin: 8px 0 24px; line-height: 1.6; }
+    .color-row { display: grid; grid-template-columns: 45px 1fr; column-gap: 13px; align-items: center; margin-bottom: 23px; }
+    .color-swatch { width: 45px; height: 45px; padding: 0; border: 1px solid var(--border); border-radius: 10px; background: #eee; grid-row: span 2; }
+    .color-row label { font-size: 13px; margin-bottom: 5px; }
+    input[type="text"] { width: 100%; min-width: 0; border: 0; border-bottom: 1px solid transparent; padding: 1px 0; color: var(--hex); font: 12px ui-monospace, SFMono-Regular, Consolas, monospace; background: transparent; }
+    input[type="text"]:hover { border-color: var(--border-hover); }
+    input[type="text"]:invalid { color: var(--invalid); }
+    .line-option { display: flex; align-items: center; gap: 9px; margin: 0 0 23px; font-size: 13px; cursor: pointer; }
+    .line-option input[type="checkbox"] { width: 16px; height: 16px; margin: 0; accent-color: var(--accent); cursor: pointer; }
+    #divider-options[hidden] { display: none; }
+    .thickness-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: -8px 0 18px; font-size: 13px; color: var(--control-fg); }
+    .thickness-row input { width: 72px; border: 1px solid var(--border); border-radius: 7px; padding: 7px 8px; background: var(--control-bg); color: inherit; }
+    .reset { color: var(--muted); font-size: 12px; border: 0; background: none; padding: 0; margin: 0 0 27px; text-decoration: underline; text-underline-offset: 3px; }
+    .export-area { border-top: 1px solid var(--border-soft); padding-top: 22px; }
+    .meta { display: flex; justify-content: space-between; margin-bottom: 16px; color: var(--soft); font-size: 12px; }
+    #export { width: 100%; border: 0; background: var(--accent); color: #fff; padding: 13px 16px; border-radius: 8px; font-size: 13px; font-weight: 500; }
+    #export:hover { background: var(--accent-hover); }
+    #export:disabled { cursor: wait; opacity: .5; }
+    #status { font-size: 11px; line-height: 1.8; color: var(--faint); margin: 12px 0 0; min-height: 40px; overflow-wrap: anywhere; }
+    footer { margin-top: 23px; color: var(--faint); font-size: 12px; line-height: 1.8; }
+    #color-picker { width: 320px; max-width: calc(100% - 32px); padding: 24px; border: 1px solid var(--border); border-radius: 16px; color: inherit; background: var(--dialog-bg); }
+    #color-picker::backdrop { background: var(--backdrop); }
+    #color-field { position: relative; height: 180px; margin: 20px 0 16px; border-radius: 7px; background-image: linear-gradient(to top, #000, transparent), linear-gradient(to right, #fff, transparent); touch-action: none; cursor: crosshair; }
+    #color-cursor { position: absolute; width: 13px; height: 13px; border: 2px solid #fff; border-radius: 50%; box-shadow: 0 0 2px 1px #0005; transform: translate(-50%, -50%); pointer-events: none; }
+    #color-field:focus-visible { outline: 3px solid var(--focus); outline-offset: 4px; }
+    #color-hue { appearance: none; display: block; width: 100%; height: 12px; margin: 10px 0 20px; border-radius: 6px; background: linear-gradient(to right, #f00, #ff0, #0f0, #0ff, #00f, #f0f, #f00); cursor: pointer; }
+    #color-hue::-webkit-slider-thumb { appearance: none; width: 17px; height: 17px; border: 2px solid #fff; border-radius: 50%; background: transparent; box-shadow: 0 0 2px 1px #0005; }
+    #color-hue::-moz-range-thumb { width: 13px; height: 13px; border: 2px solid #fff; border-radius: 50%; background: transparent; box-shadow: 0 0 2px 1px #0005; }
+    .picker-hex { display: flex; align-items: center; gap: 12px; font-size: 12px; margin-bottom: 23px; }
+    #picker-preview { width: 36px; height: 36px; flex: 0 0 auto; border: 1px solid var(--border); border-radius: 8px; background: #000; }
+    #picker-hex { flex: 1; min-width: 0; border-bottom-color: var(--border); padding: 6px 0; }
+    #recent-colors { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+    #recent-colors button { width: 28px; height: 28px; border: 1px solid var(--border); border-radius: 6px; }
+    #recent-empty { font-size: 12px; color: var(--faint); line-height: 1.7; }
+    #picker-done { width: 100%; margin-top: 20px; border: 0; border-radius: 8px; padding: 11px; background: var(--accent); color: #fff; font-size: 13px; }
+    #picker-done:hover { background: var(--accent-hover); }
+    @media (max-width: 760px) { main { padding: 28px 18px; } header { margin-bottom: 25px; } .workspace { grid-template-columns: 1fr; gap: 18px; } .preview-card { padding: 17px; } aside { padding: 22px; } }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <div class="logo" aria-hidden="true"></div>
+      <div><h1>Checker <span class="title-slash">/</span> <span data-zh="地板配色">Floor colors</span></h1><p data-zh="自由配色，一块属于你的地面。">Your colors. Your ground.</p></div>
+      <div class="header-controls">
+        <button id="theme-toggle" type="button" aria-label="Switch to dark mode" data-zh-label="切换到深色模式" data-en-dark="Dark" data-zh-dark="深色" data-en-light="Light" data-zh-light="浅色">Dark</button>
+        <select id="language" aria-label="Language" data-zh-label="语言"><option value="en">English</option><option value="zh">中文</option></select>
+      </div>
+    </header>
+    <div class="workspace">
+      <section class="preview-card" aria-label="Floor preview" data-zh-label="地板预览">
+        <div class="preview-heading">
+          <h2 data-zh="实时预览">Live preview</h2>
+          <div class="switch" aria-label="Preview mode" data-zh-label="预览模式">
+            <button type="button" data-repeat="1" aria-pressed="false" data-zh="单张贴图">Single tile</button>
+            <button type="button" data-repeat="3" aria-pressed="true" data-zh="平铺效果">Tiled</button>
+          </div>
+        </div>
+        <canvas id="preview" width="1536" height="1536" aria-label="Live checker color preview" data-zh-label="Checker 配色实时预览"></canvas>
+        <p class="caption"><span id="preview-label">3 × 3 tiles · 6 m × 6 m</span><span data-zh="每格 1 m">1 m per cell</span></p>
+      </section>
+      <aside aria-label="Color settings" data-zh-label="配色设置">
+        <h2 data-zh="配色">Colors</h2>
+        <p class="intro" data-zh="点击色块选择颜色，或输入 HEX 色值。">Pick a swatch or enter a HEX color.</p>
+        <div class="color-row">
+          <button id="color-0" class="color-swatch" type="button" value="#dddAD2" aria-haspopup="dialog" aria-label="Checker A color" data-zh-label="棋盘 A 颜色"></button>
+          <label for="hex-0" data-zh="棋盘 A">Checker A</label><input id="hex-0" type="text" value="#DDDAD2" pattern="#[0-9a-fA-F]{6}" maxlength="7" spellcheck="false" aria-label="Checker A HEX color" data-zh-label="棋盘 A HEX 色值">
+        </div>
+        <div class="color-row">
+          <button id="color-1" class="color-swatch" type="button" value="#b9babc" aria-haspopup="dialog" aria-label="Checker B color" data-zh-label="棋盘 B 颜色"></button>
+          <label for="hex-1" data-zh="棋盘 B">Checker B</label><input id="hex-1" type="text" value="#B9BABC" pattern="#[0-9a-fA-F]{6}" maxlength="7" spellcheck="false" aria-label="Checker B HEX color" data-zh-label="棋盘 B HEX 色值">
+        </div>
+        <label class="line-option"><input id="corner-marker" type="checkbox" checked><span data-zh="显示角标">Show corner markers</span></label>
+        <div class="color-row">
+          <button id="color-2" class="color-swatch" type="button" value="#76b900" aria-haspopup="dialog" aria-label="Corner marker color" data-zh-label="角标颜色"></button>
+          <label for="hex-2" data-zh="角标">Corner marker</label><input id="hex-2" type="text" value="#76B900" pattern="#[0-9a-fA-F]{6}" maxlength="7" spellcheck="false" aria-label="Corner marker HEX color" data-zh-label="角标 HEX 色值">
+        </div>
+        <label class="line-option"><input id="grid-lines" type="checkbox"><span data-zh="显示格子分割线">Show dividers</span></label>
+        <div class="color-row">
+          <button id="color-3" class="color-swatch" type="button" value="#646a5f" aria-haspopup="dialog" aria-label="Divider color" data-zh-label="分割线颜色"></button>
+          <label for="hex-3" data-zh="分割线">Divider</label><input id="hex-3" type="text" value="#646A5F" pattern="#[0-9a-fA-F]{6}" maxlength="7" spellcheck="false" aria-label="Divider HEX color" data-zh-label="分割线 HEX 色值">
+        </div>
+        <div id="divider-options" hidden>
+          <label class="thickness-row" for="line-width"><span data-zh="线条粗细（像素）">Line thickness (px)</span><input id="line-width" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="2" value="1" aria-label="Divider line thickness in pixels" data-zh-label="分割线粗细（像素）"></label>
+          <label class="line-option"><input id="half-edge" type="checkbox" checked><span data-zh="边缘分割线半宽">Half-width edge dividers</span></label>
+        </div>
+        <button class="reset" id="reset" type="button" data-zh="恢复原图配色">Reset colors</button>
+        <div class="export-area">
+          <div class="meta"><span>PNG · RGB</span><span id="dimensions">512 × 512 px</span></div>
+          <button id="export" type="button" disabled data-zh="导出并替换 PNG">Export &amp; replace PNG</button>
+          <p id="status" role="status">Loading the original texture…</p>
+        </div>
+      </aside>
+    </div>
+    <footer data-zh="导出会直接替换 USD 引用的 PNG。旧贴图先备份到 Materials/Textures/backups/，文件名包含时间戳。">Export replaces the PNG referenced by the USD. The previous texture is backed up first in Materials/Textures/backups/ with a timestamped filename.</footer>
+  </main>
+  <dialog id="color-picker" aria-labelledby="picker-title">
+    <h2 id="picker-title" data-zh="自定义颜色">Custom color</h2>
+    <div id="color-field" tabindex="0" role="group" aria-label="Saturation and brightness; use arrow keys" data-zh-label="饱和度和明度，可用方向键调整"><span id="color-cursor"></span></div>
+    <label for="color-hue" data-zh="色相">Hue</label>
+    <input id="color-hue" type="range" min="0" max="360" step="any" value="0">
+    <div class="picker-hex">
+      <span id="picker-preview" aria-hidden="true"></span>
+      <label for="picker-hex">HEX</label>
+      <input id="picker-hex" type="text" pattern="#[0-9a-fA-F]{6}" maxlength="7" spellcheck="false" aria-label="Custom HEX color" data-zh-label="自定义 HEX 色值">
+    </div>
+    <h2 data-zh="近期使用">Recent colors</h2>
+    <div id="recent-colors"></div>
+    <p id="recent-empty" data-zh="使用过的颜色将显示在这里。">Colors you use will appear here.</p>
+    <button id="picker-done" type="button" data-zh="完成">Done</button>
+  </dialog>
+  <script>
+    const preview = document.querySelector('#preview');
+    const tile = document.createElement('canvas');
+    const ctx = tile.getContext('2d', { willReadFrequently: true });
+    const colors = [0, 1, 2, 3].map(i => document.querySelector(`#color-${i}`));
+    const hexes = [0, 1, 2, 3].map(i => document.querySelector(`#hex-${i}`));
+    const status = document.querySelector('#status');
+    const exportButton = document.querySelector('#export');
+    const gridLines = document.querySelector('#grid-lines');
+    const cornerMarker = document.querySelector('#corner-marker');
+    const lineWidth = document.querySelector('#line-width');
+    const dividerOptions = document.querySelector('#divider-options');
+    const halfEdge = document.querySelector('#half-edge');
+    const languageControl = document.querySelector('#language');
+    const themeToggle = document.querySelector('#theme-toggle');
+    const translatedText = document.querySelectorAll('[data-zh]');
+    const translatedLabels = document.querySelectorAll('[data-zh-label]');
+    translatedText.forEach(element => { element.dataset.en = element.textContent; });
+    translatedLabels.forEach(element => { element.dataset.enLabel = element.getAttribute('aria-label'); });
+    const messages = {
+      en: {
+        title: 'Checker · Floor colors',
+        loading: 'Loading the original texture…',
+        ready: 'Original texture loaded. Export to apply your changes.',
+        saving: 'Saving PNG…',
+        exported: 'PNG replaced. Previous texture backup:',
+        saveError: 'Could not save PNG:',
+        error: 'Could not load the texture. Start the editor with checker_editor.py.',
+        single: 'Single tile · 2 m × 2 m',
+        tiled: '3 × 3 tiles · 6 m × 6 m',
+        themeToDark: 'Switch to dark mode',
+        themeToLight: 'Switch to light mode',
+      },
+      zh: {
+        title: 'Checker · 地板配色',
+        loading: '正在读取仓库中的原始贴图…',
+        ready: '已载入原图，点击导出即可应用修改。',
+        saving: '正在保存 PNG…',
+        exported: 'PNG 已替换。旧贴图备份：',
+        saveError: 'PNG 保存失败：',
+        error: '贴图读取失败，请通过同目录下的 checker_editor.py 启动工具。',
+        single: '单张贴图 · 2 m × 2 m',
+        tiled: '3 × 3 平铺 · 6 m × 6 m',
+        themeToDark: '切换到深色模式',
+        themeToLight: '切换到浅色模式',
+      },
+    };
+    let language = 'en', statusMessage = 'loading', statusDetail = '';
+    let original, defaults, defaultLineWidth = 1, defaultHalfEdge = true, repeat = 3;
+
+    function preferredTheme() {
+      try {
+        const saved = localStorage.getItem('checker-theme');
+        if (saved === 'light' || saved === 'dark') return saved;
+      } catch {}
+      return matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+    }
+
+    function syncThemeToggle() {
+      const dark = document.documentElement.dataset.theme === 'dark';
+      themeToggle.textContent = themeToggle.dataset[`${language}${dark ? 'Light' : 'Dark'}`];
+      themeToggle.setAttribute('aria-label', messages[language][dark ? 'themeToLight' : 'themeToDark']);
+      themeToggle.dataset.zhLabel = messages.zh[dark ? 'themeToLight' : 'themeToDark'];
+      themeToggle.dataset.enLabel = messages.en[dark ? 'themeToLight' : 'themeToDark'];
+    }
+
+    function applyTheme(theme) {
+      document.documentElement.dataset.theme = theme;
+      try { localStorage.setItem('checker-theme', theme); } catch {}
+      syncThemeToggle();
+    }
+
+    applyTheme(preferredTheme());
+    themeToggle.addEventListener('click', () => {
+      applyTheme(document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark');
+    });
+
+    function syncDividerOptions() {
+      dividerOptions.hidden = !gridLines.checked;
+    }
+
+    function lineWidthMax() {
+      return Math.max(1, Math.floor(Math.min(tile.width || 512, tile.height || 512) / 4) || 32);
+    }
+
+    function parseLineWidth() {
+      const raw = String(lineWidth.value).trim();
+      if (raw === '') return 1;
+      const width = Math.round(Number(raw));
+      if (!Number.isFinite(width)) return 1;
+      return Math.max(1, Math.min(lineWidthMax(), width));
+    }
+
+    function clampLineWidth(value = lineWidth.value) {
+      const width = Math.max(1, Math.min(lineWidthMax(), Math.round(Number(value)) || 1));
+      lineWidth.value = String(width);
+      return width;
+    }
+    const rgb = hex => hex.match(/[0-9a-f]{2}/gi).map(n => parseInt(n, 16));
+    const toHex = pixel => '#' + Array.from(pixel).map(n => n.toString(16).padStart(2, '0')).join('');
+    const picker = document.querySelector('#color-picker');
+    const colorField = document.querySelector('#color-field');
+    const cursor = document.querySelector('#color-cursor');
+    const hue = document.querySelector('#color-hue');
+    const pickerHex = document.querySelector('#picker-hex');
+    const pickerPreview = document.querySelector('#picker-preview');
+    let activeColor = 0, saturation = 0, brightness = 1;
+    let recentColors = [];
+    try {
+      recentColors = JSON.parse(localStorage.getItem('checker-recent-colors') || '[]')
+        .filter(hex => typeof hex === 'string' && /^#[0-9a-f]{6}$/i.test(hex)).slice(0, 10);
+    } catch {}
+
+    function renderRecentColors() {
+      document.querySelector('#recent-colors').replaceChildren(...recentColors.map(hex => {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.style.backgroundColor = hex;
+        button.title = hex;
+        button.setAttribute('aria-label', hex);
+        button.addEventListener('click', () => { loadPickerColor(hex); applyPickerColor(); });
+        return button;
+      }));
+      document.querySelector('#recent-empty').hidden = recentColors.length > 0;
+    }
+
+    function rememberColor(hex) {
+      hex = hex.toUpperCase();
+      recentColors = [hex, ...recentColors.filter(color => color.toUpperCase() !== hex)].slice(0, 10);
+      try { localStorage.setItem('checker-recent-colors', JSON.stringify(recentColors)); } catch {}
+      renderRecentColors();
+    }
+
+    function updatePickerPreview(hex) {
+      pickerPreview.style.backgroundColor = hex;
+      pickerPreview.title = hex.toUpperCase();
+    }
+
+    function updatePickerCursor() {
+      colorField.style.backgroundColor = `hsl(${hue.value}, 100%, 50%)`;
+      cursor.style.left = `${saturation * 100}%`;
+      cursor.style.top = `${(1 - brightness) * 100}%`;
+    }
+
+    function loadPickerColor(hex) {
+      const [r, g, b] = rgb(hex).map(value => value / 255);
+      const max = Math.max(r, g, b), min = Math.min(r, g, b), delta = max - min;
+      const h = delta === 0 ? 0 : max === r ? ((g - b) / delta + 6) % 6 : max === g ? (b - r) / delta + 2 : (r - g) / delta + 4;
+      hue.value = h * 60;
+      saturation = max === 0 ? 0 : delta / max;
+      brightness = max;
+      pickerHex.value = hex.toUpperCase();
+      updatePickerPreview(hex);
+      updatePickerCursor();
+    }
+
+    function applyPickerColor() {
+      const channel = n => {
+        const k = (n + Number(hue.value) / 60) % 6;
+        return Math.round(255 * brightness * (1 - saturation * Math.max(0, Math.min(k, 4 - k, 1))));
+      };
+      const hex = toHex([channel(5), channel(3), channel(1)]);
+      colors[activeColor].value = hex;
+      colors[activeColor].dispatchEvent(new Event('input'));
+      pickerHex.value = hex.toUpperCase();
+      updatePickerPreview(hex);
+      updatePickerCursor();
+    }
+
+    function pickAt(event) {
+      const rect = colorField.getBoundingClientRect();
+      saturation = Math.max(0, Math.min(1, (event.clientX - rect.left) / rect.width));
+      brightness = 1 - Math.max(0, Math.min(1, (event.clientY - rect.top) / rect.height));
+      applyPickerColor();
+    }
+
+    colorField.addEventListener('pointerdown', event => {
+      colorField.setPointerCapture(event.pointerId);
+      pickAt(event);
+    });
+    colorField.addEventListener('pointermove', event => {
+      if (colorField.hasPointerCapture(event.pointerId)) pickAt(event);
+    });
+    colorField.addEventListener('keydown', event => {
+      if (!['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(event.key)) return;
+      event.preventDefault();
+      saturation = Math.max(0, Math.min(1, saturation + (event.key === 'ArrowRight' ? .01 : event.key === 'ArrowLeft' ? -.01 : 0)));
+      brightness = Math.max(0, Math.min(1, brightness + (event.key === 'ArrowUp' ? .01 : event.key === 'ArrowDown' ? -.01 : 0)));
+      applyPickerColor();
+    });
+    hue.addEventListener('input', applyPickerColor);
+    pickerHex.addEventListener('input', () => {
+      if (/^#[0-9a-f]{6}$/i.test(pickerHex.value)) {
+        colors[activeColor].value = pickerHex.value;
+        colors[activeColor].dispatchEvent(new Event('input'));
+        loadPickerColor(pickerHex.value);
+      }
+    });
+    pickerHex.addEventListener('change', () => { pickerHex.value = colors[activeColor].value.toUpperCase(); });
+    document.querySelector('#picker-done').addEventListener('click', () => picker.close());
+    picker.addEventListener('close', () => rememberColor(colors[activeColor].value));
+    renderRecentColors();
+
+    function setStatus(message, detail = '') {
+      statusMessage = message;
+      statusDetail = detail;
+      status.textContent = messages[language][message] + (detail ? ' ' + detail : '');
+    }
+
+    function updatePreviewLabel() {
+      document.querySelector('#preview-label').textContent = messages[language][repeat === 1 ? 'single' : 'tiled'];
+    }
+
+    languageControl.addEventListener('change', () => {
+      language = languageControl.value;
+      document.documentElement.lang = language === 'en' ? 'en' : 'zh-CN';
+      document.title = messages[language].title;
+      translatedText.forEach(element => { element.textContent = element.dataset[language]; });
+      translatedLabels.forEach(element => { element.setAttribute('aria-label', element.dataset[language === 'en' ? 'enLabel' : 'zhLabel']); });
+      syncThemeToggle();
+      setStatus(statusMessage, statusDetail);
+      updatePreviewLabel();
+    });
+
+    function render() {
+      if (!original) return;
+      const selected = colors.map(input => rgb(input.value));
+      const output = new ImageData(new Uint8ClampedArray(original.data), tile.width, tile.height);
+      const cellWidth = tile.width / 2, cellHeight = tile.height / 2;
+      const cornerSize = Math.round(Math.min(tile.width, tile.height) * 14 / 512);
+      const width = gridLines.checked ? parseLineWidth() : 1;
+      // Internal seams: `width` on each side (2W total). Half-edge mode keeps the
+      // tile border at W so adjacent tiles also meet at 2W; otherwise border is 2W.
+      const edgeWidth = halfEdge.checked ? width : width * 2;
+      for (let i = 0; i < output.data.length; i += 4) {
+        const x = (i / 4) % tile.width, y = Math.floor(i / 4 / tile.width);
+        const isMarker = cornerMarker.checked && Math.min(x, tile.width - 1 - x) + Math.min(y, tile.height - 1 - y) < cornerSize;
+        const index = isMarker ? 2 : (Math.floor(x / cellWidth) + Math.floor(y / cellHeight)) % 2;
+        output.data.set(selected[index], i);
+        if (gridLines.checked && !isMarker) {
+          const onInternal =
+            (x >= cellWidth - width && x < cellWidth + width) ||
+            (y >= cellHeight - width && y < cellHeight + width);
+          const onEdge =
+            x < edgeWidth || x >= tile.width - edgeWidth ||
+            y < edgeWidth || y >= tile.height - edgeWidth;
+          if (onInternal || onEdge) output.data.set(selected[3], i);
+        }
+      }
+      ctx.putImageData(output, 0, 0);
+      preview.width = tile.width * repeat;
+      preview.height = tile.height * repeat;
+      const view = preview.getContext('2d');
+      view.fillStyle = view.createPattern(tile, 'repeat');
+      view.fillRect(0, 0, preview.width, preview.height);
+      updatePreviewLabel();
+    }
+
+    gridLines.addEventListener('change', () => { syncDividerOptions(); render(); });
+    lineWidth.addEventListener('input', () => {
+      lineWidth.value = lineWidth.value.replace(/\D/g, '').slice(0, 2);
+      render();
+    });
+    lineWidth.addEventListener('change', () => { clampLineWidth(); render(); });
+    lineWidth.addEventListener('blur', () => { clampLineWidth(); render(); });
+    halfEdge.addEventListener('change', render);
+    cornerMarker.addEventListener('change', render);
+    colors.forEach((input, i) => {
+      input.addEventListener('click', () => { activeColor = i; loadPickerColor(input.value); picker.showModal(); });
+      input.addEventListener('input', () => { input.style.backgroundColor = input.value; hexes[i].value = input.value.toUpperCase(); render(); });
+      hexes[i].addEventListener('input', () => {
+        if (/^#[0-9a-f]{6}$/i.test(hexes[i].value)) { input.value = hexes[i].value; input.style.backgroundColor = input.value; render(); }
+      });
+      hexes[i].addEventListener('change', () => {
+        if (/^#[0-9a-f]{6}$/i.test(hexes[i].value)) rememberColor(input.value);
+        hexes[i].value = input.value.toUpperCase();
+      });
+    });
+    document.querySelectorAll('[data-repeat]').forEach(button => button.addEventListener('click', () => {
+      repeat = Number(button.dataset.repeat);
+      document.querySelectorAll('[data-repeat]').forEach(item => item.setAttribute('aria-pressed', String(item === button)));
+      render();
+    }));
+    document.querySelector('#reset').addEventListener('click', () => {
+      if (!defaults) return;
+      defaults.forEach((hex, i) => { colors[i].value = hex; colors[i].style.backgroundColor = hex; hexes[i].value = hex.toUpperCase(); });
+      clampLineWidth(defaultLineWidth);
+      halfEdge.checked = defaultHalfEdge;
+      render();
+    });
+    exportButton.addEventListener('click', () => {
+      exportButton.disabled = true;
+      setStatus('saving');
+      tile.toBlob(async blob => {
+        try {
+          if (!blob) throw new Error('PNG encoding failed.');
+          const response = await fetch('/save-texture', { method: 'POST', headers: { 'Content-Type': 'image/png' }, body: blob });
+          const result = await response.json();
+          if (!response.ok) throw new Error(result.error || response.statusText);
+          setStatus('exported', result.backup);
+        } catch (error) {
+          setStatus('saveError', error.message);
+        } finally {
+          exportButton.disabled = false;
+        }
+      }, 'image/png');
+    });
+
+    const image = new Image();
+    image.onload = () => {
+      tile.width = image.naturalWidth;
+      tile.height = image.naturalHeight;
+      ctx.drawImage(image, 0, 0);
+      original = ctx.getImageData(0, 0, tile.width, tile.height);
+      const sample = (x, y) => original.data.slice((y * tile.width + x) * 4, (y * tile.width + x) * 4 + 3);
+      const a = toHex(sample(tile.width / 4 | 0, tile.height / 4 | 0));
+      const b = toHex(sample(tile.width * 3 / 4 | 0, tile.height / 4 | 0));
+      const marker = toHex(sample(2, 2));
+      const line = toHex(sample(tile.width / 2 - 1, tile.height / 4 | 0));
+      cornerMarker.checked = marker !== a || toHex(sample(tile.width - 3, 2)) !== b;
+      gridLines.checked = line !== a || toHex(sample(tile.width / 2, tile.height / 4 | 0)) !== b;
+      let detectedWidth = 1;
+      let detectedHalfEdge = true;
+      if (gridLines.checked) {
+        const midY = tile.height / 4 | 0;
+        const half = tile.width / 2;
+        const limit = Math.floor(Math.min(tile.width, tile.height) / 4);
+        let left = 0;
+        while (left < limit && toHex(sample(half - 1 - left, midY)) === line) left++;
+        detectedWidth = Math.max(1, left);
+        let edgeStrip = 0;
+        while (edgeStrip < limit && toHex(sample(edgeStrip, midY)) === line) edgeStrip++;
+        // Edge ≈ W → half-edge; edge ≈ 2W → full-edge.
+        detectedHalfEdge = edgeStrip <= detectedWidth;
+      }
+      defaultLineWidth = clampLineWidth(detectedWidth);
+      defaultHalfEdge = detectedHalfEdge;
+      halfEdge.checked = detectedHalfEdge;
+      syncDividerOptions();
+      defaults = [a, b, cornerMarker.checked ? marker : '#76b900', gridLines.checked ? line : '#646a5f'];
+      defaults.forEach((hex, i) => { colors[i].value = hex; colors[i].style.backgroundColor = hex; hexes[i].value = hex.toUpperCase(); });
+      document.querySelector('#dimensions').textContent = `${tile.width} × ${tile.height} px`;
+      render();
+      exportButton.disabled = false;
+      setStatus('ready');
+    };
+    image.onerror = () => { setStatus('error'); };
+    image.src = '/texture.png';
+  </script>
+</body>
+</html>

@@ -4,8 +4,8 @@
 
 """Shared buffer and quaternion helpers for the browser viewer.
 
-Isaac Lab 3.x stores quaternions as ``(x, y, z, w)``. Viser and the URDF
-poser in this package use ``(w, x, y, z)``. Articulation buffers are
+Isaac Lab 3.x stores quaternions as ``(x, y, z, w)``. MuJoCo and mjviser
+use ``(w, x, y, z)``. Articulation buffers are
 ``ProxyArray`` objects, so callers index ``.torch`` explicitly.
 """
 

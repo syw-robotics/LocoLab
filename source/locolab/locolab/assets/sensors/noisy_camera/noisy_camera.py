@@ -72,7 +72,7 @@ class NoisyCameraMixin:  # as a subclass of SensorBase
         # apply the noise pipeline to the initialized output buffers for noised output
         for data_type in self.cfg.data_types:
             self._data.output[f"{data_type}_noised"] = self.apply_noise_pipeline(
-                self._data.output[data_type], env_ids=self._ALL_INDICES, data_type=data_type
+                self._data.output[data_type].torch, env_ids=self._ALL_INDICES, data_type=data_type
             )
 
     def apply_noise_pipeline(
@@ -114,7 +114,7 @@ class NoisyCameraMixin:  # as a subclass of SensorBase
         """Apply the noise pipeline to all data types."""
         for data_type in self.cfg.data_types:
             self._data.output[f"{data_type}_noised"][env_ids] = self.apply_noise_pipeline(
-                self._data.output[data_type][env_ids], env_ids=env_ids, data_type=data_type
+                self._data.output[data_type].torch[env_ids], env_ids=env_ids, data_type=data_type
             )
 
     def reset_noise_pipeline(self, env_ids: Sequence[int] | None = None):

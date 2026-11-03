@@ -64,7 +64,6 @@ UNITREE_GO2_CFG = LocoLabArticulationCfg(
         keep_fixed_pattern=r".*_foot_joint$",
         honor_dont_collapse=False,  # we kept fixed joint pattern explicitly already
     ),
-    source_asset=_GO2_SOURCE_URDF,
     init_state=ArticulationCfg.InitialStateCfg(
         pos=(0.0, 0.0, 0.4),
         joint_pos={

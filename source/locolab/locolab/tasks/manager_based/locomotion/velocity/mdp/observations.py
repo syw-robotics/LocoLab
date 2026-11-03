@@ -186,9 +186,11 @@ class delayed_visualizable_image(ManagerTermBase):
             raise NotImplementedError("Only uniform delayed-frame sampling is supported.")
         ids = (
             torch.arange(self._num_envs, device=self._device)
-            if env_ids is None
+            if env_ids is None or isinstance(env_ids, slice)
             else torch.as_tensor(env_ids, device=self._device, dtype=torch.long)
         )
+        if isinstance(env_ids, slice):
+            ids = ids[env_ids]
         min_delay, max_delay = self.delayed_frame_ranges
         self._num_delayed_frames[ids] = torch.randint(
             min_delay,

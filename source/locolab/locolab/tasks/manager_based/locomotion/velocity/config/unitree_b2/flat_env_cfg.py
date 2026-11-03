@@ -116,7 +116,10 @@ class B2FlatEnvCfg(ManagerBasedRLEnvCfg):
         self.sim.render_interval = self.decimation
         self.sim.physics_material = self.scene.terrain.physics_material
         # physics settings
-        set_locomotion_physics(self.sim, rigid_patch_count=2**16, njmax=128, nconmax=24)
+        set_locomotion_physics(
+            self.sim, rigid_patch_count=2**16,
+            num_substeps=1, cone="elliptic", impratio=5.0, njmax=128, nconmax=24
+        )
         # disable self collisions
         set_self_collisions(self.scene.robot.spawn, False)
         # barely keeping feet goes faster; keeping calf is safer

@@ -12,6 +12,7 @@ import argparse
 import os
 import sys
 
+from locolab.utils.mdp_backend import add_mdp_backend_arg, apply_mdp_backend, make_mdp_env
 from locolab.utils.startup import (
     PLAY_NUM_STAGES,
     add_motion_file_arg,
@@ -19,6 +20,7 @@ from locolab.utils.startup import (
     loading_screen,
     prepend_motion_file_hydra_override,
     report_run_summary,
+    restore_motion_file,
 )
 from locolab.utils.viewer import add_play_viewer_args, open_play_viewer, prepare_play_viewer
 
@@ -52,6 +54,7 @@ parser.add_argument("--realtime", action="store_true", default=False, help="Run 
 # for viser remote web viewer
 add_play_viewer_args(parser)
 add_motion_file_arg(parser)
+add_mdp_backend_arg(parser)
 # append RSL-RL cli arguments
 cli_args.add_rsl_rl_args(parser)
 # append simulation launcher cli args
@@ -76,7 +79,6 @@ installed_version = metadata.version("rsl-rl-lib")
 
 import time
 
-import gymnasium as gym
 import locolab.tasks  # noqa: F401
 import torch
 from rsl_rl.runners import DistillationRunner, OnPolicyRunner
@@ -102,6 +104,7 @@ def main():
     """Play with RSL-RL agent."""
     motion_overrides = prepend_motion_file_hydra_override(args_cli.motion_file, hydra_args)
     env_cfg, agent_cfg = resolve_task_config(args_cli.task, args_cli.agent, overrides=motion_overrides)
+    env_cfg = apply_mdp_backend(env_cfg, args_cli.mdp_backend)
     # grab task name for checkpoint path
     task_name = args_cli.task.split(":")[-1]
     train_task_name = task_name.replace("-Play", "")
@@ -133,6 +136,7 @@ def main():
     else:
         resume_path = get_checkpoint_path(log_root_path, agent_cfg.load_run, agent_cfg.load_checkpoint)
 
+    restore_motion_file(env_cfg, resume_path, args_cli.motion_file, hydra_args)
     log_dir = os.path.dirname(resume_path)
 
     # set the log directory for the environment (works for all environment types)
@@ -162,7 +166,7 @@ def main():
 def _play(env_cfg, agent_cfg, resume_path, screen: LoadingScreen):
     """Play a checkpoint after the simulation runtime has started."""
     screen.stage("Creating environment")
-    env = gym.make(args_cli.task, cfg=env_cfg)
+    env = make_mdp_env(args_cli.task, env_cfg, args_cli.mdp_backend)
 
     if isinstance(env.unwrapped, DirectMARLEnv):
         env = multi_agent_to_single_agent(env)
@@ -208,6 +212,10 @@ def _play(env_cfg, agent_cfg, resume_path, screen: LoadingScreen):
         # export to JIT and ONNX
         export_policy_as_jit(policy_nn, normalizer=normalizer, path=export_model_dir, filename="policy.pt")
         export_policy_as_onnx(policy_nn, normalizer=normalizer, path=export_model_dir, filename="policy.onnx")
+
+    from locolab.utils.tracking_export import export_tracking_deployment
+
+    export_tracking_deployment(env.unwrapped, os.path.join(export_model_dir, "policy.onnx"), agent_cfg.clip_actions)
 
     dt = env.unwrapped.step_dt
 

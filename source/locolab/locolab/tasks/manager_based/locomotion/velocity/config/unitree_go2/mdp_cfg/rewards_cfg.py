@@ -184,16 +184,17 @@ class RoughRewardsCfg:
             "sensor_cfg": SceneEntityCfg("contact_forces", body_names=FOOT_LINK_NAMES),
         },
     )
-    #  feet_clearance_rough = RewTerm(
-    #      func=mdp.feet_clearance_rough,
-    #      weight=0.1,
-    #      params={
-    #          "std": 0.05,
-    #          "tanh_mult": 2.0,
-    #          "target_height": 0.1,
-    #          "asset_cfg": SceneEntityCfg("robot", body_names=FOOT_LINK_NAMES),
-    #      },
-    #  )
+    # Requires the per-foot scanners in Go2RoughSceneCfg: <foot body name>_height_scanner.
+    # feet_clearance_rough = RewTerm(
+    #     func=mdp.feet_clearance_rough,
+    #     weight=0.1,
+    #     params={
+    #         "std": 0.05,
+    #         "tanh_mult": 2.0,
+    #         "target_height": 0.1,
+    #         "asset_cfg": SceneEntityCfg("robot", body_names=FOOT_LINK_NAMES, preserve_order=True),
+    #     },
+    # )
 
     #  feet_clearance = RewTerm(
     #      func=mdp.feet_clearance,

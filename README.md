@@ -118,11 +118,94 @@ Run `python scripts/z_rl/train.py --help` (or `play.py`) for every flag. The tab
 | `--num_envs` | Number of parallel environments. |
 | `--device` | Simulation device, e.g. `cuda:0` or `cpu` (default `cuda:0` on Linux). |
 | `--physics` | Physics preset: `newton_mjwarp` (env default), `physx`, `ovphysx`, `isaacsim_physx`. Aliases and Hydra overrides are described in [`physics.py`](source/locolab/locolab/utils/physics.py). |
+| `--mdp_backend torch\|warp` | Environment runtime; defaults to `torch`. Warp supports Go2 Flat/Rough velocity, B2/G1 Flat velocity, G1 Flat tracking and their Play configs with Newton MJWarp. |
 | `--viz NAME` / `--visualizer NAME` | Isaac Lab visualizer preset(s). See [**`--viz` presets**](#viz--visualizer-presets) below. Comma-separated names run multiple viewers (e.g. `--viz kit,rerun`). Omit `--viz` for the task default (LocoLab velocity tasks: headless). `--video` still pulls in Kit recording via `viz:kit`. |
 | `--info` | Print startup logs to the terminal and skip hiding them behind the Loco Lab startup banner; also enables INFO-level SimulationApp logging. |
 | `--verbose` | Same banner behavior as `--info`, plus DEBUG-level SimulationApp logs. |
 | `--video` | Record video via Kit (`viz:kit`). |
 | `--video_length` | Steps per recorded clip (play; train also uses `--video_interval`). |
+
+`--mdp_backend warp` selects the full experimental environment and managers without a `-Warp` task suffix:
+
+```bash
+python scripts/z_rl/train.py --task Velocity-Flat-Go2 --mdp_backend warp
+python scripts/z_rl/train.py --task Velocity-Rough-Go2 --mdp_backend warp
+python scripts/z_rl/train.py --task Velocity-Flat-B2 --mdp_backend warp
+python scripts/z_rl/train.py --task Velocity-Flat-G1 --mdp_backend warp
+python scripts/z_rl/train.py --task Tracking-Flat-G1 --mdp_backend warp
+```
+
+Z-RL and RSL-RL train/play entrypoints share the selector. Supported configs are
+`Velocity-Flat-Go2`, `Velocity-Rough-Go2`, `Velocity-Flat-B2`, `Velocity-Flat-G1`,
+`Tracking-Flat-G1`, and their `-Play` variants. Other configs fail explicitly
+when Warp is selected. Newton MJWarp is required; the default Torch runtime keeps its existing
+physics choices. Add the flag explicitly for playback as well. The experimental runtime does not
+support video recording.
+
+Z-RL training and checkpoint playback are the validation path. In the current checkout, RSL-RL
+training stops before environment creation because its existing config sanitizer imports the removed
+`isaaclab_rl.rsl_rl.handle_deprecated_rsl_rl_cfg`; that separate compatibility issue is not changed here.
+
+LocoLab defaults Warp MDP managers to eager execution (`manager_call_config={"default": 1}`),
+because captured managers can skip lazy height-scanner updates. No environment variable is needed.
+An explicit config takes precedence over `MANAGER_CALL_CONFIG`; setting
+`MANAGER_CALL_CONFIG='{"default":2}'` opts into the experimental manager capture path.
+Newton's physics CUDA graphs are independent of this setting.
+G1 tracking supports explicit manager capture: link FK, velocity and contact-history caches refresh
+outside the graph before each replay. Changed input storage invalidates the affected graph.
+The G1 path also allows Scene writes/reset and interval-event/reset capture; startup randomization
+stays outside graphs. Command scheduling and environment reset selection still execute on the CPU,
+so this mode does not capture the entire environment step as one graph.
+Tracking command progression, reference
+alignment, diagnostic metrics, adaptive sampling/EMA, and reset-state preparation use Warp with persistent buffers.
+The motion loader and simulator state-writing APIs are retained. A CPU frame mirror detects clip ends;
+GPU frame readback occurs during sampling/state writes, not normal progression. Reset metrics share
+one persistent buffer and batched reduction; joint positions/velocities use the fused state writer.
+Eager tracking term launches cache argument packing while checking live storage and scalar parameters.
+Tracking action processing fuses scaling, clipping and encoder calibration once per control step;
+physics substeps reuse the calibrated target.
+Custom timers that can expire within an episode retain the original timer scheduling.
+Warp sampling preserves the distributions, not Torch's exact random sequence.
+See the [tracking setup notes](source/locolab/locolab/tasks/manager_based/locomotion/tracking/README.md)
+for motion files and CUDA library setup.
+
+Warp covers observations, per-frame noise/clip/scale and oldest-to-newest term-major history,
+processed-action delay, fixed encoder bias, rewards, terminations, reset/interval events, and
+manager CUDA graphs. Commands and terrain curriculum keep their Torch managers, as in
+`basic_loco_lib`. Startup gain/joint randomization delegates to the standard backend writers once;
+the event manager and scene use the upstream capture limitations. Missing custom terms are errors,
+rather than silently falling back to incompatible Torch callables. Z-RL retains history metadata
+for time slicing and symmetry augmentation. The regular task configs, reward weights, joint order,
+and terrain definitions are shared by both runtimes.
+
+Warp adapts a deep copy of the resolved config. The original task configs and Torch terms are
+unchanged; omitting `--mdp_backend warp` keeps the original Gym environment and Z-RL wrapper.
+The adapter lives outside the task registration tree and is imported only when Warp is selected.
+
+Run the same warmed-up benchmark for both backends (no policy inference or optimizer):
+
+```bash
+python scripts/benchmark_mdp.py --task Velocity-Flat-Go2 --mdp_backend torch --num_envs 1024 --viz none
+python scripts/benchmark_mdp.py --task Velocity-Flat-Go2 --mdp_backend warp --num_envs 1024 --viz none --check
+# Repeat with --task Velocity-Rough-Go2.
+```
+
+`--check` compares live observation frames, stateless rewards, and terminations with the Torch
+functions on the same physical state. Regression tests additionally cover delayed targets,
+encoder bias, history/noise, partial resets, action smoothness, and graph replay after input changes.
+The benchmark reports five batches of 100 steps after 50 warmup steps; faster environment steps
+do not imply identical random trajectories or establish training convergence.
+
+RTX 4090 capture-mode benchmark at 1024 environments (zero actions, Newton MJWarp, headless):
+
+| Task | Torch step | Warp step | Throughput ratio |
+|------|------------|-----------|------------------|
+| Go2 Flat | 6.30 ms | 4.55 ms | 1.38x |
+| Go2 Rough | 7.04 ms | 5.91 ms | 1.19x |
+
+Live checks passed for 34 Flat and 36 Rough observation/reward/termination terms. Both tasks
+captured nine action, observation, reward, and termination stages, including resets. These figures
+measure environment stepping; PPO policy inference and optimization are excluded.
 
 **Play-only**
 
@@ -160,6 +243,11 @@ python scripts/z_rl/train.py --task=... visualizer=rerun   # Hydra-style overrid
 ```
 
 **Z-RL train** (see `scripts/z_rl/cli_args.py`): `--resume`, `--load_run`, `--checkpoint`, `--experiment_name`, `--run_name`, `--max_iterations`, `--logger`, `--distributed`, `--teacher_checkpoint` (distillation).
+
+Z-RL and RSL-RL run directories use `<timestamp>_<resolved-physics>`, with the motion
+filename stem appended for single-clip tracking. `--run_name` adds a custom suffix,
+for example, `<timestamp>_newton_mjwarp_walk_trial1`. Automatic PhysX selection is
+recorded as the actual backend (`ovphysx` or `isaacsim_physx`).
 
 Comet logging (optional): install `pip install comet-ml`, set `COMET_API_KEY` (and optionally `COMET_WORKSPACE`), then train with `--logger comet --log_project_name <project>`. Local TensorBoard logs are retained. Agent configs also accept `logger = {"class_name": "CometLogWriter", "project_name": "<project>"}`.
 

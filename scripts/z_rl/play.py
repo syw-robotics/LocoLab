@@ -8,6 +8,7 @@
 import argparse
 import sys
 
+from locolab.utils.mdp_backend import add_mdp_backend_arg, apply_mdp_backend, make_mdp_env, wrap_z_rl_env
 from locolab.utils.remote_checkpoint import download_remote_checkpoint
 from locolab.utils.startup import (
     PLAY_NUM_STAGES,
@@ -16,6 +17,7 @@ from locolab.utils.startup import (
     loading_screen,
     prepend_motion_file_hydra_override,
     report_run_summary,
+    restore_motion_file,
 )
 from locolab.utils.viewer import add_play_viewer_args, open_play_viewer, prepare_play_viewer
 
@@ -50,6 +52,7 @@ parser.add_argument("--realtime", action="store_true", default=False, help="Run 
 add_play_viewer_args(parser)
 # for selecting any4hdmi motion file
 add_motion_file_arg(parser)
+add_mdp_backend_arg(parser)
 # append Z-RL cli arguments
 cli_args.add_z_rl_args(parser)
 # append simulation launcher cli args
@@ -70,14 +73,13 @@ sys.argv = [sys.argv[0]] + hydra_args
 import os
 import time
 
-import gymnasium as gym
 import torch
 from z_rl.runners import DistillationRunner, OnPolicyRunner
 
 from isaaclab.envs.utils.video_recorder_cfg import VideoRecorderCfg
 from isaaclab.utils.assets import retrieve_file_path
 
-from z_rl.adaptor.isaaclab import ZRlBaseRunnerCfg, ZRlVecEnvWrapper
+from z_rl.adaptor.isaaclab import ZRlBaseRunnerCfg
 from isaaclab_rl.utils.pretrained_checkpoint import get_published_pretrained_checkpoint
 
 import locolab.tasks  # noqa: F401
@@ -89,6 +91,7 @@ def main():
     """Play with Z-RL agent."""
     motion_overrides = prepend_motion_file_hydra_override(args_cli.motion_file, hydra_args)
     env_cfg, agent_cfg = resolve_task_config(args_cli.task, args_cli.agent, overrides=motion_overrides)
+    env_cfg = apply_mdp_backend(env_cfg, args_cli.mdp_backend)
     # grab task name for checkpoint path
     task_name = args_cli.task.split(":")[-1]
     train_task_name = task_name.replace("-Play", "")
@@ -147,6 +150,7 @@ def main():
             else:
                 resume_path = get_checkpoint_path(log_root_path, agent_cfg.load_run, agent_cfg.load_checkpoint)
 
+    restore_motion_file(env_cfg, resume_path, args_cli.motion_file, hydra_args)
     log_dir = os.path.dirname(resume_path)
 
     # set the log directory for the environment (works for all environment types)
@@ -176,8 +180,8 @@ def main():
 def _play(env_cfg, agent_cfg, resume_path, load_cfg, screen: LoadingScreen):
     """Play a checkpoint after the simulation runtime has started."""
     screen.stage("Creating environment")
-    env = gym.make(args_cli.task, cfg=env_cfg)
-    env = ZRlVecEnvWrapper(env, clip_actions=agent_cfg.clip_actions)
+    env = make_mdp_env(args_cli.task, env_cfg, args_cli.mdp_backend)
+    env = wrap_z_rl_env(env, clip_actions=agent_cfg.clip_actions)
 
     screen.stage("Loading policy")
     print(f"[INFO]: Loading model checkpoint from: {resume_path}")
@@ -211,6 +215,11 @@ def _play(env_cfg, agent_cfg, resume_path, load_cfg, screen: LoadingScreen):
             runner.export_policy_to_onnx(path=export_model_dir, filename="policy.onnx")
         finally:
             torch.set_default_device(default_device)
+
+    from locolab.utils.tracking_export import export_tracking_deployment
+
+    if args_cli.export_onnx:
+        export_tracking_deployment(env.unwrapped, os.path.join(export_model_dir, "policy.onnx"), agent_cfg.clip_actions)
 
     dt = env.unwrapped.step_dt
     viewer = open_play_viewer(env, args_cli)

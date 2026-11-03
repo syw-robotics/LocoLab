@@ -8,6 +8,7 @@
 import argparse
 import sys
 
+from locolab.utils.mdp_backend import add_mdp_backend_arg, apply_mdp_backend, make_mdp_env, wrap_z_rl_env
 from locolab.utils.startup import (
     TRAIN_NUM_STAGES,
     add_motion_file_arg,
@@ -15,6 +16,7 @@ from locolab.utils.startup import (
     loading_screen,
     prepend_motion_file_hydra_override,
     report_run_summary,
+    set_motion_run_name,
 )
 
 from isaaclab.app import add_launcher_args, launch_simulation
@@ -49,6 +51,7 @@ parser.add_argument(
 parser.add_argument("--debug", action="store_true", default=False, help="Enable debug mode.")
 parser.add_argument("--cprofile", action="store_true", default=False, help="Enable cProfile.")
 add_motion_file_arg(parser)
+add_mdp_backend_arg(parser)
 
 # append Z-RL cli arguments
 cli_args.add_z_rl_args(parser)
@@ -68,15 +71,12 @@ import os
 import time
 from datetime import datetime
 
-import gymnasium as gym
 import torch
 from z_rl.runners import DistillationRunner, OnPolicyRunner
 
 from isaaclab.envs import ManagerBasedRLEnvCfg
 from isaaclab.envs.utils.video_recorder_cfg import VideoRecorderCfg
 from isaaclab.utils.io import dump_yaml
-
-from z_rl.adaptor.isaaclab import ZRlVecEnvWrapper
 
 import locolab.tasks  # noqa: F401
 from isaaclab_tasks.utils import get_checkpoint_path
@@ -109,6 +109,7 @@ def main():
     """Train with Z-RL agent."""
     motion_overrides = prepend_motion_file_hydra_override(args_cli.motion_file, hydra_args)
     env_cfg, agent_cfg = resolve_task_config(args_cli.task, args_cli.agent, overrides=motion_overrides)
+    env_cfg = apply_mdp_backend(env_cfg, args_cli.mdp_backend)
     # override configurations with non-hydra CLI arguments
     agent_cfg = cli_args.update_z_rl_cfg(agent_cfg, args_cli)
 
@@ -151,9 +152,6 @@ def main():
     # The Ray Tune workflow extracts experiment name using the logging line below, hence, do not
     # change it (see PR #2346, comment-2819298849)
     print(f"Exact experiment name requested from command line: {log_dir}")
-    if agent_cfg.run_name:
-        log_dir += f"_{agent_cfg.run_name}"
-    log_dir = os.path.join(log_root_path, log_dir)
 
     # set the IO descriptors export flag if requested
     if isinstance(env_cfg, ManagerBasedRLEnvCfg):
@@ -163,15 +161,11 @@ def main():
             "IO descriptors are only supported for manager based RL environments. No IO descriptors will be exported."
         )
 
-    # set the log directory for the environment (works for all environment types)
-    env_cfg.log_dir = log_dir
-
     # Video recorders must exist before launch so Kit can be started for capture.
     if args_cli.video:
         env_cfg.video_recorders = [
             VideoRecorderCfg(
                 source="viz:kit",
-                output_dir=os.path.join(log_dir, "videos", "train"),
                 video_length=args_cli.video_length,
                 video_interval=args_cli.video_interval,
             )
@@ -186,6 +180,11 @@ def main():
     with loading_screen(args_cli, num_stages=TRAIN_NUM_STAGES) as screen:
         screen.stage("Launching simulation")
         with launch_simulation(env_cfg, args_cli):
+            set_motion_run_name(env_cfg, agent_cfg, args_cli.mdp_backend)
+            log_dir = os.path.join(log_root_path, f"{log_dir}_{agent_cfg.run_name}")
+            env_cfg.log_dir = log_dir
+            if args_cli.video:
+                env_cfg.video_recorders[0].output_dir = os.path.join(log_dir, "videos", "train")
             if args_cli.distributed:
                 agent_cfg.device = env_cfg.sim.device
             report_run_summary(screen, args_cli, env_cfg, library="z_rl", action="train")
@@ -196,8 +195,8 @@ def _train(env_cfg, agent_cfg, log_dir, resume_path, screen: LoadingScreen):
     """Run training after the simulation runtime has started."""
     start_time = time.time()
     screen.stage("Creating environment")
-    env = gym.make(args_cli.task, cfg=env_cfg)
-    env = ZRlVecEnvWrapper(env, clip_actions=agent_cfg.clip_actions)
+    env = make_mdp_env(args_cli.task, env_cfg, args_cli.mdp_backend)
+    env = wrap_z_rl_env(env, clip_actions=agent_cfg.clip_actions)
 
     screen.stage("Preparing agent")
     # create runner from z-rl

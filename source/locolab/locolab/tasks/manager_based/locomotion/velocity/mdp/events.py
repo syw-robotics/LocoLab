@@ -206,11 +206,15 @@ def randomize_ray_offsets(
             f"[randomize_ray_offsets] Distribution '{distribution}' is not implemented yet. Only support 'uniform' now"
         )
 
-    num_env_ids = env.scene.num_envs if env_ids is None else len(env_ids)
+    if env_ids is None:
+        env_ids = slice(None)
+    num_env_ids = len(range(env.scene.num_envs)[env_ids]) if isinstance(env_ids, slice) else len(env_ids)
     # extract the used quantities (to enable type-hinting)
     sensor: RayCaster | MultiMeshRayCaster = env.scene[asset_cfg.name]
-    ray_starts = sensor.ray_starts.torch[env_ids]  # (num_envs, num_rays, 3)
-    ray_directions = sensor.ray_directions.torch[env_ids]  # (num_envs, num_rays, 3)
+    starts = getattr(sensor.ray_starts, "torch", sensor.ray_starts)
+    directions = getattr(sensor.ray_directions, "torch", sensor.ray_directions)
+    ray_starts = starts[env_ids]  # (num_envs, num_rays, 3)
+    ray_directions = directions[env_ids]  # (num_envs, num_rays, 3)
     # sample from given range
     range_list = [offset_pose_ranges.get(key, (0.0, 0.0)) for key in ["x", "y", "z", "roll", "pitch", "yaw"]]
     ranges = torch.tensor(range_list, device=ray_starts.device)  # (6, 2)
@@ -234,8 +238,8 @@ def randomize_ray_offsets(
     ray_starts += position_samples.reshape(ray_starts.shape)
     ray_directions = math_utils.quat_apply(rotation_samples.reshape(*ray_directions.shape[:-1], 4), ray_directions)
 
-    sensor.ray_starts.torch[env_ids] = ray_starts
-    sensor.ray_directions.torch[env_ids] = ray_directions
+    starts[env_ids] = ray_starts
+    directions[env_ids] = ray_directions
 
 
 def randomize_encoder_bias(

@@ -67,8 +67,10 @@ _drop_prebundle_modules()
 importlib.invalidate_caches()
 try:
     import viser
-    from viser.extras import ViserUrdf
+    from mjviser import ViserMujocoScene
+    from mjviser.conversions import group_geoms_by_visual_compat, merge_geoms, merge_geoms_hull
+    from viser.transforms import SO3
 finally:
     sys.path[:0] = _prebundle
 
-__all__ = ["ViserUrdf", "viser"]
+__all__ = ["SO3", "ViserMujocoScene", "group_geoms_by_visual_compat", "merge_geoms", "merge_geoms_hull", "viser"]
