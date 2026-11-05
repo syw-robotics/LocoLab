@@ -135,7 +135,59 @@ class EdgeCylinder(VirtualObstacleBase):
 
         edges = mesh.face_adjacency_edges[keep]
         vertices = mesh.vertices
-        return np.hstack((vertices[edges[:, 0]], vertices[edges[:, 1]]))
+        coordinates = np.hstack((vertices[edges[:, 0]], vertices[edges[:, 1]]))
+        if min_nz is None:
+            return coordinates
+        return self._exposed_surface_edges(mesh, coordinates)
+
+    @staticmethod
+    def _exposed_surface_edges(mesh: trimesh.Trimesh, edges: np.ndarray) -> np.ndarray:
+        """Remove assembly seams while retaining exposed lips at every elevation.
+
+        Split at nearby mesh vertices first: a box edge can be only partly covered
+        by its neighbor. Probe both sides of each piece against the complete mesh,
+        rather than treating each box's sharp edges as exposed terrain edges.
+        This runs once during obstacle generation, never during penetration queries.
+        """
+        epsilon = 1e-4
+        pieces = []
+        tree = mesh.triangles_tree
+        for edge in edges:
+            start, end = edge[:3], edge[3:]
+            direction = end - start
+            length = np.linalg.norm(direction)
+            if np.linalg.norm(direction[:2]) < epsilon:
+                continue
+            bounds = np.r_[np.minimum(start, end) - epsilon, np.maximum(start, end) + epsilon]
+            neighbors = list(tree.intersection(bounds))
+            vertices = mesh.triangles[neighbors].reshape(-1, 3)
+            fractions = np.clip((vertices - start) @ direction / length**2, 0.0, 1.0)
+            fractions = np.unique(np.r_[0.0, fractions, 1.0])
+            for left, right in zip(fractions[:-1], fractions[1:]):
+                if (right - left) * length > epsilon:
+                    pieces.append(np.r_[start + left * direction, start + right * direction])
+        if not pieces:
+            return np.empty((0, 6), dtype=np.float32)
+        pieces = np.asarray(pieces)
+        midpoints = (pieces[:, :3] + pieces[:, 3:]) * 0.5
+        directions = pieces[:, 3:] - pieces[:, :3]
+        sideways = np.column_stack((-directions[:, 1], directions[:, 0], np.zeros(len(pieces))))
+        sideways *= epsilon / np.linalg.norm(sideways, axis=1, keepdims=True)
+        origins = np.concatenate((midpoints + sideways, midpoints - sideways))
+        origins[:, 2] -= epsilon
+        ray_directions = np.zeros_like(origins)
+        ray_directions[:, 2] = 1.0
+        _, ray_ids, face_ids = mesh.ray.intersects_location(origins, ray_directions, multiple_hits=True)
+        # Signed exits minus entries identify solid material at the edge height.
+        # An overhead floating slab contributes an entry and exit that cancel;
+        # it must not hide the lower tread's exposed lip.
+        winding = np.zeros(len(origins), dtype=np.int32)
+        np.add.at(
+            winding, ray_ids, np.sign(mesh.face_normals[face_ids, 2]).astype(np.int32)
+        )
+        inside = (winding > 0).reshape(2, -1)
+        keep = inside[0] != inside[1]
+        return pieces[keep]
 
     def _filter_edges_by_direction(self, edge_coords: np.ndarray) -> np.ndarray:
         """Filter raw sharp edges by direction before detector-specific edge processing."""
