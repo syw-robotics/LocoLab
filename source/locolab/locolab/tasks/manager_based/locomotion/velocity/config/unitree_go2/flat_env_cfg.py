@@ -151,3 +151,4 @@ class Go2FlatEnvCfg_PLAY(Go2FlatEnvCfg):
         self.scene.num_envs = 10
         self.scene.env_spacing = 2.5
         self.commands.base_velocity.debug_vis = True
+        self.events.push_robot_by_setting_velocity.params["debug_vis"] = True

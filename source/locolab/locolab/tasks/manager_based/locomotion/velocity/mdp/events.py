@@ -23,9 +23,10 @@ from typing import TYPE_CHECKING, Any, Sequence, Literal
 import torch
 
 import isaaclab.utils.math as math_utils
+from isaaclab.envs.mdp.events import push_by_setting_velocity as _push_by_setting_velocity
 from isaaclab.managers import SceneEntityCfg
-from isaaclab.sensors.ray_caster import RayCaster, MultiMeshRayCaster
 
+from locolab.utils.debug_viz.push.push_debug_vis_cfg import PushDebugVisCfg
 from locolab.utils.terrains.terrain_utils import (
     build_terrain_reset_range_tables,
     get_terrain_mask,
@@ -35,6 +36,7 @@ from locolab.utils.terrains.terrain_utils import (
 if TYPE_CHECKING:
     from isaaclab.assets import Articulation
     from isaaclab.envs import ManagerBasedEnv
+    from isaaclab.sensors.ray_caster import RayCaster, MultiMeshRayCaster
 
 logger = logging.getLogger(__name__)
 
@@ -42,6 +44,33 @@ logger = logging.getLogger(__name__)
 _UNKNOWN_TERRAIN_RESET_WARNINGS: set[tuple[str, ...]] = set()
 
 _RangeDict = dict[str, tuple[float, float]]
+
+
+def push_by_setting_velocity(
+    env: ManagerBasedEnv,
+    env_ids: torch.Tensor | slice | None,
+    velocity_range: _RangeDict,
+    asset_cfg: SceneEntityCfg = SceneEntityCfg("robot"),
+    debug_vis: bool = False,
+    debug_vis_cfg: PushDebugVisCfg | None = None,
+):
+    """Apply a velocity increment, optionally showing it as a transient world-frame arrow."""
+    # Global interval events pass None; tensor[None] would add a batch dimension.
+    if env_ids is None:
+        env_ids = slice(None)
+    if not debug_vis:
+        _push_by_setting_velocity(env, env_ids, velocity_range, asset_cfg)
+        return
+
+    from locolab.utils.debug_viz.push.push_debug_vis import get_push_debug_vis
+
+    asset = env.scene[asset_cfg.name]
+    velocity = asset.data.root_vel_w.torch[env_ids]
+    delta = math_utils.sample_uniform_from_ranges(
+        velocity_range, ("x", "y", "z", "roll", "pitch", "yaw"), velocity.shape[:-1], device=asset.device
+    )
+    asset.write_root_velocity_to_sim_index(root_velocity=velocity + delta, env_ids=env_ids)
+    get_push_debug_vis(env, asset_cfg.name, debug_vis_cfg).record(env_ids, delta)
 
 
 # ===== root reset by terrain =====
@@ -180,6 +209,11 @@ def register_virtual_obstacle_to_sensor(
         if not hasattr(sensor, "register_virtual_obstacles"):
             raise ValueError(f"Sensor {sensor_cfg.name} does not support virtual obstacles.")
         sensor.register_virtual_obstacles(virtual_obstacles, enabled_env_mask=enabled_env_mask)
+
+    # Startup runs after viewer initialization; terrain import can precede it.
+    for virtual_obstacle in virtual_obstacles.values():
+        if virtual_obstacle.cfg.debug_vis:
+            virtual_obstacle.visualize()
 
 
 # ===== ray cast camera =====

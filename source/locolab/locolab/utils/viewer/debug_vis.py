@@ -7,15 +7,20 @@
 Isaac's ``set_debug_vis`` updates viewport markers. Those markers are not part of
 the mjviser scene, so a headless browser never sees them. This module reads the same
 quantities and draws them in Viser: velocity arrows from a command term, ray-hit
-points from a caster such as a height scanner, and a frame at each terrain origin.
+points from a caster such as a height scanner, terrain-origin frames, and virtual
+obstacle edge cylinders and foot volume points.
 """
 
 from __future__ import annotations
 
+import inspect
+
 import numpy as np
 import trimesh
 
-from locolab.utils.markers import BLUE_RAY_CASTER_MARKER_CFG
+from locolab.assets.sensors.volume_points import VolumePoints
+from locolab.utils.debug_viz.markers import BLUE_RAY_CASTER_MARKER_CFG
+from locolab.utils.debug_viz.push.push_debug_vis import PushDebugVis, get_push_debug_vis
 
 from .utils import as_numpy, rotate_wxyz, xyzw_to_wxyz
 
@@ -54,12 +59,32 @@ def debug_sources(env) -> list[tuple[str, object]]:
                 continue
             if _drawable(obj):
                 found.append((str(name), obj))
+    terrain = getattr(scene, "terrain", None)
+    for name, obstacle in getattr(terrain, "virtual_obstacles", {}).items():
+        if hasattr(obstacle, "edges_pyt"):
+            found.append((f"virtual_obstacle/{name}", obstacle))
     manager = getattr(unwrapped, "command_manager", None)
     terms = getattr(manager, "_terms", None)
     if isinstance(terms, dict):
         for name, term in terms.items():
             if _drawable(term):
                 found.append((f"command/{name}", term))
+    manager = getattr(unwrapped, "event_manager", None)
+    if manager is not None:
+        for names in manager.active_terms.values():
+            for name in names:
+                cfg = manager.get_term_cfg(name)
+                if (
+                    getattr(cfg.func, "__name__", "") == "push_by_setting_velocity"
+                    and "debug_vis" in inspect.signature(cfg.func).parameters
+                ):
+                    asset_cfg = cfg.params.get("asset_cfg")
+                    obj = get_push_debug_vis(
+                        unwrapped, asset_cfg.name if asset_cfg is not None else "robot", cfg.params.get("debug_vis_cfg")
+                    )
+                    obj.params = cfg.params
+                    obj.set_debug_vis(cfg.params.get("debug_vis", False))
+                    found.append((f"event/{name}", obj))
     return found
 
 
@@ -76,10 +101,13 @@ class DebugScene:
         self._meshes = {
             "shaft": _unit_shaft(),
             "head": _unit_head(),
-            "point": trimesh.creation.icosphere(subdivisions=1, radius=1.0),
+            "point": trimesh.creation.icosphere(subdivisions=2, radius=1.0),
         }
 
-    def show(self, name: str, kind: str, positions, wxyzs, scales, color: tuple[int, int, int]) -> None:
+    def show(
+        self, name: str, kind: str, positions, wxyzs, scales, color: tuple[int, int, int],
+        opacity: float = 1.0, *, opacities=None,
+    ) -> None:
         batch = self._batches.get(name)
         if batch is None or batch.kind != kind:
             if batch is not None:
@@ -87,7 +115,7 @@ class DebugScene:
             mesh = self._meshes[kind]
             batch = _Batch(name, kind, np.asarray(mesh.vertices), np.asarray(mesh.faces))
             self._batches[name] = batch
-        batch.sync(self._server, positions, wxyzs, scales, color)
+        batch.sync(self._server, positions, wxyzs, scales, color, opacity, opacities=opacities)
 
     def show_frames(self, name: str, positions) -> None:
         points = np.asarray(positions, dtype=np.float32).reshape(-1, 3)
@@ -109,6 +137,35 @@ class DebugScene:
             return
         handle.batched_positions = points
         handle.batched_wxyzs = wxyz
+
+    def show_obstacle(self, label: str, obstacle) -> None:
+        """Upload static edge cylinders once, until their debug layer is cleared."""
+        name = f"{label}/edges"
+        if name in self._batches:
+            return
+        edges = as_numpy(obstacle.edges_pyt, slice(None)).reshape(-1, 6)
+        directions = edges[:, 3:] - edges[:, :3]
+        lengths = np.linalg.norm(directions, axis=1)
+        valid = lengths > 1e-8
+        if not np.any(valid):
+            return
+        lengths = lengths[valid]
+        directions = directions[valid] / lengths[:, None]
+        radius = obstacle.cfg.cylinder_radius
+        _, color = _sphere_style_from_marker_cfg(obstacle.cfg.visualizer, "cylinder", radius, (204, 25, 25))
+        marker = obstacle.cfg.visualizer.markers.get("cylinder")
+        material = getattr(marker, "visual_material", None)
+        opacity = float(getattr(material, "opacity", 0.5))
+        # The shared shaft mesh spans z=[0, 1], so position it at the edge start.
+        self.show(
+            name,
+            "shaft",
+            edges[valid, :3].astype(np.float32),
+            _quats_from_z(directions).astype(np.float32),
+            np.column_stack((np.full(len(lengths), radius), np.full(len(lengths), radius), lengths)).astype(np.float32),
+            color,
+            opacity=opacity,
+        )
 
     def set_ghost_hulls(self, enabled: bool) -> None:
         """Switch browser geometry only when mjviser's hull option changes."""
@@ -194,12 +251,18 @@ def draw_debug(scene: DebugScene, terms: list[tuple[str, object]], enabled: dict
             scene.hide(label)
             continue
         try:
-            if hasattr(obj, "motion") and hasattr(obj, "time_steps"):
+            if isinstance(obj, PushDebugVis):
+                _draw_push(scene, label, obj, selector)
+            elif hasattr(obj, "motion") and hasattr(obj, "time_steps"):
                 scene.show_motion(label, obj, selector)
             elif hasattr(obj, "vel_command_b"):
                 _draw_velocity(scene, label, obj, selector)
             elif hasattr(obj, "terrain_origins"):
                 _draw_terrain(scene, label, obj)
+            elif hasattr(obj, "edges_pyt"):
+                scene.show_obstacle(label, obj)
+            elif isinstance(obj, VolumePoints):
+                _draw_volume_points(scene, label, obj, selector)
             else:
                 _draw_rays(scene, label, obj, selector)
         except Exception as exc:
@@ -210,6 +273,8 @@ def draw_debug(scene: DebugScene, terms: list[tuple[str, object]], enabled: dict
 
 
 def _drawable(obj) -> bool:
+    if isinstance(obj, VolumePoints):
+        return True
     if hasattr(obj, "motion") and hasattr(obj, "time_steps"):
         return True
     if hasattr(obj, "vel_command_b"):
@@ -277,7 +342,26 @@ def _draw_velocity(scene: DebugScene, label: str, obj, selector) -> None:
     )
 
 
-def _draw_arrow(scene, name, origin, quat, xy, gain: float, color: tuple[int, int, int]) -> None:
+def _draw_push(scene, label, obj, selector) -> None:
+    opacity = as_numpy(obj.opacity(selector), slice(None))
+    active = opacity > 0.0
+    origin = as_numpy(obj.robot.data.root_link_pos_w, selector)[active]
+    velocity = as_numpy(obj.velocity_w, selector)[active]
+    quat = np.tile([1.0, 0.0, 0.0, 0.0], (len(velocity), 1))
+    scale = obj.cfg.visualizer_cfg.markers["arrow"].scale
+    # Match Newton's unit arrow: shaft/head radii are 0.2/0.4 times the marker's Y/Z scale.
+    _draw_arrow(
+        scene, f"{label}/push", origin, quat, velocity, scale[0],
+        _marker_color(obj, "visualizer_cfg", (51, 51, 229)), opacities=opacity[active],
+        shaft_radii=(scale[1] * 0.2, scale[2] * 0.2),
+        head_radii=(scale[1] * 0.4, scale[2] * 0.4),
+    )
+
+
+def _draw_arrow(
+    scene, name, origin, quat, xy, gain: float, color: tuple[int, int, int], *, opacities=None,
+    shaft_radii=(_SHAFT_RADIUS, _SHAFT_RADIUS), head_radii=(_HEAD_RADIUS, _HEAD_RADIUS),
+) -> None:
     speed = np.linalg.norm(xy, axis=1)
     count = len(speed)
     if count == 0:
@@ -285,8 +369,7 @@ def _draw_arrow(scene, name, origin, quat, xy, gain: float, color: tuple[int, in
         return
     direction_b = np.zeros((count, 3))
     moving = speed >= 1e-4
-    direction_b[moving, 0] = xy[moving, 0] / speed[moving]
-    direction_b[moving, 1] = xy[moving, 1] / speed[moving]
+    direction_b[moving, :xy.shape[1]] = xy[moving] / speed[moving, None]
     direction_b[~moving, 0] = 1.0
     direction_w = rotate_wxyz(quat, direction_b)
     direction_w /= np.maximum(np.linalg.norm(direction_w, axis=1, keepdims=True), 1e-8)
@@ -296,14 +379,15 @@ def _draw_arrow(scene, name, origin, quat, xy, gain: float, color: tuple[int, in
     wxyz = _quats_from_z(direction_w).astype(np.float32)
     shaft_pos = origin.astype(np.float32)
     head_pos = (origin + direction_w * shaft_len[:, None]).astype(np.float32)
-    shaft_scale = np.column_stack((np.full(count, _SHAFT_RADIUS), np.full(count, _SHAFT_RADIUS), shaft_len)).astype(
+    shaft_scale = np.column_stack((np.full(count, shaft_radii[0]), np.full(count, shaft_radii[1]), shaft_len)).astype(
         np.float32
     )
-    head_scale = np.column_stack((np.full(count, _HEAD_RADIUS), np.full(count, _HEAD_RADIUS), head_len)).astype(
+    head_scale = np.column_stack((np.full(count, head_radii[0]), np.full(count, head_radii[1]), head_len)).astype(
         np.float32
     )
-    scene.show(f"{name}/shaft", "shaft", shaft_pos, wxyz, shaft_scale, color)
-    scene.show(f"{name}/head", "head", head_pos, wxyz, head_scale, color)
+    style = {} if opacities is None else {"opacities": opacities}
+    scene.show(f"{name}/shaft", "shaft", shaft_pos, wxyz, shaft_scale, color, **style)
+    scene.show(f"{name}/head", "head", head_pos, wxyz, head_scale, color, **style)
 
 
 def _draw_rays(scene: DebugScene, label: str, obj, selector) -> None:
@@ -325,6 +409,29 @@ def _draw_rays(scene: DebugScene, label: str, obj, selector) -> None:
         np.full((count, 3), radius, dtype=np.float32),
         ray_color,
     )
+
+
+def _draw_volume_points(scene: DebugScene, label: str, obj: VolumePoints, selector) -> None:
+    data = obj.data
+    points = as_numpy(data.points_pos_w, selector).reshape(-1, 3)
+    offsets = as_numpy(data.penetration_offset, selector).reshape(-1, 3)
+    penetrated = np.linalg.norm(offsets, axis=1) > 0.0
+    finite = np.isfinite(points).all(axis=1)
+    for marker_name, mask, default_color in (
+        ("sphere", finite & ~penetrated, (0, 255, 0)),
+        ("sphere_penetrated", finite & penetrated, (255, 0, 0)),
+    ):
+        positions = points[mask].astype(np.float32)
+        radius, color = _sphere_style_from_marker_cfg(obj.cfg.visualizer_cfg, marker_name, 0.01, default_color)
+        count = len(positions)
+        scene.show(
+            f"{label}/{marker_name}",
+            "point",
+            positions,
+            np.tile(np.array([1.0, 0.0, 0.0, 0.0], dtype=np.float32), (count, 1)),
+            np.full((count, 3), radius, dtype=np.float32),
+            color,
+        )
 
 
 def _marker_offset(obj) -> np.ndarray:
@@ -394,13 +501,13 @@ def _quats_from_z(directions: np.ndarray) -> np.ndarray:
 
 
 def _unit_shaft() -> trimesh.Trimesh:
-    mesh = trimesh.creation.cylinder(radius=1.0, height=1.0, sections=10)
+    mesh = trimesh.creation.cylinder(radius=1.0, height=1.0, sections=16)
     mesh.apply_translation((0.0, 0.0, 0.5))
     return mesh
 
 
 def _unit_head() -> trimesh.Trimesh:
-    return trimesh.creation.cone(radius=1.0, height=1.0, sections=10)
+    return trimesh.creation.cone(radius=1.0, height=1.0, sections=16)
 
 
 class _Batch:
@@ -412,7 +519,9 @@ class _Batch:
         self._handle = None
         self._count = 0
 
-    def sync(self, server, positions, wxyzs, scales, color: tuple[int, int, int]) -> None:
+    def sync(
+        self, server, positions, wxyzs, scales, color: tuple[int, int, int], opacity: float = 1.0, *, opacities=None
+    ) -> None:
         count = len(positions)
         if count == 0:
             self.remove()
@@ -427,16 +536,20 @@ class _Batch:
                 batched_positions=positions,
                 batched_scales=scales,
                 batched_colors=color,
-                opacity=1.0,
-                flat_shading=True,
+                opacity=opacity,
+                flat_shading=False,
                 cast_shadow=False,
                 receive_shadow=False,
             )
             self._count = count
+            if opacities is not None:
+                self._handle.batched_opacities = np.asarray(opacities, dtype=np.float32)
             return
         self._handle.batched_positions = positions
         self._handle.batched_wxyzs = wxyzs
         self._handle.batched_scales = scales
+        if opacities is not None:
+            self._handle.batched_opacities = np.asarray(opacities, dtype=np.float32)
 
     def remove(self) -> None:
         if self._handle is not None:

@@ -34,7 +34,7 @@ from locolab.tasks.manager_based.locomotion.velocity.config.unitree_go2.mdp_cfg 
 )
 from locolab.assets.robots.unitree.Go2.go2 import UNITREE_GO2_CFG  # isort: skip
 from locolab.utils.terrains.terrains_cfg import ROUGH_TERRAINS_CFG  # isort: skip
-from locolab.utils.markers import BLUE_RAY_CASTER_MARKER_CFG  # isort: skip
+from locolab.utils.debug_viz.markers import BLUE_RAY_CASTER_MARKER_CFG  # isort: skip
 
 
 ##
@@ -168,6 +168,7 @@ class Go2RoughEnvCfg_PLAY(Go2RoughEnvCfg):
         self.scene.num_envs = 10
         self.scene.env_spacing = 2.5
         self.commands.base_velocity.debug_vis = True
+        self.events.push_robot_by_setting_velocity.params["debug_vis"] = True
         # spawn the robot randomly in the grid (instead of their terrain levels)
         self.scene.terrain.max_init_terrain_level = None
         # reduce the number of terrains to save memory

@@ -214,8 +214,8 @@ class MjviserRobot:
         for handle, lod in self._visual_lods:
             handle.lod = lod if enabled else "off"
 
-    def update(self, selector, env_idx: int) -> None:
-        """Transfer selected body poses once and let mjviser update its instances."""
+    def body_poses(self, selector):
+        """Read world link frames, including fixed links merged by the backend."""
         data = self.robot.data
         position = select_rows(data.body_pos_w, selector)[:, self._sim_body_ids]
         orientation = select_rows(data.body_quat_w, selector)[:, self._sim_body_ids]
@@ -231,8 +231,13 @@ class MjviserRobot:
         # World pose = simulated ancestor pose × fixed body offset.
         offset_position = self._body_offsets[:, :3, 3]
         position = packed[..., :3] + (rotation @ offset_position[..., None])[..., 0]
+        return position, rotation @ self._body_offsets[:, :3, :3]
+
+    def update(self, selector, env_idx: int) -> None:
+        """Transfer selected body poses once and let mjviser update its instances."""
+        position, rotation = self.body_poses(selector)
         self._positions[selector, 1:] = position
-        self._rotations[selector, 1:] = rotation @ self._body_offsets[:, :3, :3]
+        self._rotations[selector, 1:] = rotation
         self.scene.show_only_selected = position.shape[0] != len(self._positions)
 
         # mjviser caches these arrays and serializes poses on the websocket thread.

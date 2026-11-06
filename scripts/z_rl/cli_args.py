@@ -40,14 +40,14 @@ def add_z_rl_args(parser: argparse.ArgumentParser):
         "--logger",
         type=str,
         default=None,
-        choices={"wandb", "tensorboard", "neptune", "swanlab", "comet"},
+        choices={"wandb", "tensorboard", "neptune", "swanlab", "comet", "trackio"},
         help="Logger module to use.",
     )
     arg_group.add_argument(
         "--log_project_name",
         type=str,
         default=None,
-        help="Name of the logging project when using wandb, neptune, swanlab, or comet.",
+        help="Name of the logging project when using wandb, neptune, swanlab, comet, or trackio.",
     )
 
 
@@ -98,10 +98,15 @@ def update_z_rl_cfg(agent_cfg: ZRlBaseRunnerCfg, args_cli: argparse.Namespace):
     if args_cli.logger is not None:
         agent_cfg.logger = args_cli.logger
     # set the project name for remote loggers
-    if agent_cfg.logger in {"wandb", "neptune", "swanlab", "comet"} and args_cli.log_project_name:
+    if (
+        isinstance(agent_cfg.logger, str)
+        and agent_cfg.logger in {"wandb", "neptune", "swanlab", "comet", "trackio"}
+        and args_cli.log_project_name
+    ):
         agent_cfg.wandb_project = args_cli.log_project_name
         agent_cfg.neptune_project = args_cli.log_project_name
         agent_cfg.comet_project = args_cli.log_project_name
         agent_cfg.swanlab_project = args_cli.log_project_name
+        agent_cfg.trackio_project = args_cli.log_project_name
 
     return agent_cfg

@@ -21,8 +21,12 @@ def finite_difference_ang_vel(quat_xyzw: torch.Tensor, dt: float) -> torch.Tenso
 
     ``quat_xyzw`` is ``(T, ..., 4)``. The result is ``(T, ..., 3)`` in the world frame.
     """
-    if quat_xyzw.shape[0] < 3:
-        raise ValueError(f"Need at least 3 frames to difference orientation, got {quat_xyzw.shape[0]}.")
+    if quat_xyzw.shape[0] < 2:
+        raise ValueError(f"Need at least 2 frames to difference orientation, got {quat_xyzw.shape[0]}.")
+    if quat_xyzw.shape[0] == 2:
+        # A two-frame AMP pair has one angular velocity, shared by both endpoints.
+        omega = axis_angle_from_quat(quat_mul(quat_xyzw[1:], quat_inv(quat_xyzw[:1]))) / dt
+        return torch.cat((omega, omega), dim=0)
     q_prev = quat_xyzw[:-2]
     q_next = quat_xyzw[2:]
     # q_next * inverse(q_prev) expresses the rotation over two steps in the world frame.

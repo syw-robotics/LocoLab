@@ -16,7 +16,7 @@ from isaaclab.managers import CommandTermCfg
 from isaaclab.markers import VisualizationMarkersCfg
 from isaaclab.utils import configclass
 
-from locolab.utils.markers import GREEN_ARROW_X_MARKER_CFG, RED_ARROW_X_MARKER_CFG
+from locolab.utils.debug_viz.markers import GREEN_ARROW_X_MARKER_CFG, RED_ARROW_X_MARKER_CFG
 
 from .flat_patch_velocity_command import FlatPatchVelocityCommand
 from .pose_2d_command import TerrainBasedPose2dCommand

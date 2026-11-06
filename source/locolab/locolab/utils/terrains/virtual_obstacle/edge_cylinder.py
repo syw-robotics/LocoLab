@@ -15,7 +15,6 @@ from isaaclab.markers import VisualizationMarkers
 from isaaclab.sensors import patterns
 from isaaclab.utils.warp import convert_to_warp_mesh, raycast_mesh
 from numpy.linalg import norm
-from pxr import UsdGeom, UsdPhysics
 from sklearn.cluster import DBSCAN
 from locolab.utils.warp.cylinder import CylinderSpatialGrid
 

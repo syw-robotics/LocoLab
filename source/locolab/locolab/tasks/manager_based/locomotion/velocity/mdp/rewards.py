@@ -415,7 +415,10 @@ def feet_short_swing(
     has_previous_stance = sensor.data.last_contact_time.torch[:, sensor_cfg.body_ids] > 0.0
     air_time = sensor.data.last_air_time.torch[:, sensor_cfg.body_ids]
     shortfall = (1.0 - air_time / min_air_time).clamp_min(0.0)
-    return (shortfall * first_contact * has_previous_stance).sum(dim=1) * _command_is_moving(env, command_name)
+    command = env.command_manager.get_command(command_name)
+    # Small commands offer less tracking reward to offset the cost of initiating a step.
+    scale = (command[:, :2].norm(dim=1) / 0.5 + command[:, 2].abs() / 1.5).clamp(max=1.0)
+    return (shortfall * first_contact * has_previous_stance).sum(dim=1) * scale * _command_is_moving(env, command_name)
 
 
 def feet_short_single_support(

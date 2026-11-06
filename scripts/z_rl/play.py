@@ -75,6 +75,7 @@ import time
 
 import torch
 from z_rl.runners import DistillationRunner, OnPolicyRunner
+from z_rl.runners.model_based_runner import ModelBasedRunner
 
 from isaaclab.envs.utils.video_recorder_cfg import VideoRecorderCfg
 from isaaclab.utils.assets import retrieve_file_path
@@ -89,7 +90,7 @@ from isaaclab_tasks.utils.hydra import resolve_task_config
 
 def main():
     """Play with Z-RL agent."""
-    motion_overrides = prepend_motion_file_hydra_override(args_cli.motion_file, hydra_args)
+    motion_overrides = prepend_motion_file_hydra_override(args_cli.motion_file, hydra_args, task=args_cli.task)
     env_cfg, agent_cfg = resolve_task_config(args_cli.task, args_cli.agent, overrides=motion_overrides)
     env_cfg = apply_mdp_backend(env_cfg, args_cli.mdp_backend)
     # grab task name for checkpoint path
@@ -151,6 +152,11 @@ def main():
                 resume_path = get_checkpoint_path(log_root_path, agent_cfg.load_run, agent_cfg.load_checkpoint)
 
     restore_motion_file(env_cfg, resume_path, args_cli.motion_file, hydra_args)
+    from locolab.utils.smp.config import restore_smp_config
+
+    restore_smp_config(env_cfg, resume_path, hydra_args)
+    if getattr(env_cfg, 'smp', None) is not None and not env_cfg.smp.enabled and load_cfg is None:
+        load_cfg = {'actor': True, 'iteration': False}
     log_dir = os.path.dirname(resume_path)
 
     # set the log directory for the environment (works for all environment types)
@@ -190,6 +196,8 @@ def _play(env_cfg, agent_cfg, resume_path, load_cfg, screen: LoadingScreen):
         runner = OnPolicyRunner(env, agent_cfg.to_dict(), log_dir=None, device=agent_cfg.device)
     elif agent_cfg.class_name == "DistillationRunner":
         runner = DistillationRunner(env, agent_cfg.to_dict(), log_dir=None, device=agent_cfg.device)
+    elif agent_cfg.class_name == "ModelBasedRunner":
+        runner = ModelBasedRunner(env, agent_cfg.to_dict(), log_dir=None, device=agent_cfg.device)
     else:
         raise ValueError(f"Unsupported runner class: {agent_cfg.class_name}")
     runner.load(resume_path, load_cfg=load_cfg)

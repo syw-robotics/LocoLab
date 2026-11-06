@@ -5,7 +5,7 @@ set -euo pipefail
 
 # Require both local checkout paths, followed by an optional full-stack installation flag.
 if [[ $# -lt 2 || $# -gt 3 || ( $# -eq 3 && "$3" != "--all" ) ]]; then
-    echo "Usage: bash scripts/install.sh /path/to/IsaacLab /path/to/z_rl [--all]" >&2
+    echo "Usage: bash install.sh /path/to/IsaacLab /path/to/z_rl [--all]" >&2
     exit 1
 fi
 

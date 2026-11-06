@@ -191,9 +191,9 @@ class VolumePoints(SensorBase):
         # PhysX exposes a rigid-body view. Newton does not, so those poses come from the articulation.
         physics_sim_view = SimulationContext.instance().physics_sim_view
         if hasattr(physics_sim_view, "create_rigid_body_view"):
-            body_names_regex = r"(" + "|".join(body_names) + r")"
-            body_names_regex = f"{self.cfg.prim_path.rsplit('/', 1)[0]}/{body_names_regex}"
-            body_names_glob = body_names_regex.replace(".*", "*")
+            from isaaclab.sim.utils.queries import path_expr_to_glob
+
+            body_names_glob = path_expr_to_glob(self.cfg.prim_path)
             self._body_physx_view = physics_sim_view.create_rigid_body_view(body_names_glob)
             self._articulation = None
             self._body_ids = None
@@ -202,7 +202,7 @@ class VolumePoints(SensorBase):
                 raise RuntimeError(
                     "Failed to initialize volume points sensor for specified bodies."
                     f"\n\tInput prim path    : {self.cfg.prim_path}"
-                    f"\n\tResolved prim paths: {body_names_regex}"
+                    f"\n\tResolved prim paths: {body_names_glob}"
                 )
         else:
             self._body_physx_view = None

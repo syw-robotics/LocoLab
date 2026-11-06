@@ -25,6 +25,9 @@ class CommandsCfg:
         anchor_body_name=ANCHOR_BODY_NAME,
         body_names=BODY_NAMES,
         joint_names=JOINT_NAMES,
+        # Select reference fields and their concatenation order (one frame).
+        # Available: joint_pos, joint_vel, base_height, base_lin_vel, base_ang_vel, projected_gravity.
+        command_terms=("joint_pos", "joint_vel"),
         pose_range={
             "x": (-0.05, 0.05),
             "y": (-0.05, 0.05),

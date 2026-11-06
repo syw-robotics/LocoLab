@@ -6,10 +6,10 @@
 # All rights reserved.
 # Modifications are licensed under BSD-3-Clause.
 
-"""Single-clip motion command for whole-body tracking.
+"""Packed motion-library command for whole-body tracking.
 
-The reference is one resampled motion shared by every environment. Reset samples
-a time index inside that clip and writes the reference state into the robot.
+Reset samples a reference frame across the configured clips and writes that
+state into the robot. Each environment advances within its selected clip.
 
 Reading order: initialization, reference/robot state views, command lifecycle,
 sampling, simulator state writes, and initialization-time body kinematics.
@@ -27,9 +27,9 @@ import isaaclab.utils.math as math_utils
 from isaaclab.assets import Articulation
 from isaaclab.managers import CommandTerm
 
-from .utils import finite_difference_ang_vel, relative_body_poses
-
-from .motion_loader import MotionLoader
+from locolab.utils.motion import relative_body_poses
+from locolab.utils.motion.command import command_dimension, command_sources
+from locolab.utils.motion.loader import MotionLoader
 
 if TYPE_CHECKING:
     from isaaclab.envs import ManagerBasedRLEnv
@@ -38,7 +38,7 @@ if TYPE_CHECKING:
 
 
 class MotionCommand(CommandTerm):
-    """Track one motion clip. The command is reference joint position and velocity."""
+    """Track sampled motion clips using configurable single-frame reference fields."""
 
     cfg: MotionCommandCfg
 
@@ -49,6 +49,7 @@ class MotionCommand(CommandTerm):
             raise ValueError("metrics_update_interval must be a positive integer.")
         if not isinstance(cfg.ghost_max_envs, int) or cfg.ghost_max_envs < 1:
             raise ValueError("ghost_max_envs must be a positive integer.")
+        self.command_dim = command_dimension(cfg.command_terms, len(cfg.joint_names))
         self._metrics_update_counter = 0
 
         # Resolve robot indices once; all state views below follow the configured order.
@@ -70,8 +71,9 @@ class MotionCommand(CommandTerm):
         self.motion_anchor_body_index = cfg.body_names.index(cfg.anchor_body_name)
         self.num_bodies = len(cfg.body_names)
 
-        # Build the shared clip, including body trajectories absent from the qpos file.
+        # Build shared reference tensors, including body trajectories absent from qpos.
         self.motion = MotionLoader(cfg.motion_file, cfg.joint_names, env.step_dt, self.device)
+        self._command_sources = command_sources(self.motion, cfg.command_terms)
         self._compute_body_kinematics()
 
         # Each environment has its own frame cursor and robot-aligned reference poses.
@@ -81,7 +83,10 @@ class MotionCommand(CommandTerm):
         self.body_quat_relative_w[..., 3] = 1.0
 
         # Group frames into roughly one-second bins for failure-weighted reset sampling.
-        self.bin_count = int(self.motion.time_step_total // (1.0 / env.step_dt)) + 1
+        self.bin_starts, self.bin_ends, self.frame_bin, self.bin_neighbors = self.motion.sampling_bins(
+            max(1, round(1.0 / env.step_dt)), cfg.adaptive_kernel_size
+        )
+        self.bin_count = len(self.bin_starts)
         self.bin_failed_count = torch.zeros(self.bin_count, dtype=torch.float, device=self.device)
         self._current_bin_failed = torch.zeros(self.bin_count, dtype=torch.float, device=self.device)
         kernel = torch.tensor(
@@ -106,7 +111,7 @@ class MotionCommand(CommandTerm):
         self.metrics["sampling_top1_bin"] = torch.zeros(self.num_envs, device=self.device)
 
         print(
-            f"[INFO] Motion tracking clip: {self.motion.motion_file} "
+            f"[INFO] Motion tracking: {len(self.motion.motion_files)} clips from {self.motion.motion_file} "
             f"({self.motion.time_step_total} frames at {1.0 / self.motion.output_dt:.1f} Hz, "
             f"source {1.0 / self.motion.input_dt:.1f} Hz)."
         )
@@ -117,8 +122,8 @@ class MotionCommand(CommandTerm):
     # Only positions need the scene origin offset to become simulation world positions.
     @property
     def command(self) -> torch.Tensor:
-        """Policy command of shape (num_envs, 2 * num_joints): positions then velocities."""
-        return torch.cat((self.joint_pos, self.joint_vel), dim=1)
+        """Single-frame reference fields in ``cfg.command_terms`` order."""
+        return torch.cat([source[self.time_steps] for source in self._command_sources], dim=-1)
 
     @property
     def joint_pos(self) -> torch.Tensor:
@@ -225,14 +230,27 @@ class MotionCommand(CommandTerm):
         self.metrics["error_joint_pos"] = torch.norm(self.joint_pos - self.robot_joint_pos, dim=-1)
         self.metrics["error_joint_vel"] = torch.norm(self.joint_vel - self.robot_joint_vel, dim=-1)
 
+    def reset(self, env_ids=None):
+        # Count failure once at episode reset, before any new reference is sampled.
+        # A newly sampled final frame may wrap again during this same manager step.
+        if self.cfg.sampling_mode == "adaptive":
+            ids = self._as_env_ids(slice(None) if env_ids is None else env_ids)
+            failed = self._env.termination_manager.terminated[ids]
+            fail_bins = self.frame_bin[self.time_steps[ids][failed]]
+            self._current_bin_failed += torch.bincount(fail_bins, minlength=self.bin_count).float()
+        return super().reset(env_ids)
+
     def _resample_command(self, env_ids: Sequence[int] | slice):
         """Choose new clip frames and reset the selected robots around those states."""
         ids = self._as_env_ids(env_ids)
         if ids.numel() == 0:
             return
-        # sampling_mode includes "start", "uniform", and "adaptive" (failure-weighted). The first two are deterministic.
+        # Start mode cycles each environment through all clips; uniform/adaptive sample frames.
         if self.cfg.sampling_mode == "start":
-            self.time_steps[ids] = 0
+            if not hasattr(self, "_next_start_clip"):
+                self._next_start_clip = torch.arange(self.num_envs, device=self.device) % len(self.motion.motion_files)
+            self.time_steps[ids] = self.motion.clip_starts[self._next_start_clip[ids]]
+            self._next_start_clip[ids] = (self._next_start_clip[ids] + 1) % len(self.motion.motion_files)
         elif self.cfg.sampling_mode == "uniform":
             self._uniform_sampling(ids)
         else:
@@ -244,8 +262,10 @@ class MotionCommand(CommandTerm):
 
     def _update_command(self):
         """Advance one control frame; reaching the clip end triggers a fresh reset sample."""
-        self.time_steps += 1
-        wrap_ids = torch.where(self.time_steps >= self.motion.time_step_total)[0]
+        wrap = self.time_steps + 1 >= self.motion.frame_end[self.time_steps]
+        # Keep outgoing final frames intact for failure accounting and pre-teleport capture.
+        self.time_steps += (~wrap).long()
+        wrap_ids = torch.where(wrap)[0]
         if wrap_ids.numel() > 0:
             self._resample_command(wrap_ids)
         else:
@@ -274,33 +294,15 @@ class MotionCommand(CommandTerm):
 
     # Reset sampling: bias towards difficult clip segments or draw frames uniformly.
     def _adaptive_sampling(self, env_ids: torch.Tensor) -> None:
-        """Record termination bins, then sample a bin and a random frame within it."""
-        # Count failures at the outgoing frames, before replacing their time indices.
-        episode_failed = self._env.termination_manager.terminated[env_ids]
-        if torch.any(episode_failed):
-            current_bin_index = torch.clamp(
-                (self.time_steps * self.bin_count) // max(self.motion.time_step_total, 1),
-                0,
-                self.bin_count - 1,
-            )
-            fail_bins = current_bin_index[env_ids][episode_failed]
-            self._current_bin_failed[:] = torch.bincount(fail_bins, minlength=self.bin_count).float()
-
+        """Sample a failure-weighted bin and a random frame within its clip."""
         # Keep every bin reachable; spread failure weights towards earlier nearby bins.
         sampling_probabilities = self.bin_failed_count + self.cfg.adaptive_uniform_ratio / float(self.bin_count)
-        sampling_probabilities = torch.nn.functional.pad(
-            sampling_probabilities.view(1, 1, -1),
-            (0, self.cfg.adaptive_kernel_size - 1),
-            mode="replicate",
-        )
-        sampling_probabilities = torch.nn.functional.conv1d(sampling_probabilities, self.kernel.view(1, 1, -1)).view(-1)
+        sampling_probabilities = (sampling_probabilities[self.bin_neighbors] * self.kernel).sum(-1)
         sampling_probabilities = sampling_probabilities / sampling_probabilities.sum()
 
         sampled_bins = torch.multinomial(sampling_probabilities, len(env_ids), replacement=True)
-        self.time_steps[env_ids] = (
-            (sampled_bins + math_utils.sample_uniform(0.0, 1.0, (len(env_ids),), device=self.device))
-            / self.bin_count
-            * (self.motion.time_step_total - 1)
+        self.time_steps[env_ids] = self.bin_starts[sampled_bins] + (
+            torch.rand(len(env_ids), device=self.device) * (self.bin_ends[sampled_bins] - self.bin_starts[sampled_bins])
         ).long()
 
         if self._metrics_update_counter == 0:
@@ -411,9 +413,7 @@ class MotionCommand(CommandTerm):
             body_pos[start:stop] = self.robot.data.body_link_pos_w.torch[:count, self.body_ids] - origins[:count, None, :]
             body_quat[start:stop] = self.robot.data.body_link_quat_w.torch[:count, self.body_ids]
 
-        body_lin_vel = torch.gradient(body_pos, spacing=self.motion.output_dt, dim=0)[0]
-        body_ang_vel = finite_difference_ang_vel(body_quat, self.motion.output_dt)
-        self.motion.set_body_state(body_pos, body_quat, body_lin_vel, body_ang_vel)
+        self.motion.set_body_poses(body_pos, body_quat)
 
     # Debug rendering uses visual meshes only; it never writes simulator state.
     def _set_debug_vis_impl(self, debug_vis: bool):

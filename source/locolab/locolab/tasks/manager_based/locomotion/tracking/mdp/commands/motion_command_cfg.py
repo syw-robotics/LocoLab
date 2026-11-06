@@ -18,7 +18,7 @@ from .motion_command import MotionCommand
 
 @configclass
 class MotionCommandCfg(CommandTermCfg):
-    """Configuration for a single-clip motion tracking command."""
+    """Configuration for a motion-library tracking command."""
 
     class_type: type = MotionCommand
 
@@ -29,16 +29,22 @@ class MotionCommandCfg(CommandTermCfg):
     """Robot scene entity that follows the motion."""
 
     motion_file: str = MISSING
-    """Path to one converted ``.npz`` clip containing ``qpos``."""
+    """Path to one converted ``.npz`` clip or a directory of clips (recursive)."""
 
     anchor_body_name: str = MISSING
-    """Body used to express the reference anchor in the robot frame."""
+    """Tracking frame for observations, rewards and termination; G1 supports pelvis or torso_link."""
 
     body_names: Sequence[str] = MISSING
     """Bodies tracked by the rewards, in the order stored by the command."""
 
     joint_names: Sequence[str] = MISSING
     """Joints in the same order as the motion ``qpos`` hinge columns."""
+
+    command_terms: tuple[str, ...] = ("joint_pos", "joint_vel")
+    """Ordered reference fields: joint_pos, joint_vel, base_height, base_lin_vel,
+    base_ang_vel, projected_gravity. Base is the motion root, independent of anchor;
+    velocities and unit gravity are expressed in its reference frame.
+    """
 
     pose_range: dict[str, tuple[float, float]] = {}
     """Uniform root pose noise applied when a reference state is sampled."""
@@ -57,4 +63,4 @@ class MotionCommandCfg(CommandTermCfg):
     adaptive_uniform_ratio: float = 0.1
     adaptive_alpha: float = 0.001
     sampling_mode: Literal["adaptive", "uniform", "start"] = "adaptive"
-    """How to pick the next reference frame. ``start`` always restarts the clip."""
+    """How to pick the next reference frame. ``start`` cycles through clips at their first frame."""

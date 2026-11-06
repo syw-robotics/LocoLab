@@ -72,8 +72,12 @@ def export_tracking_deployment(env, path: str | Path, clip_actions: float | None
     if not hasattr(env.cfg.commands, "motion"):
         return
     command = env.command_manager.get_term("motion")
+    if tuple(command.cfg.command_terms) != ("joint_pos", "joint_vel"):
+        raise ValueError("Tracking deployment currently supports only command_terms=('joint_pos', 'joint_vel').")
     names = list(command.cfg.joint_names)
     action = env.action_manager.get_term("joint_pos")
+    if getattr(action.cfg, "use_reference_residual", False):
+        raise ValueError("Reference residual deployment requires a controller that adds the reference joint positions.")
     if list(action._joint_names) != names:
         raise ValueError("Tracking action and motion joint orders must match.")
     if not action.cfg.use_default_offset:
@@ -118,6 +122,7 @@ def export_tracking_deployment(env, path: str | Path, clip_actions: float | None
         "observation_modules": ["unitree_deploy.obs.motion_tracking_obs"],
         "observation_types": {
             "base_ang_vel": "unitree_deploy.obs.base_obs:BaseAngularVelocityObservation",
+            "projected_gravity": "unitree_deploy.obs.base_obs:ProjectedGravityObservation",
             "joint_pos_rel": "unitree_deploy.obs.base_obs:JointPositionObservation",
             "joint_vel": "unitree_deploy.obs.base_obs:JointVelocityObservation",
             "prev_action": "unitree_deploy.obs.base_obs:PreviousActionObservation",

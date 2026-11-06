@@ -15,7 +15,10 @@ import logging
 import threading
 import time
 
+from locolab.utils.debug_viz.push.push_debug_vis import PushDebugVis
+
 from ._viser import viser
+from .browser import CAMERA_MOVE_SPEED_JS
 from .debug_vis import DebugScene, debug_sources, draw_debug
 from .mjviser_robot import MjviserRobot
 from .terrain import HEIGHT_COLOR_SCALE_M, SOLID_COLOR, paint_terrain
@@ -105,7 +108,9 @@ class ViserPlayViewer:
 
         self._debug_terms = debug_sources(self._env)
         self._debug_enabled = {
-            label: bool(getattr(getattr(obj, "cfg", None), "debug_vis", False)) for label, obj in self._debug_terms
+            label: obj.debug_vis if isinstance(obj, PushDebugVis)
+            else bool(getattr(getattr(obj, "cfg", None), "debug_vis", False))
+            for label, obj in self._debug_terms
         }
         self._status_html = ""
         self._prepare_ground(scene)
@@ -117,7 +122,11 @@ class ViserPlayViewer:
             self._robot_view.create_scene(self._server)
             self._add_ground()
             self._build_gui()
-            self._server.on_client_connect(lambda _client: self._release_if_waiting())
+
+            @self._server.on_client_connect
+            def _(client) -> None:
+                self._apply_camera_move_speed(client)
+                self._release_if_waiting()
         except Exception:
             self._server.stop()
             raise
@@ -292,6 +301,21 @@ class ViserPlayViewer:
                     else:
                         self._set_speed_index(SPEEDS.index(1.0))
 
+            with self._server.gui.add_folder("Navigation"):
+                self._camera_move_speed = self._server.gui.add_slider(
+                    "Move speed (m/s)",
+                    min=0.1,
+                    max=20.0,
+                    step=0.1,
+                    initial_value=2.0,
+                    hint="Camera translation speed for W/A/S/D/Q/E.",
+                )
+
+                @self._camera_move_speed.on_update
+                def _(_event) -> None:
+                    for client in self._server.get_clients().values():
+                        self._apply_camera_move_speed(client)
+
             self._robot_view.scene.create_scene_gui()
             self._build_debug_gui()
 
@@ -304,12 +328,14 @@ class ViserPlayViewer:
         if not self._debug_terms:
             return
         with self._server.gui.add_folder("debug_viz"):
-            for label, _obj in self._debug_terms:
+            for label, obj in self._debug_terms:
                 checkbox = self._server.gui.add_checkbox(label, initial_value=self._debug_enabled[label])
 
                 @checkbox.on_update
-                def _(event, key=label) -> None:
+                def _(event, key=label, term=obj) -> None:
                     self._debug_enabled[key] = bool(event.target.value)
+                    if isinstance(term, PushDebugVis):
+                        term.set_debug_vis(bool(event.target.value))
 
     def _build_robot_vis_gui(self) -> None:
         with self._server.gui.add_folder("Robot"):
@@ -378,6 +404,12 @@ class ViserPlayViewer:
                 self._terrain_rgb = (int(red), int(green), int(blue))
                 if not self._terrain_color:
                     self._schedule_terrain_appearance(0.2)
+
+    def _apply_camera_move_speed(self, client) -> None:
+        from viser import _messages
+
+        source = CAMERA_MOVE_SPEED_JS.replace("__MOVE_SPEED__", str(float(self._camera_move_speed.value)))
+        client._websock_connection.queue_message(_messages.RunJavascriptMessage(source=source))
 
     def _release_if_waiting(self) -> None:
         """Start playback on the first browser. Later clients leave the pause button alone."""

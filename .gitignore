@@ -66,7 +66,16 @@ _build
 /datasets/
 
 # Tests
-tests/
+tests/*
+# !tests/test_kit_startup.py
+# !tests/test_volume_points.py
+# !tests/test_smp*.py
+# !tests/test_amp*.py
+# !tests/test_velocity_push.py
+
+docs/
+scripts/evaluation/
+scripts/validation/
 
 # Docker history
 .isaac-lab-docker-history
@@ -74,3 +83,5 @@ tests/
 # TacSL sensor
 **/tactile_record/*
 **/gelsight_r15_data/*
+
+

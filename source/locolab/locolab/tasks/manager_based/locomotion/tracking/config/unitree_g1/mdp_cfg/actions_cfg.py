@@ -10,22 +10,19 @@ from isaaclab.utils import configclass
 
 import locolab.tasks.manager_based.locomotion.tracking.mdp as mdp
 from locolab.assets.robots.unitree.G1.g1_actuators import g1_action_scale
-from locolab.tasks.manager_based.locomotion.velocity.mdp.actions.delayed_actions import (
-    EncoderBiasJointPositionAction,
-)
 
 from . import JOINT_NAMES
 
 
 @configclass
 class ActionsCfg:
-    """Joint position residual around the default pose."""
+    """Choose joint position residuals around the default pose or motion reference."""
 
-    joint_pos = mdp.JointPositionActionCfg(
-        class_type=EncoderBiasJointPositionAction,
+    joint_pos = mdp.TrackingJointPositionActionCfg(
         asset_name="robot",
         joint_names=JOINT_NAMES,
         scale=g1_action_scale,
         use_default_offset=True,
+        use_reference_residual=False,
         preserve_order=True,
     )

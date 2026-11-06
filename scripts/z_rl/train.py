@@ -73,6 +73,7 @@ from datetime import datetime
 
 import torch
 from z_rl.runners import DistillationRunner, OnPolicyRunner
+from z_rl.runners.model_based_runner import ModelBasedRunner
 
 from isaaclab.envs import ManagerBasedRLEnvCfg
 from isaaclab.envs.utils.video_recorder_cfg import VideoRecorderCfg
@@ -107,7 +108,7 @@ torch.backends.cudnn.benchmark = False
 
 def main():
     """Train with Z-RL agent."""
-    motion_overrides = prepend_motion_file_hydra_override(args_cli.motion_file, hydra_args)
+    motion_overrides = prepend_motion_file_hydra_override(args_cli.motion_file, hydra_args, task=args_cli.task)
     env_cfg, agent_cfg = resolve_task_config(args_cli.task, args_cli.agent, overrides=motion_overrides)
     env_cfg = apply_mdp_backend(env_cfg, args_cli.mdp_backend)
     # override configurations with non-hydra CLI arguments
@@ -176,6 +177,9 @@ def main():
     resume_path = None
     if agent_cfg.resume:
         resume_path = get_checkpoint_path(log_root_path, agent_cfg.load_run, agent_cfg.load_checkpoint)
+        from locolab.utils.smp.config import restore_smp_config
+
+        restore_smp_config(env_cfg, resume_path, hydra_args)
 
     with loading_screen(args_cli, num_stages=TRAIN_NUM_STAGES) as screen:
         screen.stage("Launching simulation")
@@ -204,6 +208,8 @@ def _train(env_cfg, agent_cfg, log_dir, resume_path, screen: LoadingScreen):
         runner = OnPolicyRunner(env, agent_cfg.to_dict(), log_dir=log_dir, device=agent_cfg.device)
     elif agent_cfg.class_name == "DistillationRunner":
         runner = DistillationRunner(env, agent_cfg.to_dict(), log_dir=log_dir, device=agent_cfg.device)
+    elif agent_cfg.class_name == "ModelBasedRunner":
+        runner = ModelBasedRunner(env, agent_cfg.to_dict(), log_dir=log_dir, device=agent_cfg.device)
     else:
         raise ValueError(f"Unsupported runner class: {agent_cfg.class_name}")
 

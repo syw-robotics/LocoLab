@@ -20,7 +20,7 @@ from pathlib import Path
 import numpy as np
 import torch
 
-from .utils import finite_difference_ang_vel, finite_difference_vel, resample_motion
+from .math import finite_difference_ang_vel, finite_difference_vel, resample_motion
 
 _ROOT_QPOS_NAMES = (
     "root_tx",
@@ -34,7 +34,7 @@ _ROOT_QPOS_NAMES = (
 
 
 class MotionLoader:
-    """One motion clip, resampled to ``output_dt`` seconds on ``device``.
+    """One clip or a directory of clips packed at ``output_dt`` seconds on ``device``.
 
     Root trajectories have shape ``(T, 3)`` / ``(T, 4)``; joint trajectories
     have shape ``(T, J)`` in the supplied ``joint_names`` order. Root poses and
@@ -49,15 +49,29 @@ class MotionLoader:
         device: str | torch.device,
     ) -> None:
         path = Path(motion_file).expanduser().resolve()
+        if path.is_dir():
+            files = sorted(path.rglob("*.npz"))
+            if not files:
+                raise FileNotFoundError(f"No .npz motion clips found in {path}")
+            clips = [MotionLoader(str(p), joint_names, output_dt, device) for p in files]
+            self.motion_file = str(path)
+            self.input_dt, self.output_dt = clips[0].input_dt, float(output_dt)
+            self.device, self.joint_names = torch.device(device), tuple(joint_names)
+            for name in ("root_pos", "root_quat", "joint_pos", "root_lin_vel", "joint_vel", "root_ang_vel"):
+                setattr(self, name, torch.cat([getattr(clip, name) for clip in clips]))
+            self.time_step_total = len(self.joint_pos)
+            self._set_clips([str(p) for p in files], [clip.time_step_total for clip in clips])
+            self.body_pos_w = self.body_quat_w = self.body_lin_vel_w = self.body_ang_vel_w = None
+            return
         if not path.is_file():
             raise FileNotFoundError(f"Motion file not found: {path}")
         if output_dt <= 0.0:
             raise ValueError(f"output_dt must be positive, got {output_dt}.")
 
-        payload = np.load(path, allow_pickle=False)
-        if "qpos" not in payload:
-            raise KeyError(f"Motion file {path} does not contain a qpos array.")
-        qpos = np.asarray(payload["qpos"], dtype=np.float32)
+        with np.load(path, allow_pickle=False) as payload:
+            if "qpos" not in payload:
+                raise KeyError(f"Motion file {path} does not contain a qpos array.")
+            qpos = np.asarray(payload["qpos"], dtype=np.float32)
         if qpos.ndim != 2 or qpos.shape[1] < 8:
             raise ValueError(f"Expected qpos with shape (T, >=8), got {qpos.shape}.")
 
@@ -102,12 +116,60 @@ class MotionLoader:
         self.joint_vel = finite_difference_vel(self.joint_pos, self.output_dt)
         self.root_ang_vel = finite_difference_ang_vel(self.root_quat, self.output_dt)
         self.time_step_total = int(self.joint_pos.shape[0])
+        self._set_clips([str(path)], [self.time_step_total])
 
         # qpos clips omit body trajectories; the simulator supplies them after loading.
         self.body_pos_w: torch.Tensor | None = None
         self.body_quat_w: torch.Tensor | None = None
         self.body_lin_vel_w: torch.Tensor | None = None
         self.body_ang_vel_w: torch.Tensor | None = None
+
+    def _set_clips(self, files: list[str], lengths: list[int]) -> None:
+        self.motion_files = files
+        self.clip_lengths = lengths
+        lengths_t = torch.tensor(lengths, device=self.device)
+        self.clip_ends = lengths_t.cumsum(0)
+        self.clip_starts = self.clip_ends - lengths_t
+        self.frame_end = self.clip_ends.repeat_interleave(lengths_t)
+        self.frame_clip = torch.arange(len(files), device=self.device).repeat_interleave(lengths_t)
+
+    def sampling_bins(self, frames_per_bin: int, kernel_size: int):
+        """Partition every clip independently; smoothing neighbors stay in the same clip."""
+        starts, ends, neighbors = [], [], []
+        offset = 0
+        for length in self.clip_lengths:
+            local = list(range(0, length, frames_per_bin))
+            first, last = len(starts), len(starts) + len(local) - 1
+            starts.extend(offset + frame for frame in local)
+            ends.extend(offset + min(frame + frames_per_bin, length) for frame in local)
+            neighbors.extend([min(index + k, last) for k in range(kernel_size)] for index in range(first, last + 1))
+            offset += length
+        starts = torch.tensor(starts, device=self.device)
+        ends = torch.tensor(ends, device=self.device)
+        frame_bin = torch.arange(len(starts), device=self.device).repeat_interleave(ends - starts)
+        return starts, ends, frame_bin, torch.tensor(neighbors, device=self.device)
+
+    def set_body_poses(self, body_pos_w: torch.Tensor, body_quat_w: torch.Tensor) -> None:
+        """Differentiate each clip separately, including both endpoints."""
+        positions = body_pos_w.split(self.clip_lengths)
+        rotations = body_quat_w.split(self.clip_lengths)
+        self.set_body_state(
+            body_pos_w,
+            body_quat_w,
+            torch.cat([finite_difference_vel(p, self.output_dt) for p in positions]),
+            torch.cat([finite_difference_ang_vel(q, self.output_dt) for q in rotations]),
+        )
+
+    def evaluation_starts(self, horizon: int, segments_per_clip: int):
+        """Evenly spaced deterministic segments, including clips shorter than the horizon."""
+        starts, offset = [], 0
+        for length in self.clip_lengths:
+            starts.append(
+                torch.linspace(0, max(0, length - horizon), segments_per_clip, device=self.device).long() + offset
+            )
+            offset += length
+        clip = torch.arange(len(self.motion_files), device=self.device).repeat_interleave(segments_per_clip)
+        return clip, torch.cat(starts)
 
     def set_body_state(
         self,

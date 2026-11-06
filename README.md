@@ -39,6 +39,8 @@ We introduce **LocoLab**, a RL locomotion **env benchmark** with sim2real robust
 
 ## 📦 Installation
 
+We recommend following Isaac Lab's official [Automatic setup with uv (recommended)](https://isaac-sim.github.io/IsaacLab/main/source/isaaclab/installation.html#automatic-setup-with-uv-recommended) guide to install Isaac Lab, then continuing with the LocoLab setup below.
+
 Clone [Isaac Lab 3.0](https://github.com/isaac-sim/IsaacLab), [Z-RL](https://github.com/syw-robotics/z_rl), and LocoLab into separate directories. Install [uv](https://docs.astral.sh/uv/getting-started/installation/), then create and activate a Python 3.12 environment (or activate an existing one):
 
 ```bash
@@ -50,7 +52,7 @@ cd /path/to/LocoLab
 **Required stack — one command:**
 
 ```bash
-bash scripts/install.sh /path/to/IsaacLab /path/to/z_rl
+bash install.sh /path/to/IsaacLab /path/to/z_rl
 ```
 
 Both local checkout paths are required. This installs Isaac Lab into the activated environment, with **Newton MJWarp + OV PhysX** physics and **Newton GL + Viser** visualization available.
@@ -60,7 +62,7 @@ It also installs the supplied Z-RL checkout, LocoLab in editable mode, including
 **Optional stack — one command:**
 
 ```bash
-bash scripts/install.sh /path/to/IsaacLab /path/to/z_rl --all
+bash install.sh /path/to/IsaacLab /path/to/z_rl --all
 ```
 
 This installs the required stack plus **Newton RTX** and **Isaac Sim / Kit**. It can be run directly on a fresh environment or after the required installation.
@@ -81,7 +83,7 @@ This installs the required stack plus **Newton RTX** and **Isaac Sim / Kit**. It
 Check the installation and start a small training run:
 
 ```bash
-python scripts/list_envs.py
+python scripts/tools/list_envs.py
 
 # train example
 python scripts/z_rl/train.py --task=Velocity-Flat-Go2 --physics ovphysx --num_envs 16 --max_iterations 50 agent.save_interval=50
@@ -107,6 +109,20 @@ python scripts/z_rl/play.py --task=Velocity-Flat-Go2 --physics newton_mjwarp --n
     ```
 
     <!-- Use `scripts/rsl_rl/play.py` for RSL-RL checkpoints. Play tasks are usually `<TASK_NAME>-Play`; `z_rl/play.py` appends `-Play` when missing. -->
+
+### Script layout
+
+Run scripts from the repository root with the activated Python environment.
+
+| Path | Purpose |
+|------|---------|
+| `install.sh` | Install the local Isaac Lab, Z-RL and LocoLab stack. |
+| `scripts/z_rl/` | Z-RL training, playback and their CLI helpers. |
+| `scripts/rsl_rl/` | RSL-RL training, playback and their CLI helpers. |
+| `scripts/smp/` | Offline SMP motion-prior pretraining. |
+| `scripts/evaluation/` | Velocity and tracking checkpoint evaluation with Z-RL. |
+| `scripts/validation/` | AMP/tracking correctness checks and MDP performance benchmarks. |
+| `scripts/tools/` | List environments, run random actions, generate projects and sync logs. |
 
 ### Common CLI options (train & play)
 
@@ -146,10 +162,13 @@ Z-RL training and checkpoint playback are the validation path. In the current ch
 training stops before environment creation because its existing config sanitizer imports the removed
 `isaaclab_rl.rsl_rl.handle_deprecated_rsl_rl_cfg`; that separate compatibility issue is not changed here.
 
-LocoLab defaults Warp MDP managers to eager execution (`manager_call_config={"default": 1}`),
-because captured managers can skip lazy height-scanner updates. No environment variable is needed.
-An explicit config takes precedence over `MANAGER_CALL_CONFIG`; setting
-`MANAGER_CALL_CONFIG='{"default":2}'` opts into the experimental manager capture path.
+On CUDA, Go2 Flat automatically captures action, termination, reward and observation managers.
+Go2 configurations with ray casters (including Rough) capture only actions and terminations:
+reward/observation calls stay eager so lazy scanner data is refreshed. Other tasks and CPU runs
+retain eager defaults. This selection happens once during configuration, with no per-step checks.
+An explicit config takes precedence over `MANAGER_CALL_CONFIG`; use
+`MANAGER_CALL_CONFIG='{"default":1}'` to force eager execution. Full capture via
+`MANAGER_CALL_CONFIG='{"default":2}'` remains experimental and fails live parity checks on Go2 Rough.
 Newton's physics CUDA graphs are independent of this setting.
 G1 tracking supports explicit manager capture: link FK, velocity and contact-history caches refresh
 outside the graph before each replay. Changed input storage invalidates the affected graph.
@@ -169,6 +188,13 @@ Warp sampling preserves the distributions, not Torch's exact random sequence.
 See the [tracking setup notes](source/locolab/locolab/tasks/manager_based/locomotion/tracking/README.md)
 for motion files and CUDA library setup.
 
+G1 score-matching motion priors use Any4HDMI directly; see the
+[SMP tasks and pretraining guide](source/locolab/locolab/tasks/manager_based/locomotion/smp/README.md).
+
+`AMP-Flat-G1` trains an adversarial motion prior with Z-RL PPO, supporting single
+or multiple Any4HDMI clips and Torch/Warp backends. See the
+[AMP training, Play and verification guide](source/locolab/locolab/tasks/manager_based/locomotion/amp/README.md).
+
 Warp covers observations, per-frame noise/clip/scale and oldest-to-newest term-major history,
 processed-action delay, fixed encoder bias, rewards, terminations, reset/interval events, and
 manager CUDA graphs. Commands and terrain curriculum keep their Torch managers, as in
@@ -185,27 +211,35 @@ The adapter lives outside the task registration tree and is imported only when W
 Run the same warmed-up benchmark for both backends (no policy inference or optimizer):
 
 ```bash
-python scripts/benchmark_mdp.py --task Velocity-Flat-Go2 --mdp_backend torch --num_envs 1024 --viz none
-python scripts/benchmark_mdp.py --task Velocity-Flat-Go2 --mdp_backend warp --num_envs 1024 --viz none --check
-# Repeat with --task Velocity-Rough-Go2.
+python scripts/validation/benchmark_mdp.py --task Velocity-Flat-Go2 --mdp_backend torch --num_envs 1024 --viz none
+python scripts/validation/benchmark_mdp.py --task Velocity-Flat-Go2 --mdp_backend warp --num_envs 1024 --viz none
+# Repeat with --task Velocity-Rough-Go2; force the previous eager default for comparison:
+MANAGER_CALL_CONFIG='{"default":1}' python scripts/validation/benchmark_mdp.py --task Velocity-Flat-Go2 --mdp_backend warp --num_envs 1024 --viz none
+# Validate executed outputs separately, or collect an untimed CPU/CUDA stage trace:
+python scripts/validation/benchmark_mdp.py --task Velocity-Rough-Go2 --mdp_backend warp --num_envs 128 --viz none --check
+python scripts/validation/benchmark_mdp.py --task Velocity-Flat-Go2 --mdp_backend warp --num_envs 1024 --viz none --profile /tmp/mdp-trace.json
 ```
 
-`--check` compares live observation frames, stateless rewards, and terminations with the Torch
-functions on the same physical state. Regression tests additionally cover delayed targets,
-encoder bias, history/noise, partial resets, action smoothness, and graph replay after input changes.
-The benchmark reports five batches of 100 steps after 50 warmup steps; faster environment steps
-do not imply identical random trajectories or establish training convergence.
+`--check` snapshots actual manager outputs before invoking Torch references. Each stage is checked
+in a separate rollout with changing actions and partial timeouts, so reference sensor refreshes
+cannot conceal another stage's stale data. Observation noise is disabled for these validation runs;
+do not compare their timings against normal noisy runs. History raw frames, stateless rewards and
+terminations are checked live; regression tests cover history/noise, action delay/bias and stateful
+rewards. `--profile` is Warp-only and records a separate 20-step run after timing, without adding
+instrumentation to training. Open its JSON in a Chrome trace viewer or Perfetto.
 
-RTX 4090 capture-mode benchmark at 1024 environments (zero actions, Newton MJWarp, headless):
+The benchmark reports five batches of 100 steps after 50 warmup steps. RTX 4090 results at 1024
+environments (zero actions, Newton MJWarp, headless, observation noise retained):
 
-| Task | Torch step | Warp step | Throughput ratio |
-|------|------------|-----------|------------------|
-| Go2 Flat | 6.30 ms | 4.55 ms | 1.38x |
-| Go2 Rough | 7.04 ms | 5.91 ms | 1.19x |
+| Task | Warp eager step | Automatic capture step | Throughput ratio |
+|------|-----------------|------------------------|------------------|
+| Go2 Flat | 7.01 ms | 6.02 ms | 1.16x |
+| Go2 Rough | 10.54 ms | 10.44 ms | 1.01x (within run variability) |
 
-Live checks passed for 34 Flat and 36 Rough observation/reward/termination terms. Both tasks
-captured nine action, observation, reward, and termination stages, including resets. These figures
-measure environment stepping; PPO policy inference and optimization are excluded.
+Live checks passed for 34 Flat and 36 Rough terms across 100 steps per stage with partial timeouts.
+Flat captured nine stages; Rough captured five action/termination stages. Full Rough capture was
+excluded after a stale height-scanner reward failed parity. These measurements exclude policy
+inference and optimization and do not establish training convergence or identical random trajectories.
 
 **Play-only**
 
@@ -245,11 +279,13 @@ python scripts/z_rl/train.py --task=... visualizer=rerun   # Hydra-style overrid
 **Z-RL train** (see `scripts/z_rl/cli_args.py`): `--resume`, `--load_run`, `--checkpoint`, `--experiment_name`, `--run_name`, `--max_iterations`, `--logger`, `--distributed`, `--teacher_checkpoint` (distillation).
 
 Z-RL and RSL-RL run directories use `<timestamp>_<resolved-physics>`, with the motion
-filename stem appended for single-clip tracking. `--run_name` adds a custom suffix,
+filename stem appended for single-clip tracking. `--run_name` is appended last, after the motion filename,
 for example, `<timestamp>_newton_mjwarp_walk_trial1`. Automatic PhysX selection is
 recorded as the actual backend (`ovphysx` or `isaacsim_physx`).
 
-Comet logging (optional): install `pip install comet-ml`, set `COMET_API_KEY` (and optionally `COMET_WORKSPACE`), then train with `--logger comet --log_project_name <project>`. Local TensorBoard logs are retained. Agent configs also accept `logger = {"class_name": "CometLogWriter", "project_name": "<project>"}`.
+<!-- Comet logging (optional): install `pip install comet-ml`, set `COMET_API_KEY` (and optionally `COMET_WORKSPACE`), then train with `--logger comet --log_project_name <project>`. Local TensorBoard logs are retained. Agent configs also accept `logger = {"class_name": "CometLogWriter", "project_name": "<project>"}`. -->
+<!--  -->
+<!-- Trackio logging (optional): install `pip install trackio` (or the Z-RL extra `pip install -e '/path/to/z_rl[trackio]'`), then train with `--logger trackio --log_project_name <project>`. Agent configs also accept `logger = {"class_name": "TrackioLogWriter", "project_name": "<project>"}`. Metrics, configs, checkpoints, code diffs, and videos are logged alongside local TensorBoard logs. Automatic GPU/CPU monitoring is disabled. Trackio stores runs locally by default; view them with `trackio show --project <project>`. For remote logging, set `TRACKIO_SPACE_ID=owner/space` and authenticate with Hugging Face, or set `TRACKIO_SERVER_URL` for a self-hosted server. See the [Trackio documentation](https://huggingface.co/docs/trackio). -->
 
 ### Play checkpoints trained on a server
 
@@ -296,18 +332,18 @@ not supported by this entry point.
     - Listing registered tasks (includes installed external projects):
 
         ```bash
-        python scripts/list_envs.py
+        python scripts/tools/list_envs.py
         ```
 
     - Running a task with a random agent for testing:
 
         ```bash
-        python scripts/random_agent.py --task=<TASK_NAME>
+        python scripts/tools/random_agent.py --task=<TASK_NAME>
         ```
 
     <!-- - Fetch a training logging from remote server: -->
     <!--     ```bash -->
-    <!--     ./scripts/sync_logs.sh --help  # check this script for usage -->
+    <!--     ./scripts/tools/sync_logs.sh --help  # check this script for usage -->
     <!--     ``` -->
 
 - **Preset terrains:**
@@ -328,7 +364,7 @@ Generate a standalone, pip-installable task package **outside** this repository:
 ```bash
 python -m locolab.template
 # or
-python scripts/new_project.py
+python scripts/tools/new_project.py
 ```
 
 The generator asks for a parent directory, project folder name, Python package name, config/task name, and RL library (`z_rl`, `rsl_rl`, or `both`). These names are independent: `Go2ParkourLab` can install as `go2_parkour` and register `Velocity-Flat-MyGo2`. Avoid config names like `go2` that collide with LocoLab built-ins.

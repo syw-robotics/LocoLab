@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Sync logs from remote server to local
-# Usage: ./sync_logs.sh [options]
+# Usage: bash scripts/tools/sync_logs.sh [options]
 
 
 # Variables need to be set in the "~/.locolab_env" file, these should be read from the environment variables
@@ -18,7 +18,7 @@ ONLY_CHECKPOINT=false
 CONFIG_FILE_NAME=".locolab_env"
 
 # Variables do not change
-LOCAL_LOG_ROOT_PATH="$(cd "$(dirname "$0")"/.. && pwd)/logs/z_rl"
+LOCAL_LOG_ROOT_PATH="$(cd "$(dirname "$0")"/../.. && pwd)/logs/z_rl"
 
 # Color output
 RED='\033[0;31m'
