@@ -126,7 +126,7 @@ class MjviserRobot:
     def __init__(self, robot, num_envs: int) -> None:
         self.robot = robot
         self.visual_hulls = False
-        self.distance_lod = True
+        self.distance_lod = False
         self._mjcf_path = robot_mjcf_path(robot.cfg)
         model = load_mjcf_model(self._mjcf_path)
         self.model = model
@@ -181,6 +181,7 @@ class MjviserRobot:
         self._visual_lods = [
             (group.handle, group.handle.lod) for group in self.scene._mesh_groups if group.group_id == 0
         ]
+        self.set_distance_lod(self.distance_lod)
 
         # mjviser exports flat colors as vertex colors without a BLEND material.
         # Private handle access stays in this adapter (mjviser version pinned).
@@ -199,6 +200,27 @@ class MjviserRobot:
         # camera-tracking offset moves the entire world consistently.
         self.scene.site_groups_visible = [False] * 6
         self.set_visibility(self.has_visual, not self.has_visual and self.has_collision, False)
+
+    def create_scene_gui(self) -> None:
+        """Keep mjviser's environment slider synchronized with robot clicks."""
+        self.scene.create_scene_gui()
+        if self.scene.num_envs <= 1:
+            return
+        # mjviser keeps its slider local; access the pinned Viser handle registry
+        # here so clicks use the same selection callback as the native control.
+        env_slider = next(
+            handle for handle in self.scene.server.gui._gui_input_handle_from_uuid.values()
+            if isinstance(handle, viser.GuiSliderHandle) and handle.label == "Select"
+        )
+        handles = [(group.handle, len(group.body_ids)) for group in self.scene._mesh_groups]
+        handles += [(handle, 1) for handle, _ in self.scene._hull_dynamic_handles]
+        for handle, bodies_per_env in handles:
+            @handle.on_click
+            def _(event, count=bodies_per_env) -> None:
+                if event.instance_index is None or self.scene.show_only_selected:
+                    return
+                # Instances are flattened in environment, then body order.
+                env_slider.value = int(event.instance_index) // count
 
     def set_visibility(self, visual: bool, collision: bool, hull: bool) -> None:
         """Select one shared visual/ghost mesh mode; collision stays independent."""

@@ -89,8 +89,8 @@ def set_locomotion_physics(
     )
 
     sim.physics = physics
-    # ImplicitActuatorCfg ignores this flag and keeps its drive on the solver. The flag enables
-    # native Newton actuators for explicit configs such as DCMotorCfg and IdealPDActuatorCfg.
+    # ImplicitActuatorCfg ignores this flag and keeps its drive on the solver.
+    # The flag enables native Newton actuators for explicit configs such as DCMotorCfg and IdealPDActuatorCfg.
     sim.use_newton_actuators = False
 
 

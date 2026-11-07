@@ -46,6 +46,13 @@ class MotionCommandCfg(CommandTermCfg):
     velocities and unit gravity are expressed in its reference frame.
     """
 
+    command_frame_offsets: tuple[int, ...] = (0,)
+    """Reference frame offsets in control steps, concatenated frame first, then term.
+
+    Negative offsets read past reference frames; positive offsets read future ones.
+    Each index is clamped to the current clip's first/last frame, without wrapping.
+    """
+
     pose_range: dict[str, tuple[float, float]] = {}
     """Uniform root pose noise applied when a reference state is sampled."""
 

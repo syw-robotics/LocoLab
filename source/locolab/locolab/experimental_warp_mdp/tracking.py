@@ -7,6 +7,8 @@ import warp as wp
 from isaaclab.utils.warp.launch_cache import _WarpLaunchCache
 from isaaclab_experimental.managers import ManagerTermBase
 
+from locolab.utils.motion.command import COMMAND_DIMS, command_dimension, reference_command
+
 
 @wp.func
 def _rotation_error(reference: wp.quat, actual: wp.quat):
@@ -50,13 +52,23 @@ class _MotionTerm(ManagerTermBase):
 @wp.kernel(enable_backward=False)
 def _command_frame(
     frames: wp.array(dtype=wp.int64), position: wp.array2d(dtype=float), velocity: wp.array2d(dtype=float),
+    base: wp.array2d(dtype=float), columns: wp.array(dtype=int),
+    offsets: wp.array(dtype=wp.int64), clip_starts: wp.array(dtype=wp.int64),
+    frame_clip: wp.array(dtype=wp.int64), frame_end: wp.array(dtype=wp.int64),
     out: wp.array2d(dtype=float),
 ):
     i, j = wp.tid()
-    if j < position.shape[1]:
-        out[i, j] = position[frames[i], j]
+    column = columns[j % columns.shape[0]]
+    frame = frames[i]
+    offset = offsets[j // columns.shape[0]]
+    if offset != wp.int64(0):
+        frame = wp.clamp(frame + offset, clip_starts[frame_clip[frame]], frame_end[frame] - wp.int64(1))
+    if column < position.shape[1]:
+        out[i, j] = position[frame, column]
+    elif column < 2 * position.shape[1]:
+        out[i, j] = velocity[frame, column - position.shape[1]]
     else:
-        out[i, j] = velocity[frames[i], j - position.shape[1]]
+        out[i, j] = base[frame, column - 2 * position.shape[1]]
 
 
 class generated_commands(ManagerTermBase):
@@ -66,11 +78,34 @@ class generated_commands(ManagerTermBase):
         self._frames = wp.from_torch(command.time_steps, dtype=wp.int64)
         self._position = wp.from_torch(command.motion.joint_pos)
         self._velocity = wp.from_torch(command.motion.joint_vel)
-        self._descriptor = SimpleNamespace(out_dim=2 * self._position.shape[1])
+        terms = command.cfg.command_terms
+        joints = self._position.shape[1]
+        offsets = tuple(command.cfg.command_frame_offsets)
+        self._descriptor = SimpleNamespace(out_dim=command_dimension(terms, joints, offsets))
+        self._offsets = wp.array(offsets, dtype=wp.int64, device=env.device)
+        self._clip_starts = wp.from_torch(command.motion.clip_starts)
+        self._frame_clip = wp.from_torch(command.motion.frame_clip)
+        self._frame_end = wp.from_torch(command.motion.frame_end)
+        columns, base_terms = [], []
+        base_offset = 2 * joints
+        for name in terms:
+            if name in ("joint_pos", "joint_vel"):
+                offset = 0 if name == "joint_pos" else joints
+                columns.extend(range(offset, offset + joints))
+            else:
+                columns.extend(range(base_offset, base_offset + COMMAND_DIMS[name]))
+                base_offset += COMMAND_DIMS[name]
+                base_terms.append(name)
+        self._columns = wp.array(columns, dtype=int, device=env.device)
+        # Precompute only requested root fields; joint trajectories remain shared.
+        self._base = (wp.from_torch(reference_command(command.motion, slice(None), base_terms))
+                      if base_terms else wp.empty((0, 0), device=env.device))
 
     def __call__(self, env, out, command_name):
         wp.launch(_command_frame, dim=out.shape,
-                  inputs=[self._frames, self._position, self._velocity, out], device=self.device)
+                  inputs=[self._frames, self._position, self._velocity, self._base, self._columns,
+                          self._offsets, self._clip_starts, self._frame_clip, self._frame_end, out],
+                  device=self.device)
 
 
 @wp.kernel(enable_backward=False)

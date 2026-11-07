@@ -57,6 +57,7 @@ GO2_SPATIAL_SYMMETRY_MAPPING = complete_symmetry_mapping(
 )
 
 UNITREE_GO2_CFG = LocoLabArticulationCfg(
+    deployment_robot="go2",
     spawn=assetx_export_usd_cfg(
         asset_path=_GO2_SOURCE_URDF,
         foot_expression="/.*_foot/collisions.*",

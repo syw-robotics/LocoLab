@@ -10,7 +10,7 @@ from isaaclab.utils import configclass
 
 import locolab.tasks.manager_based.locomotion.tracking.mdp as mdp
 
-from . import ANCHOR_BODY_NAME, BODY_NAMES, DEFAULT_MOTION_FILE, JOINT_NAMES, VELOCITY_RANGE
+from . import BODY_NAMES, DEFAULT_MOTION_FILE, JOINT_NAMES, VELOCITY_RANGE
 
 
 @configclass
@@ -22,12 +22,13 @@ class CommandsCfg:
         resampling_time_range=(1.0e9, 1.0e9),
         debug_vis=False,
         motion_file=DEFAULT_MOTION_FILE,
-        anchor_body_name=ANCHOR_BODY_NAME,
+        anchor_body_name="pelvis",
         body_names=BODY_NAMES,
         joint_names=JOINT_NAMES,
-        # Select reference fields and their concatenation order (one frame).
+        # Select reference fields and their concatenation order within each frame.
         # Available: joint_pos, joint_vel, base_height, base_lin_vel, base_ang_vel, projected_gravity.
-        command_terms=("joint_pos", "joint_vel"),
+        command_terms=("joint_pos", "joint_vel", "base_height", "base_lin_vel", "base_ang_vel", "projected_gravity"),
+        command_frame_offsets=(0,),  # e.g. (-8, -4, -2, 0, 1, 2, 3, 4), history to future in control steps.
         pose_range={
             "x": (-0.05, 0.05),
             "y": (-0.05, 0.05),

@@ -509,7 +509,8 @@ def _short_swing(
         j = ids[k]
         if last_contact[i, j] > 0.0:
             total += wp.max(1.0 - air[i, j] / minimum, 0.0) * first_contact[i, j]
-    out[i] = wp.where(_moving(command, i), total, 0.0)
+    scale = wp.min(wp.length(wp.vec2(command[i, 0], command[i, 1])) / 0.5 + wp.abs(command[i, 2]) / 1.5, 1.0)
+    out[i] = wp.where(_moving(command, i), total * scale, 0.0)
 
 
 def feet_short_swing(env, out, command_name, sensor_cfg, min_air_time):

@@ -316,7 +316,7 @@ class ViserPlayViewer:
                     for client in self._server.get_clients().values():
                         self._apply_camera_move_speed(client)
 
-            self._robot_view.scene.create_scene_gui()
+            self._robot_view.create_scene_gui()
             self._build_debug_gui()
 
         with tabs.add_tab("Visualization", icon=viser.Icon.EYE):
@@ -337,6 +337,20 @@ class ViserPlayViewer:
                     if isinstance(term, PushDebugVis):
                         term.set_debug_vis(bool(event.target.value))
 
+                if hasattr(obj, "get_motion_ghost"):
+                    count = self._server.gui.add_number(
+                        f"{label} ghost_max_envs",
+                        initial_value=min(obj.cfg.ghost_max_envs, self._num_envs),
+                        min=1,
+                        max=self._num_envs,
+                        step=1,
+                        hint="Maximum reference ghosts in the browser's current environment selection.",
+                    )
+
+                    @count.on_update
+                    def _(event, key=label) -> None:
+                        self._debug_scene.ghost_max_envs[key] = int(event.target.value)
+
     def _build_robot_vis_gui(self) -> None:
         with self._server.gui.add_folder("Robot"):
             visual = self._server.gui.add_checkbox("Visual", initial_value=self._robot_view.has_visual)
@@ -348,7 +362,7 @@ class ViserPlayViewer:
                 hint="Use the same convex-hull visual meshes for the robot and browser ghost.",
             )
             distance_lod = self._server.gui.add_checkbox(
-                "Distance LOD", initial_value=True,
+                "Distance LOD", initial_value=self._robot_view.distance_lod,
                 hint="Reduce distant Visual and ghost meshes. Disable to keep full detail at every distance.",
             )
 

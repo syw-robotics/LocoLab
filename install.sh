@@ -35,7 +35,7 @@ if sys.version_info[:2] != (3, 12):
 '
 
 # Locate LocoLab relative to this script, independent of the current working directory.
-repo_root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
+repo_root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 
 # Add required OV PhysX and Viser dependencies; Newton MJWarp and GL are in the base install.
 extras=(--extra ovphysx --extra viser)
@@ -45,8 +45,8 @@ if [[ "${3:-}" == "--all" ]]; then
     extras+=(--extra ovrtx --extra isaacsim)
 fi
 
-# Sync Isaac Lab into the active environment while retaining unrelated installed packages.
-uv sync --project "$1" --active --inexact "${extras[@]}"
+# Use Isaac Lab's lockfile without rewriting it, retaining unrelated installed packages.
+uv sync --project "$1" --active --inexact --locked "${extras[@]}"
 
 # Install the supplied Z-RL checkout, LocoLab, and its extension in editable mode with dependencies.
 uv pip install --python "$VIRTUAL_ENV/bin/python" \

@@ -37,7 +37,7 @@ from locolab.tasks.manager_based.locomotion.velocity.config.unitree_g1.mdp_cfg i
 )
 from locolab.assets import UNITREE_G1_29DOF_TORSO_BASE_CFG  # isort: skip
 from locolab.utils.terrains.terrains_cfg import ROUGH_TERRAINS_CFG  # isort: skip
-from locolab.utils.markers import BLUE_RAY_CASTER_MARKER_CFG  # isort: skip
+from locolab.utils.debug_viz.markers import BLUE_RAY_CASTER_MARKER_CFG  # isort: skip
 
 
 ##
@@ -127,7 +127,10 @@ class G1RoughEnvCfg(ManagerBasedRLEnvCfg):
         self.sim.dt = 0.005
         self.sim.render_interval = self.decimation
         self.sim.physics_material = self.scene.terrain.physics_material
-        set_locomotion_physics(self.sim, rigid_patch_count=2**16, njmax=100, nconmax=20)
+        set_locomotion_physics(
+            self.sim, rigid_patch_count=2**16,
+            num_substeps=1, cone="elliptic", impratio=5.0, njmax=100, nconmax=20
+        )
         # update sensor update periods
         # we tick all the sensors based on the smallest update period (physics update period)
         self.scene.contact_forces.update_period = self.sim.dt
@@ -144,6 +147,7 @@ class G1RoughEnvCfg_PLAY(G1RoughEnvCfg):
         self.scene.num_envs = 10
         self.scene.env_spacing = 2.5
         self.commands.base_velocity.debug_vis = True
+        self.events.push_robot_by_setting_velocity.params["debug_vis"] = True
 
         # set command ranges to the curriculum limits
         lin_vel_cmd_params = self.curriculum.lin_vel_cmd_levels.params

@@ -9,6 +9,5 @@
 """LocoLab: locomotion environments and utilities on Isaac Lab.
 
 Import ``locolab.tasks`` to register Gym environments and installed
-``locolab.tasks`` plugins. The package root stays passive so tools such as
-``python -m locolab.template`` do not load Isaac Sim.
+``locolab.tasks`` plugins. The package root stays passive and does not load Isaac Sim.
 """

@@ -1,0 +1,8 @@
+default: motion_tracking
+ckpts:
+  motion_tracking: .
+switch:
+  enabled: false
+motion_ghost:
+  enabled: true
+  toggle_key: g

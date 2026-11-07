@@ -102,6 +102,7 @@ def configure_history(cfg):
         "base_ang_vel": 3,
         "projected_gravity": 3,
         "velocity_commands": 3,
+        "task_command": 5,
         "joint_pos": "joint",
         "joint_vel": "joint",
         "actions": "action",

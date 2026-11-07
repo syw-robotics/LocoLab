@@ -9,7 +9,6 @@
 """Installation script for the 'locolab' python package."""
 
 import os
-from pathlib import Path
 
 import toml
 from setuptools import find_packages, setup
@@ -29,15 +28,6 @@ INSTALL_REQUIRES = [
 ]
 
 
-def _template_package_data() -> list[str]:
-    """Non-Python files copied into generated external projects."""
-    template_pkg = Path(EXTENSION_PATH) / "locolab" / "template"
-    root = template_pkg / "external_project"
-    if not root.is_dir():
-        return []
-    return [str(path.relative_to(template_pkg)) for path in root.rglob("*") if path.is_file()]
-
-
 # Installation operation
 setup(
     name="locolab",
@@ -52,8 +42,13 @@ setup(
     license="Apache License 2.0",
     include_package_data=True,
     package_data={
-        "locolab.template": _template_package_data(),
-        "locolab": ["assets/terrains/checker_ground/*.usda", "assets/terrains/checker_ground/Materials/Textures/*.png"],
+        "locolab": [
+            "assets/terrains/checker_ground/*.usda",
+            "assets/terrains/checker_ground/Materials/Textures/*.png",
+            "utils/deployment/templates/*.yaml",
+            "utils/deployment/templates/*/*.yaml",
+            "utils/deployment/templates/*/*.md",
+        ],
     },
     python_requires=">=3.10",
     entry_points={

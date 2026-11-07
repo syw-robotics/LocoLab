@@ -38,13 +38,14 @@ class MotionGhost:
         self.default_joint_pos = as_numpy(robot.data.default_joint_pos, slice(None)).copy()
         self.origins = as_numpy(command._env.scene.env_origins, slice(None)).copy()
 
-    def poses(self, command, selector=slice(None)):
+    def poses(self, command, selector=slice(None), *, max_envs=None):
         """Return world link poses for the selected environments, in wxyz order."""
-        frames = command.time_steps[selector][:self.max_envs].detach().cpu().numpy()
-        position = self.root_pos[frames] + self.origins[selector][:self.max_envs]
+        max_envs = self.max_envs if max_envs is None else max_envs
+        frames = command.time_steps[selector][:max_envs].detach().cpu().numpy()
+        position = self.root_pos[frames] + self.origins[selector][:max_envs]
         orientation = self.root_wxyz[frames]
         # Preserve default positions for any robot joints omitted by the motion clip.
-        joints = self.default_joint_pos[selector][:self.max_envs].copy()
+        joints = self.default_joint_pos[selector][:max_envs].copy()
         joints[:, command._joint_ids] = self.joint_pos[frames]
         return self.bodies.poses(position, orientation, joints[:, self.joint_ids])
 

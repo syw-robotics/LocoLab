@@ -46,7 +46,7 @@ class _TrackingCallSwitch:
             data = self._env.command_manager.get_term("motion").robot.data
             arrays = [data.body_link_pose_w.warp]
             if stage == "RewardManager_compute":
-                arrays.append(data.body_link_vel_w.warp)
+                arrays.extend([data.body_link_vel_w.warp, data.root_link_pose_w.warp])
                 for cfg in self._env.reward_manager._term_cfgs:
                     for name in cfg.params.get("sensor_names", ()):
                         history = self._env.scene[name].data.normal_force_matrix_w_history

@@ -12,7 +12,6 @@ from isaaclab.assets import ArticulationCfg, AssetBaseCfg
 from isaaclab.envs import ManagerBasedRLEnvCfg
 from isaaclab.scene import InteractiveSceneCfg
 from isaaclab.sensors import ContactSensorCfg
-from isaaclab.sim.schemas import UsdPhysicsCollisionCfg
 from isaaclab.utils import configclass
 
 from locolab.utils.physics import set_self_collisions, set_locomotion_physics
@@ -35,7 +34,9 @@ from locolab.tasks.manager_based.locomotion.velocity.config.unitree_g1.mdp_cfg i
     FOOT_CONTACT_LINK_NAMES,
     SELF_COLLISION_LINK_NAMES,
 )
-from locolab.assets.robots.unitree.G1.g1 import UNITREE_G1_29DOF_TORSO_BASE_CFG  # isort: skip
+#  from locolab.assets.robots.unitree.G1.g1 import UNITREE_G1_29DOF_TORSO_BASE_CFG    # isort: skip
+# from locolab.assets.robots.unitree.G1.g1 import UNITREE_G1_29DOF_PELVIS_BASE_CFG  # isort: skip
+from locolab.assets.robots.unitree.G1.g1 import g1_sphere_feet_cfg  # isort: skip
 
 
 ##
@@ -73,7 +74,9 @@ class G1FlatSceneCfg(InteractiveSceneCfg):
     )
 
     # =====  robots  =====
-    robot: ArticulationCfg = UNITREE_G1_29DOF_TORSO_BASE_CFG.replace(
+    #  robot: ArticulationCfg = g1_sphere_feet_cfg("torso").replace(
+    robot: ArticulationCfg = g1_sphere_feet_cfg("pelvis").replace(
+    #  robot: ArticulationCfg = UNITREE_G1_29DOF_PELVIS_BASE_CFG.replace(
         prim_path="{ENV_REGEX_NS}/Robot",
     )
 
@@ -124,32 +127,34 @@ class G1FlatEnvCfg(ManagerBasedRLEnvCfg):
         self.sim.render_interval = self.decimation
         self.sim.physics_material = self.scene.terrain.physics_material
         # physics settings
-        set_locomotion_physics(self.sim, rigid_patch_count=2**16, njmax=250, nconmax=70)
-        # disable self collisions
-        set_self_collisions(self.scene.robot.spawn, False)
-        self.self_collision_contact_forces = None
-        # only keep foot collisions
-        self.scene.robot.spawn.collision_props["/(?!.*_ankle_roll_link).*"] = [
-            UsdPhysicsCollisionCfg(collision_enabled=False)
-        ]
+        set_locomotion_physics(
+            self.sim, rigid_patch_count=2**16,
+            num_substeps=1, cone="elliptic", impratio=5.0, njmax=90, nconmax=20, ls_iterations=30,
+        )
+        set_self_collisions(self.scene.robot.spawn, True)
 
         # update sensor update periods
         self.scene.feet_contact_forces.update_period = self.sim.dt
-        #  self.scene.self_collision_contact_forces.update_period = self.sim.dt
+        self.scene.self_collision_contact_forces.update_period = self.sim.dt
 
 
 def _configure_play_env(cfg: G1FlatEnvCfg) -> None:
     cfg.scene.num_envs = 10
     cfg.scene.env_spacing = 2.5
     cfg.commands.base_velocity.debug_vis = True
+    cfg.events.push_robot_by_setting_velocity.params["debug_vis"] = True
 
     lin_vel_cmd_params = cfg.curriculum.lin_vel_cmd_levels.params
     ang_vel_cmd_params = cfg.curriculum.ang_vel_cmd_levels.params
+    push_robot_params = cfg.curriculum.push_robot_levels.params
     cfg.commands.base_velocity.ranges = type(cfg.commands.base_velocity.ranges)(
         lin_vel_x=lin_vel_cmd_params["max_lin_vel_x_ranges"],
         lin_vel_y=lin_vel_cmd_params["max_lin_vel_y_ranges"],
         ang_vel_z=ang_vel_cmd_params["max_ang_vel_z_ranges"],
         heading=cfg.commands.base_velocity.ranges.heading,
+    )
+    cfg.events.push_robot_by_setting_velocity.params["velocity_range"] = dict(
+        push_robot_params["max_push_velocity_ranges"]
     )
 
 

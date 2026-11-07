@@ -23,6 +23,7 @@ class ActionsCfg:
         joint_names=JOINT_NAMES,
         scale=g1_action_scale,
         use_default_offset=True,
-        use_reference_residual=False,
+        use_reference_residual=True,
+        #  use_reference_residual=False,
         preserve_order=True,
     )

@@ -97,7 +97,8 @@ class DebugScene:
         self._frames: dict[str, object] = {}
         self._ghosts: dict[str, tuple] = {}
         self._ghost_hulls = False
-        self.distance_lod = True
+        self.ghost_max_envs: dict[str, int] = {}
+        self.distance_lod = False
         self._meshes = {
             "shaft": _unit_shaft(),
             "head": _unit_head(),
@@ -183,7 +184,7 @@ class DebugScene:
             self._ghosts[label] = (command.get_motion_ghost(), [])
         ghost, handles = self._ghosts[label]
         meshes = ghost.bodies.hull_meshes if self._ghost_hulls else ghost.bodies.meshes
-        positions, wxyz = ghost.poses(command, selector)
+        positions, wxyz = ghost.poses(command, selector, max_envs=self.ghost_max_envs.get(label))
         count = len(positions)
         if handles and len(handles[0].batched_positions) != count:
             for handle in handles:
@@ -305,10 +306,9 @@ def _draw_terrain(scene: DebugScene, label: str, obj) -> None:
 
 def _ray_hits(obj):
     data = getattr(obj, "data", None)
-    if data is None:
-        return None
     try:
-        return getattr(data, "ray_hits_w", None)
+        hits = getattr(data, "ray_hits_w", None)
+        return hits if hits is not None else getattr(obj, "ray_hits_w", None)
     except Exception:
         return None
 
@@ -392,23 +392,32 @@ def _draw_arrow(
 
 def _draw_rays(scene: DebugScene, label: str, obj, selector) -> None:
     hits = as_numpy(_ray_hits(obj), selector).reshape(-1, 3)
+    # Custom sensors share prototype indices with their Isaac Lab debug drawing.
+    indices_fn = getattr(obj, "get_debug_vis_marker_indices", None)
+    indices = indices_fn() if indices_fn is not None else None
+    indices = as_numpy(indices, selector).reshape(-1) if indices is not None else np.zeros(len(hits), dtype=np.int32)
     finite = np.isfinite(hits).all(axis=1)
-    points = hits[finite]
+    points, indices = hits[finite], indices[finite]
     if len(points) > _MAX_RAY_POINTS:
-        points = points[:: int(np.ceil(len(points) / _MAX_RAY_POINTS))]
+        stride = int(np.ceil(len(points) / _MAX_RAY_POINTS))
+        points, indices = points[::stride], indices[::stride]
     if len(points) == 0:
         scene.clear(label)
         return
-    count = len(points)
-    radius, ray_color = _ray_hit_style(obj)
-    scene.show(
-        f"{label}/points",
-        "point",
-        points.astype(np.float32),
-        np.tile(np.array([1.0, 0.0, 0.0, 0.0], dtype=np.float32), (count, 1)),
-        np.full((count, 3), radius, dtype=np.float32),
-        ray_color,
-    )
+    vis = getattr(getattr(obj, "cfg", None), "visualizer_cfg", None)
+    markers = getattr(vis, "markers", {"hit": None})
+    for index, marker_name in enumerate(markers):
+        positions = points[indices == index].astype(np.float32)
+        count = len(positions)
+        radius, color = _sphere_style_from_marker_cfg(vis, marker_name, _BLUE_RAY_HIT_RADIUS, _BLUE_RAY_HIT_COLOR)
+        scene.show(
+            f"{label}/points/{marker_name}",
+            "point",
+            positions,
+            np.tile(np.array([1.0, 0.0, 0.0, 0.0], dtype=np.float32), (count, 1)),
+            np.full((count, 3), radius, dtype=np.float32),
+            color,
+        )
 
 
 def _draw_volume_points(scene: DebugScene, label: str, obj: VolumePoints, selector) -> None:
@@ -450,12 +459,6 @@ def _length_gain(obj) -> float:
     arrow = markers.get("arrow") if isinstance(markers, dict) else None
     scale = getattr(arrow, "scale", (0.5, 0.5, 0.5))
     return float(scale[0])
-
-
-def _ray_hit_style(obj) -> tuple[float, tuple[int, int, int]]:
-    cfg = getattr(obj, "cfg", None)
-    vis = getattr(cfg, "visualizer_cfg", None)
-    return _sphere_style_from_marker_cfg(vis, "hit", _BLUE_RAY_HIT_RADIUS, _BLUE_RAY_HIT_COLOR)
 
 
 def _sphere_style_from_marker_cfg(

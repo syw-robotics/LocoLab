@@ -64,9 +64,6 @@ BODY_NAMES = (
     "right_wrist_yaw_link",
 )
 
-# Tracking anchor; override commands.motion.anchor_body_name="torso_link" for torso tracking.
-# The robot's floating base and motion root remain pelvis.
-ANCHOR_BODY_NAME = "pelvis"
 OTHER_BODY_LINK_NAMES = [
     ".*_hip_.*_link",
     ".*_knee_link",

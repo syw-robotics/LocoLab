@@ -20,16 +20,22 @@ Robot layers are **Visual** and **Collision** (green enabled, gray disabled by t
 environment). **Convex hull** selects the shared mesh mode for Visual and browser
 motion ghosts: off uses the original visual meshes with matching mjviser grouping
 and distance LOD; on replaces both with visual-only convex hulls. **Distance LOD**
-in **Visualization → Robot** defaults to on; turn it off to keep full mesh detail
-at every distance for both Visual and browser ghosts. This toggle is independent
+in **Visualization → Robot** defaults to off, keeping full mesh detail at every
+distance for both Visual and browser ghosts. Enable it to simplify distant meshes. This toggle is independent
 of the convex-hull mode. Visual primitives
 and meshes without valid hulls retain their original geometry. The collision layer
 always shows the assetx-exported simulation collision shapes and is unaffected by
 the visual mesh mode. Ghost visibility remains a separate task debug control.
+Under **Controls → debug_viz**, **command/motion ghost_max_envs** changes the live
+browser ghost limit from 1 to the number of simulated environments. It starts at
+the configured `ghost_max_envs` (capped by that number) and applies after environment selection.
 Kit/Newton ghosts always keep their original visual meshes. These controls affect
 display only; they do not change simulation.
 
 Camera tracking, FOV and environment selection use mjviser's native Scene GUI.
+Left-click a robot to select its environment and update **Environment → Select**.
+Picking works with Visual, Collision, and Convex hull meshes. Camera tracking
+follows the selection when enabled; **Hide others** keeps its current setting.
 Terrain and task overlays are children of its `/fixed_bodies` frame, so tracking
 moves the whole scene consistently. Playback pause/reset/speed and task-specific
 debug/terrain controls remain in LocoLab. **Controls → Navigation → Move speed (m/s)**

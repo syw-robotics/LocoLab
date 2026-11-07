@@ -18,7 +18,7 @@ from isaaclab.utils import configclass
 @configclass
 class G1TrackingPPORunnerCfg(ZRlOnPolicyRunnerCfg):
     num_steps_per_env = 24
-    max_iterations = 10_000
+    max_iterations = 5000
     save_interval = 500
     experiment_name = "g1_flat_tracking"
     obs_groups = {"actor": ["policy"], "critic": ["critic"]}

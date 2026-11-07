@@ -38,7 +38,7 @@ if TYPE_CHECKING:
 
 
 class MotionCommand(CommandTerm):
-    """Track sampled motion clips using configurable single-frame reference fields."""
+    """Track sampled motion clips using configurable reference fields and frame offsets."""
 
     cfg: MotionCommandCfg
 
@@ -49,7 +49,11 @@ class MotionCommand(CommandTerm):
             raise ValueError("metrics_update_interval must be a positive integer.")
         if not isinstance(cfg.ghost_max_envs, int) or cfg.ghost_max_envs < 1:
             raise ValueError("ghost_max_envs must be a positive integer.")
-        self.command_dim = command_dimension(cfg.command_terms, len(cfg.joint_names))
+        self.command_dim = command_dimension(cfg.command_terms, len(cfg.joint_names), cfg.command_frame_offsets)
+        self._command_offsets = (
+            None if tuple(cfg.command_frame_offsets) == (0,)
+            else torch.tensor(cfg.command_frame_offsets, dtype=torch.long, device=self.device)
+        )
         self._metrics_update_counter = 0
 
         # Resolve robot indices once; all state views below follow the configured order.
@@ -122,8 +126,13 @@ class MotionCommand(CommandTerm):
     # Only positions need the scene origin offset to become simulation world positions.
     @property
     def command(self) -> torch.Tensor:
-        """Single-frame reference fields in ``cfg.command_terms`` order."""
-        return torch.cat([source[self.time_steps] for source in self._command_sources], dim=-1)
+        """Reference windows in frame-offset order, with terms ordered within each frame."""
+        if self._command_offsets is None:
+            return torch.cat([source[self.time_steps] for source in self._command_sources], dim=-1)
+        start = self.motion.clip_starts[self.motion.frame_clip[self.time_steps]]
+        end = self.motion.frame_end[self.time_steps] - 1
+        frames = (self.time_steps[:, None] + self._command_offsets).clamp(start[:, None], end[:, None])
+        return torch.cat([source[frames] for source in self._command_sources], dim=-1).flatten(1)
 
     @property
     def joint_pos(self) -> torch.Tensor:

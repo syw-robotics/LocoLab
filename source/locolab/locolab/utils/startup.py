@@ -44,12 +44,12 @@ loading_screen = startup_screen
 
 
 def add_motion_file_arg(parser: argparse.ArgumentParser) -> None:
-    """Register ``--motion_file`` for tracking and AMP tasks."""
+    """Register ``--motion_file`` for tasks with a motion source."""
     parser.add_argument(
         "--motion_file",
         type=str,
         default=None,
-        help="Path to a converted motion NPZ or directory (tracking commands.motion or AMP data).",
+        help="Path to a converted motion NPZ or directory.",
     )
 
 
@@ -57,21 +57,31 @@ def prepend_motion_file_hydra_override(
     motion_file: str | None, hydra_args: list[str], *, task: str | None = None
 ) -> list[str]:
     """Apply ``--motion_file`` before env ``__post_init__`` runs inside ``resolve_task_config``."""
-    if motion_file is None or (task is not None and task.split(":")[-1] in ("AMP-Flat-G1", "AMP-Flat-G1-Play")):
+    if motion_file is None:
         return hydra_args
+    config_path = "commands.motion.motion_file"
+    if task is not None:
+        from importlib import import_module
+
+        import gymnasium as gym
+
+        entry_point = gym.spec(task).kwargs["env_cfg_entry_point"]
+        module = import_module(entry_point.split(":", 1)[0].rsplit(".", 1)[0])
+        config_path = getattr(module, "MOTION_FILE_HYDRA_PATH", config_path)
     path = os.path.abspath(os.path.expanduser(motion_file))
-    return [*hydra_args, f"env.commands.motion.motion_file={path}"]
+    return [*hydra_args, f"env.{config_path}={path}"]
 
 
 def apply_motion_file_override(env_cfg: Any, motion_file: str | None) -> None:
-    """Override the selected tracking or AMP motion source after config resolution."""
+    """Override the selected motion source after config resolution."""
     if motion_file is None:
         return
     motion = getattr(getattr(env_cfg, "commands", None), "motion", None)
     if motion is None:
-        motion = getattr(env_cfg, "amp", None)
+        source = getattr(env_cfg, "motion_source", None)
+        motion = source() if source is not None else None
     if motion is None:
-        raise ValueError("This task has no tracking or AMP motion configuration; --motion_file is not supported.")
+        raise ValueError("This task has no motion configuration; --motion_file is not supported.")
     path = os.path.abspath(os.path.expanduser(motion_file))
     motion.motion_file = path
     print(f"[INFO] Motion clip: {path}")
@@ -84,7 +94,8 @@ def set_motion_run_name(env_cfg: Any, agent_cfg: Any, mdp_backend: str = "torch"
         parts.append("warp")
     motion = getattr(getattr(env_cfg, "commands", None), "motion", None)
     if motion is None:
-        motion = getattr(env_cfg, "amp", None)
+        source = getattr(env_cfg, "motion_source", None)
+        motion = source() if source is not None else None
     if motion is not None and getattr(motion, "motion_file", None):
         parts.append(Path(motion.motion_file).stem)
     if agent_cfg.run_name:
@@ -95,7 +106,7 @@ def set_motion_run_name(env_cfg: Any, agent_cfg: Any, mdp_backend: str = "torch"
 def restore_motion_file(
     env_cfg: Any, checkpoint: str, motion_file: str | None, hydra_args: list[str]
 ) -> None:
-    """Restore the training clip and tracking action mode unless explicitly overridden.
+    """Restore the training clip, command layout and action mode unless overridden.
 
     Keep play-specific noise and sampling settings.
     BaseLoader reads scalar strings without constructing Python objects from YAML tags.
@@ -110,7 +121,13 @@ def restore_motion_file(
     restore_action = hasattr(action, "use_reference_residual") and not any(
         arg.lstrip("+").startswith("env.actions.joint_pos.use_reference_residual=") for arg in hydra_args
     )
-    if not restore_motion and not restore_action:
+    restore_offsets = hasattr(motion, "command_frame_offsets") and not any(
+        arg.lstrip("+").startswith("env.commands.motion.command_frame_offsets=") for arg in hydra_args
+    )
+    restore_terms = hasattr(motion, "command_terms") and not any(
+        arg.lstrip("+").startswith("env.commands.motion.command_terms=") for arg in hydra_args
+    )
+    if not restore_motion and not restore_action and not restore_offsets and not restore_terms:
         return
     config_path = Path(checkpoint).parent / "params" / "env.yaml"
     if not config_path.is_file():
@@ -121,6 +138,12 @@ def restore_motion_file(
         saved_cfg = yaml.load(stream, Loader=yaml.BaseLoader)
     if restore_motion:
         apply_motion_file_override(env_cfg, saved_cfg["commands"]["motion"]["motion_file"])
+    if restore_offsets:
+        saved_motion = saved_cfg.get("commands", {}).get("motion", {})
+        motion.command_frame_offsets = tuple(int(value) for value in saved_motion.get("command_frame_offsets", (0,)))
+    if restore_terms:
+        saved_motion = saved_cfg.get("commands", {}).get("motion", {})
+        motion.command_terms = tuple(saved_motion.get("command_terms", ("joint_pos", "joint_vel")))
     if restore_action:
         saved_action = saved_cfg.get("actions", {}).get("joint_pos", {})
         action.use_reference_residual = str(saved_action.get("use_reference_residual", False)).lower() == "true"

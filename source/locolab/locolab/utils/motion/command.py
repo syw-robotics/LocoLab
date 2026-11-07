@@ -1,4 +1,4 @@
-"""Selectable single-frame reference observations, independent of the tracking anchor."""
+"""Selectable reference observations, independent of the tracking anchor."""
 
 import torch
 
@@ -15,14 +15,16 @@ COMMAND_DIMS = {
 }
 
 
-def command_dimension(terms, num_joints):
+def command_dimension(terms, num_joints, frame_offsets=(0,)):
     """Validate the configured layout once, before constructing observations."""
     if not terms or len(set(terms)) != len(terms):
         raise ValueError("command_terms must be non-empty and contain no duplicates.")
     unknown = set(terms) - COMMAND_DIMS.keys()
     if unknown:
         raise ValueError(f"Unknown command_terms: {sorted(unknown)}. Choose from {tuple(COMMAND_DIMS)}.")
-    return sum(COMMAND_DIMS[name] or num_joints for name in terms)
+    if not frame_offsets or any(type(offset) is not int for offset in frame_offsets):
+        raise ValueError("command_frame_offsets must be a non-empty sequence of integer control-step offsets.")
+    return len(frame_offsets) * sum(COMMAND_DIMS[name] or num_joints for name in terms)
 
 
 def command_sources(motion, terms):

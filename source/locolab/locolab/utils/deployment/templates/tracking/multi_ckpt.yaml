@@ -1,0 +1,20 @@
+default: locomotion
+ckpts:
+  locomotion: ../vanilla_ppo_flat  # point to a velocity policy ckpt path
+  motion_tracking: .
+# Manual round-robin profile switching, separate from state-machine transitions.
+switch:
+  # Keep false here: B must reach locomotion -> prepare_motion for the arm handoff.
+  enabled: false
+  # Only used when enabled above; the workflow B key is in state_machine.yaml.
+  button: B
+  # Names from ckpts above, not filesystem paths.
+  order: [locomotion, motion_tracking]
+  # Controller STATE names where manual cycling is allowed.
+  only_when: [locomotion]
+  # null keeps the current state; a state name triggers it after manual switching.
+  on_switch: null
+# Sim2sim reference ghost; these settings do not affect real deployment.
+motion_ghost:
+  enabled: true  # initial visibility; the toggle key overrides it at runtime
+  toggle_key: g  # choose an unused simulator key, separate from remote buttons

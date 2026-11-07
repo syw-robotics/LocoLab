@@ -57,6 +57,7 @@ B2_SPATIAL_SYMMETRY_MAPPING = complete_symmetry_mapping(
 )
 
 UNITREE_B2_CFG = LocoLabArticulationCfg(
+    deployment_robot="b2",
     spawn=assetx_export_usd_cfg(
         asset_path=_B2_SOURCE_URDF,
         foot_expression="/.*_foot/collisions.*",

@@ -78,6 +78,12 @@ class LocoLabArticulationCfg(ArticulationCfg):
 
     joint_sdk_names: list[str] = None
 
+    deployment_robot: str | None = None
+    """Robot identifier used by the deployment controller."""
+
+    deployment_imu_source: str | None = None
+    """Optional IMU selection for robots with multiple sources, such as G1."""
+
     joint_symmetry_mapping: dict[str, tuple[float, str]] | None = None
     spatial_symmetry_mapping: dict[str, str] | None = None
 

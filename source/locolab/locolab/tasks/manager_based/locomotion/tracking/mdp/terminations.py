@@ -12,16 +12,11 @@ from typing import TYPE_CHECKING, cast
 
 import torch
 
-from isaaclab.utils.math import quat_apply_inverse
-
 from .commands import MotionCommand
 from .rewards import _body_indexes
 
 if TYPE_CHECKING:
     from isaaclab.envs import ManagerBasedRLEnv
-
-
-_GRAVITY_W = (0.0, 0.0, -1.0)
 
 
 def bad_anchor_pos_z_only(env: ManagerBasedRLEnv, command_name: str, threshold: float) -> torch.Tensor:
@@ -31,10 +26,10 @@ def bad_anchor_pos_z_only(env: ManagerBasedRLEnv, command_name: str, threshold: 
 
 def bad_anchor_ori(env: ManagerBasedRLEnv, command_name: str, threshold: float) -> torch.Tensor:
     command = cast(MotionCommand, env.command_manager.get_term(command_name))
-    gravity_w = command.anchor_quat_w.new_tensor(_GRAVITY_W)
-    motion_projected_gravity_b = quat_apply_inverse(command.anchor_quat_w, gravity_w)
-    robot_projected_gravity_b = quat_apply_inverse(command.robot_anchor_quat_w, gravity_w)
-    return (motion_projected_gravity_b[:, 2] - robot_projected_gravity_b[:, 2]).abs() > threshold
+    # For xyzw quaternions, projected unit gravity's z component is 2*(x*x+y*y)-1.
+    motion_xy = command.anchor_quat_w[:, :2].square().sum(-1)
+    robot_xy = command.robot_anchor_quat_w[:, :2].square().sum(-1)
+    return (2 * (motion_xy - robot_xy)).abs() > threshold
 
 
 def bad_motion_body_pos_z_only(

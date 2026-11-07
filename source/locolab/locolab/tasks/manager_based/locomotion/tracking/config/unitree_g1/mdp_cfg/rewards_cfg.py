@@ -17,8 +17,10 @@ from . import JOINT_NAMES
 
 @configclass
 class RewardsCfg:
-    """BeyondMimic-style tracking rewards for one G1 motion."""
+    """Motion Tracking rewards for G1 motion."""
 
+    # ===== task-specific rewards =====
+    # -- root tracking --
     motion_global_root_pos = RewTerm(
         func=mdp.motion_global_anchor_position_error_exp,
         weight=0.5,
@@ -28,6 +30,17 @@ class RewardsCfg:
         func=mdp.motion_global_anchor_orientation_error_exp,
         weight=0.5,
         params={"command_name": "motion", "std": 0.4},
+    )
+    # -- body tracking --
+    motion_body_lin_vel = RewTerm(
+        func=mdp.motion_global_body_linear_velocity_error_exp,
+        weight=1.0,
+        params={"command_name": "motion", "std": 1.0},
+    )
+    motion_body_ang_vel = RewTerm(
+        func=mdp.motion_global_body_angular_velocity_error_exp,
+        weight=1.0,
+        params={"command_name": "motion", "std": 3.14},
     )
     motion_body_pos = RewTerm(
         func=mdp.motion_relative_body_position_error_exp,
@@ -39,22 +52,32 @@ class RewardsCfg:
         weight=1.0,
         params={"command_name": "motion", "std": 0.4},
     )
-    motion_body_lin_vel = RewTerm(
-        func=mdp.motion_global_body_linear_velocity_error_exp,
-        weight=1.0,
-        params={"command_name": "motion", "std": 1.0},
-    )
-    motion_body_ang_vel = RewTerm(
-        func=mdp.motion_global_body_angular_velocity_error_exp,
-        weight=1.0,
-        params={"command_name": "motion", "std": 3.14},
-    )
-    action_rate_l2 = RewTerm(func=mdp.action_rate_l2, weight=-1.0e-1)
-    joint_limit = RewTerm(
-        func=mdp.joint_pos_limits,
-        weight=-10.0,
+    # -- joint tracking --
+    #  motion_joint_pos = RewTerm(
+    #      func=mdp.motion_joint_position_error_exp,
+    #      weight=1.0,
+    #      params={"command_name": "motion", "std": 0.6},
+    #  )
+
+    # ===== penalty rewards =====
+    # -- joint --
+    action_rate = RewTerm(func=mdp.action_rate_l2, weight=-0.1)
+    joint_acc_l2 = RewTerm(
+        func=mdp.joint_acc_l2,
+        weight=-1.0e-6,
         params={"asset_cfg": SceneEntityCfg("robot", joint_names=JOINT_NAMES, preserve_order=True)},
     )
+    joint_limit = RewTerm(
+        func=mdp.joint_pos_limits,
+        weight=-5.0,
+        params={"asset_cfg": SceneEntityCfg("robot", joint_names=JOINT_NAMES, preserve_order=True)},
+    )
+    torque_limit = RewTerm(
+        func=mdp.applied_torque_limits,
+        weight=-0.1,
+        params={"asset_cfg": SceneEntityCfg("robot", joint_names=JOINT_NAMES, preserve_order=True)},
+    )
+    # -- collision --
     self_collisions = RewTerm(
         func=mdp.self_collision_cost,
         weight=-10.0,

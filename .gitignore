@@ -67,11 +67,6 @@ _build
 
 # Tests
 tests/*
-# !tests/test_kit_startup.py
-# !tests/test_volume_points.py
-# !tests/test_smp*.py
-# !tests/test_amp*.py
-# !tests/test_velocity_push.py
 
 docs/
 scripts/evaluation/

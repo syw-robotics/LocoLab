@@ -12,7 +12,7 @@ def add_mdp_backend_arg(parser: argparse.ArgumentParser) -> None:
         "--mdp_backend",
         choices=("torch", "warp"),
         default="torch",
-        help="Environment runtime: torch (default), or Warp for supported velocity, tracking, SMP and AMP tasks.",
+        help="Environment runtime: torch (default), or Warp for supported built-in and external tasks.",
     )
 
 
@@ -22,9 +22,6 @@ def apply_mdp_backend(env_cfg, backend: str):
         return env_cfg
     if backend != "warp":
         raise ValueError(f"Unknown MDP backend: {backend!r}")
-
-    if getattr(env_cfg, "model_based_tracking", False):
-        raise ValueError("Tracking WM currently requires --mdp_backend torch")
 
     import copy
 
@@ -47,10 +44,11 @@ def make_mdp_env(task: str, env_cfg, backend: str):
         raise ValueError(
             "Video recording requires --mdp_backend torch; the experimental Warp runtime does not support it."
         )
-    if getattr(env_cfg, "amp", None) is not None:
-        from locolab.experimental_warp_mdp.amp import AmpWarpEnv
+    entry_point = getattr(env_cfg, "warp_env_entry_point", None)
+    if entry_point is not None:
+        from gymnasium.envs.registration import load_env_creator
 
-        return AmpWarpEnv(cfg=env_cfg)
+        return load_env_creator(entry_point)(cfg=env_cfg)
     from locolab.experimental_warp_mdp.env import LocoLabWarpEnv
 
     return LocoLabWarpEnv(cfg=env_cfg)
@@ -58,11 +56,9 @@ def make_mdp_env(task: str, env_cfg, backend: str):
 
 def wrap_z_rl_env(env, clip_actions):
     """Keep Warp observation-history metadata visible to Z-RL's symmetry and time slicing."""
-    if getattr(env.unwrapped.cfg, "amp", None) is not None:
-        from locolab.utils.amp.vecenv import AmpVecEnvWrapper, AmpWarpVecEnvWrapper
-
-        wrapper_type = AmpWarpVecEnvWrapper if getattr(env.unwrapped.cfg, "_locolab_warp", False) else AmpVecEnvWrapper
-        return wrapper_type(env, clip_actions=clip_actions)
+    wrap = getattr(env.unwrapped.cfg, "wrap_z_rl_env", None)
+    if wrap is not None:
+        return wrap(env, clip_actions)
     if getattr(env.unwrapped.cfg, "_locolab_warp", False):
         from locolab.experimental_warp_mdp.z_rl import ZRlWarpVecEnvWrapper
 
@@ -71,6 +67,4 @@ def wrap_z_rl_env(env, clip_actions):
         from z_rl.adaptor.isaaclab import ZRlVecEnvWrapper
 
         wrapper = ZRlVecEnvWrapper(env, clip_actions=clip_actions)
-    if getattr(env.unwrapped.cfg, "smp", None) is not None:
-        wrapper.smp_runtime = env.unwrapped.smp_runtime
     return wrapper

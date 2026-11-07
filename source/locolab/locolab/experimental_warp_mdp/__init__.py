@@ -6,7 +6,12 @@ from isaaclab_experimental.envs.mdp import *  # noqa: F401, F403
 from isaaclab_tasks_experimental.core.velocity.mdp import *  # noqa: F401, F403
 
 from .actions import DelayedAction, EncoderBiasJointPositionAction
-from .events import randomize_actuator_gains, randomize_encoder_bias, randomize_joint_parameters
+from .events import (
+    push_by_setting_velocity,
+    randomize_actuator_gains,
+    randomize_encoder_bias,
+    randomize_joint_parameters,
+)
 from .observations import (
     feet_contact_flag,
     generated_commands,
@@ -43,7 +48,12 @@ from .terminations import bad_orientation, illegal_contact
 
 def prepare_cfg(cfg):
     """Adapt supported tasks; reject missing terms instead of mixing manager interfaces."""
+    prepare = getattr(cfg, "prepare_warp", None)
+    if prepare is not None:
+        prepare()
+        return
     from isaaclab_experimental.envs.frontend import WarpFrontend
+    from isaaclab.sensors import RayCasterCfg
 
     from locolab.tasks.manager_based.locomotion.velocity import mdp as velocity_mdp
     from locolab.tasks.manager_based.locomotion.velocity.config.unitree_b2.flat_env_cfg import (
@@ -95,6 +105,7 @@ def prepare_cfg(cfg):
 
         namespace.update(vars(tracking))
         namespace["EncoderBiasJointPositionAction"] = TrackingJointPositionAction
+        namespace["TrackingJointPositionAction"] = TrackingJointPositionAction
         cfg.commands.motion.class_type = WarpMotionCommand
         # LocoLabWarpEnv refreshes live link/sensor caches before tracking graph replay.
     replacements = {
@@ -115,6 +126,13 @@ def prepare_cfg(cfg):
             if source is None:
                 continue
             twin = replacements.get(source)
+            if source.__name__ == "push_by_setting_velocity" and not term.params.get("debug_vis", False):
+                # Keep training on the original capturable Warp term without debug work.
+                from isaaclab_experimental.envs.mdp.events import push_by_setting_velocity as warp_push
+
+                twin = warp_push
+                term.params.pop("debug_vis", None)
+                term.params.pop("debug_vis_cfg", None)
             if twin is None:
                 missing.append(".".join(path) + ": " + source.__name__)
             else:
@@ -128,9 +146,17 @@ def prepare_cfg(cfg):
         cfg.actions.joint_pos.action.class_type = EncoderBiasJointPositionAction
     WarpFrontend.adapt_cfg(cfg)
     configure_history(cfg)
-    # Keep lazy sensor refresh outside manager graphs until its replay path is fixed.
+    # Only Go2 stages validated against live replay opt into capture automatically.
+    # Height scanners need eager reward/observation calls to refresh their data.
     if getattr(cfg, "manager_call_config", None) is None:
-        cfg.manager_call_config = os.environ.get("MANAGER_CALL_CONFIG") or {"default": 1}
+        modes = {"default": 1}
+        if str(cfg.sim.device).startswith("cuda") and type(cfg) in (
+            Go2FlatEnvCfg, Go2FlatEnvCfg_PLAY, Go2RoughEnvCfg, Go2RoughEnvCfg_PLAY
+        ):
+            modes.update(ActionManager=2, TerminationManager=2)
+            if not any(isinstance(sensor, RayCasterCfg) for sensor in vars(cfg.scene).values()):
+                modes.update(RewardManager=2, ObservationManager=2)
+        cfg.manager_call_config = os.environ.get("MANAGER_CALL_CONFIG") or modes
     cfg._locolab_warp = True
     print(
         "[INFO] LocoLab Warp runtime: observations/history, actions, rewards, terminations, events;"

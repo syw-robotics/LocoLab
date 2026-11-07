@@ -6,8 +6,27 @@ import warp as wp
 from isaaclab.envs.mdp.events import randomize_actuator_gains as _ActuatorGains
 from isaaclab.envs.mdp.events import randomize_joint_parameters as _JointParameters
 from isaaclab_experimental.envs.mdp.events import _mask_to_env_ids
+from isaaclab_experimental.envs.mdp.events import push_by_setting_velocity as _push_by_setting_velocity
 from isaaclab_experimental.managers import ManagerTermBase, SceneEntityCfg
 from isaaclab_experimental.utils.warp import WarpCapturable
+
+
+@WarpCapturable(False, reason="Push visualization records transient state outside CUDA graphs")
+def push_by_setting_velocity(
+    env, env_mask, velocity_range, asset_cfg=SceneEntityCfg("robot"), debug_vis=False, debug_vis_cfg=None
+):
+    """Use the Warp push unchanged, recording its applied increment only for debug display."""
+    if not debug_vis:
+        _push_by_setting_velocity(env, env_mask, velocity_range, asset_cfg)
+        return
+
+    from locolab.utils.debug_viz.push.push_debug_vis import get_push_debug_vis
+
+    env_ids = _mask_to_env_ids(env_mask)
+    before = env.scene[asset_cfg.name].data.root_vel_w.torch[env_ids].clone()
+    _push_by_setting_velocity(env, env_mask, velocity_range, asset_cfg)
+    after = wp.to_torch(_push_by_setting_velocity._scratch_vel)[env_ids]
+    get_push_debug_vis(env, asset_cfg.name, debug_vis_cfg).record(env_ids, after - before)
 
 
 @wp.kernel(enable_backward=False)

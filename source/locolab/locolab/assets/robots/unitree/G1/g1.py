@@ -106,6 +106,8 @@ _G1_SDK_JOINT_NAMES = [
 ]
 
 UNITREE_G1_29DOF_PELVIS_BASE_CFG = LocoLabArticulationCfg(
+    deployment_robot="g1",
+    deployment_imu_source="pelvis",
     spawn=assetx_export_usd_cfg(
         asset_path=_G1_PELVIS_BASE_XML,
         foot_expression="/.*ankle_roll_link/collisions.*",
@@ -132,6 +134,7 @@ UNITREE_G1_29DOF_PELVIS_BASE_CFG = LocoLabArticulationCfg(
 """Configuration for the pelvis-base Unitree G1 29DOF humanoid robot."""
 
 UNITREE_G1_29DOF_TORSO_BASE_CFG = UNITREE_G1_29DOF_PELVIS_BASE_CFG  .replace(
+    deployment_imu_source="torso",
     spawn=assetx_export_usd_cfg(
         asset_path=_G1_TORSO_BASE_XML,
         foot_expression="/.*ankle_roll_link/collisions.*",
