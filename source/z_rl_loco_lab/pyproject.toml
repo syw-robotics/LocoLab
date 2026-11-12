@@ -7,8 +7,12 @@ name = "z-rl-loco-lab"
 version = "0.1.0"
 description = "External plugin package for z_rl"
 readme = "README.md"
+license = { text = "BSD-3-Clause" }
 requires-python = ">=3.9"
 dependencies = ["z_rl"]
+
+[tool.setuptools]
+license-files = ["LICENSE"]
 
 [tool.setuptools.packages.find]
 where = ["."]
