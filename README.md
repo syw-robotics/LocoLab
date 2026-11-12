@@ -12,7 +12,7 @@
 
 <!-- [![Linux platform](https://img.shields.io/badge/platform-linux--64-orange.svg)](https://releases.ubuntu.com/22.04/)
 [![Windows platform](https://img.shields.io/badge/platform-windows--64-orange.svg)](https://www.microsoft.com/en-us/) -->
-<!-- [![License](https://img.shields.io/badge/license-Apache2.0-yellow.svg)](https://opensource.org/license/apache-2-0) -->
+<!-- [![License](https://img.shields.io/badge/license-BSD--3--Clause-blue.svg)](LICENSE) -->
 
 
 </div>
@@ -57,7 +57,6 @@ python -c "import ovphysx.types, z_rl, z_rl_loco_lab, locolab; print('Imports OK
 python scripts/tools/list_envs.py
 ```
 
-```
 <details>
 <summary>📄 Extra dependencies</summary>
 
@@ -82,7 +81,6 @@ uv sync --project <path-to-isaaclab-3.0> --active --inexact --locked --extra ovr
 ```
 
 </details>
-```
 
 
 
@@ -196,7 +194,6 @@ on the logged-in server. The corresponding instance must be running (`python -m 
 The highest numbered `model_<iteration>.pt` is selected unless `#model_<iteration>.pt` pins a file.
 Downloads use the saved Token, bypass environment proxies, verify the SHA-256 and size, and cache locally.
 
-```
 <details>
 <summary>📄 More details</summary>
 
@@ -267,7 +264,6 @@ Install and authenticate only the SDK you use, on the local machine:
 
 
 </details>
-```
 
 
 <!-- Z-RL and RSL-RL train/play entrypoints share the selector. Supported configs are -->
@@ -366,7 +362,6 @@ Install and authenticate only the SDK you use, on the local machine:
 <!-- | `--checkpoint`, `--load_run` | Which run/checkpoint to load (see Z-RL/RSL-RL groups in `--help`). | -->
 <!-- | `--use_pretrained_checkpoint` | Load published Nucleus checkpoint when available. | -->
 <!--  -->
-```
 
 
 <!-- Comet logging (optional): install `pip install comet-ml`, set `COMET_API_KEY` (and optionally `COMET_WORKSPACE`), then train with `--logger comet --log_project_name <project>`. Local TensorBoard logs are retained. Agent configs also accept `logger = {"class_name": "CometLogWriter", "project_name": "<project>"}`. -->
@@ -402,6 +397,16 @@ Install and authenticate only the SDK you use, on the local machine:
 <!-- ``` -->
 <!--  -->
 <!-- Different types of tasks are organized in different sub-directories, such that tasks are clearly separated and mdp components are easily reusable. -->
+
+## 📄 License
+
+LocoLab code is licensed under the [BSD 3-Clause License](LICENSE), following Isaac Lab.
+Existing upstream copyright and license notices are retained, including those from
+[Isaac Lab](https://github.com/isaac-sim/IsaacLab) and
+[RSL-RL](https://github.com/leggedrobotics/rsl_rl).
+Third-party robot models, meshes, textures, datasets, and other assets remain
+subject to their respective licenses; the code license does not grant additional
+rights to those assets.
 
 ## 📝 TODO
 - [x] **Symmetry Config Definition**: Alongside with which in Z RL

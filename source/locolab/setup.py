@@ -39,7 +39,8 @@ setup(
     description=EXTENSION_TOML_DATA["package"]["description"],
     keywords=EXTENSION_TOML_DATA["package"]["keywords"],
     install_requires=INSTALL_REQUIRES,
-    license="Apache License 2.0",
+    license="BSD-3-Clause",
+    license_files=["LICENSE"],
     include_package_data=True,
     package_data={
         "locolab": [
