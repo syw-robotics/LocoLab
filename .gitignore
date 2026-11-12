@@ -19,6 +19,7 @@
 **/*.egg-info/
 **/__pycache__/
 **/.pytest_cache/
+**/.locolab_usd_cache/
 **/*.pyc
 **/*.pb
 
@@ -65,7 +66,11 @@ _build
 /datasets/
 
 # Tests
-tests/
+tests/*
+
+docs/
+scripts/evaluation/
+scripts/validation/
 
 # Docker history
 .isaac-lab-docker-history
@@ -73,3 +78,5 @@ tests/
 # TacSL sensor
 **/tactile_record/*
 **/gelsight_r15_data/*
+
+

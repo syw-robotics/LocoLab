@@ -14,6 +14,13 @@ def flat_terrain_visual_material_cfg() -> sim_utils.PreviewSurfaceCfg:
         roughness=0.8,
     )
 
+def flat_rough_terrain_visual_material_cfg() -> sim_utils.PreviewSurfaceCfg:
+    """Create the default visual material for flat rough terrain."""
+    return sim_utils.MdlFileCfg(
+        mdl_path=f"{ISAACLAB_NUCLEUS_DIR}/Materials/TilesMarbleSpiderWhiteBrickBondHoned/TilesMarbleSpiderWhiteBrickBondHoned.mdl",
+        project_uvw=True,
+        texture_scale=(0.25, 0.25),
+    )
 
 def rough_terrain_visual_material_cfg() -> sim_utils.MdlFileCfg:
     """Create the default visual material for rough terrain."""

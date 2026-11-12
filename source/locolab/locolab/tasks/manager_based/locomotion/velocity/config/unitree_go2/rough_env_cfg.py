@@ -6,7 +6,8 @@
 # All rights reserved.
 # Modifications are licensed under BSD-3-Clause.
 
-import isaaclab.sim as sim_utils
+from isaaclab_physx.sim.spawners.materials import PhysxRigidBodyMaterialCfg
+
 from isaaclab.assets import ArticulationCfg, AssetBaseCfg
 from isaaclab.envs import ManagerBasedRLEnvCfg
 from isaaclab.scene import InteractiveSceneCfg
@@ -14,6 +15,7 @@ from isaaclab.sensors import ContactSensorCfg, RayCasterCfg, patterns
 from isaaclab.utils import configclass
 
 #  from isaaclab.utils.assets import ISAAC_NUCLEUS_DIR
+from locolab.utils.physics import set_self_collisions, set_locomotion_physics
 from locolab.utils.scene import rough_terrain_visual_material_cfg, blue_sky_light_cfg
 from locolab.utils.terrains import TerrainImporterCfg
 
@@ -30,9 +32,9 @@ from locolab.tasks.manager_based.locomotion.velocity.config.unitree_go2.mdp_cfg 
     RoughCurriculumsCfg,
     RoughTerminationsCfg,
 )
-from locolab.assets import UNITREE_GO2_CFG  # isort: skip
+from locolab.assets.robots.unitree.Go2.go2 import UNITREE_GO2_CFG  # isort: skip
 from locolab.utils.terrains.terrains_cfg import ROUGH_TERRAINS_CFG  # isort: skip
-from locolab.utils.markers import BLUE_RAY_CASTER_MARKER_CFG, PURPLE_RAY_CASTER_MARKER_CFG
+from locolab.utils.debug_viz.markers import BLUE_RAY_CASTER_MARKER_CFG  # isort: skip
 
 
 ##
@@ -60,7 +62,7 @@ class Go2RoughSceneCfg(InteractiveSceneCfg):
         prim_path="/World/ground",
         terrain_type="generator",
         terrain_generator=ROUGH_TERRAINS_CFG,
-        physics_material=sim_utils.RigidBodyMaterialCfg(
+        physics_material=PhysxRigidBodyMaterialCfg(
             friction_combine_mode="multiply",
             restitution_combine_mode="multiply",
             static_friction=1.0,
@@ -75,53 +77,31 @@ class Go2RoughSceneCfg(InteractiveSceneCfg):
 
     # =====  sensors  =====
     height_scanner: RayCasterCfg = RayCasterCfg(
+        # The assetx-exported USD places the base rigid body directly under Robot.
         prim_path="{ENV_REGEX_NS}/Robot/base",
-        offset=RayCasterCfg.OffsetCfg(pos=(0.0, 0.0, 5.0)),
+        offset=RayCasterCfg.OffsetCfg(pos=(0.0, 0.0, 20.0)),
         ray_alignment="yaw",
         pattern_cfg=patterns.GridPatternCfg(resolution=0.1, size=[1.6, 1.0]),
         debug_vis=False,
         mesh_prim_paths=["/World/ground"],
+        global_world_only=True,
         visualizer_cfg=BLUE_RAY_CASTER_MARKER_CFG,
     )
     contact_forces: ContactSensorCfg = ContactSensorCfg(
         prim_path="{ENV_REGEX_NS}/Robot/.*", history_length=3, track_air_time=True
     )
-    #  FL_foot_height_scanner: RayCasterCfg = RayCasterCfg(
-    #      prim_path="{ENV_REGEX_NS}/Robot/FL_foot",
-    #      offset=RayCasterCfg.OffsetCfg(pos=(0.0, 0.0, 5.0)),
-    #      ray_alignment="yaw",
-    #      pattern_cfg=patterns.GridPatternCfg(resolution=0.05, size=[0.05, 0.05]),
-    #      debug_vis=True,
-    #      mesh_prim_paths=["/World/ground"],
-    #      visualizer_cfg=PURPLE_RAY_CASTER_MARKER_CFG,
-    #  )
-    #  FR_foot_height_scanner: RayCasterCfg = RayCasterCfg(
-    #      prim_path="{ENV_REGEX_NS}/Robot/FR_foot",
-    #      offset=RayCasterCfg.OffsetCfg(pos=(0.0, 0.0, 5.0)),
-    #      ray_alignment="yaw",
-    #      pattern_cfg=patterns.GridPatternCfg(resolution=0.05, size=[0.05, 0.05]),
-    #      debug_vis=True,
-    #      mesh_prim_paths=["/World/ground"],
-    #      visualizer_cfg=PURPLE_RAY_CASTER_MARKER_CFG,
-    #  )
-    #  RL_foot_height_scanner: RayCasterCfg = RayCasterCfg(
-    #      prim_path="{ENV_REGEX_NS}/Robot/RL_foot",
-    #      offset=RayCasterCfg.OffsetCfg(pos=(0.0, 0.0, 5.0)),
-    #      ray_alignment="yaw",
-    #      pattern_cfg=patterns.GridPatternCfg(resolution=0.05, size=[0.05, 0.05]),
-    #      debug_vis=True,
-    #      mesh_prim_paths=["/World/ground"],
-    #      visualizer_cfg=PURPLE_RAY_CASTER_MARKER_CFG,
-    #  )
-    #  RR_foot_height_scanner: RayCasterCfg = RayCasterCfg(
-    #      prim_path="{ENV_REGEX_NS}/Robot/RR_foot",
-    #      offset=RayCasterCfg.OffsetCfg(pos=(0.0, 0.0, 5.0)),
-    #      ray_alignment="yaw",
-    #      pattern_cfg=patterns.GridPatternCfg(resolution=0.05, size=[0.05, 0.05]),
-    #      debug_vis=True,
-    #      mesh_prim_paths=["/World/ground"],
-    #      visualizer_cfg=PURPLE_RAY_CASTER_MARKER_CFG,
-    #  )
+    # for foot in ("FL_foot", "FR_foot", "RL_foot", "RR_foot"):
+    #     locals()[f"{foot}_height_scanner"] = RayCasterCfg(
+    #         prim_path=f"{{ENV_REGEX_NS}}/Robot/{foot}",
+    #         offset=RayCasterCfg.OffsetCfg(pos=(0.0, 0.0, 5.0)),
+    #         ray_alignment="yaw",
+    #         pattern_cfg=patterns.GridPatternCfg(resolution=0.05, size=[0.05, 0.05]),
+    #         debug_vis=True,
+    #         mesh_prim_paths=["/World/ground"],
+    #         global_world_only=True,
+    #         visualizer_cfg=BLUE_RAY_CASTER_MARKER_CFG,
+    #     )
+    # del foot
 
     # =====  lights  =====
     sky_light: AssetBaseCfg = blue_sky_light_cfg()
@@ -133,6 +113,8 @@ class Go2RoughSceneCfg(InteractiveSceneCfg):
 @configclass
 class Go2RoughEnvCfg(ManagerBasedRLEnvCfg):
     """Configuration for the Go2 flat environment."""
+
+    seed: int = 42
 
     # Scene settings
     scene: Go2RoughSceneCfg = Go2RoughSceneCfg(num_envs=4096, env_spacing=2.5)
@@ -155,16 +137,22 @@ class Go2RoughEnvCfg(ManagerBasedRLEnvCfg):
         self.sim.dt = 0.005
         self.sim.render_interval = self.decimation
         self.sim.physics_material = self.scene.terrain.physics_material
-        self.sim.physx.gpu_max_rigid_patch_count = 10 * 2**15
+        # physics settings
+        set_locomotion_physics(
+            self.sim, rigid_patch_count=2**16,
+            num_substeps=1, cone="elliptic", impratio=10.0, njmax=128, nconmax=24,
+        )
+        # enable self collisions
+        set_self_collisions(self.scene.robot.spawn, True)
+
         self.scene.terrain.max_init_terrain_level = 0
+
         # update sensor update periods
         # we tick all the sensors based on the smallest update period (physics update period)
         self.scene.contact_forces.update_period = self.sim.dt
         self.scene.height_scanner.update_period = self.decimation * self.sim.dt
-        #  self.scene.FL_foot_height_scanner.update_period = self.decimation * self.sim.dt
-        #  self.scene.FR_foot_height_scanner.update_period = self.decimation * self.sim.dt
-        #  self.scene.RL_foot_height_scanner.update_period = self.decimation * self.sim.dt
-        #  self.scene.RR_foot_height_scanner.update_period = self.decimation * self.sim.dt
+        # for foot in ("FL_foot", "FR_foot", "RL_foot", "RR_foot"):
+        #     getattr(self.scene, f"{foot}_height_scanner").update_period = self.decimation * self.sim.dt
 
         # log terrain levels by each terrain type
         self.curriculum.terrain_levels.params["log_by_terrain_type"] = True
@@ -180,6 +168,7 @@ class Go2RoughEnvCfg_PLAY(Go2RoughEnvCfg):
         self.scene.num_envs = 10
         self.scene.env_spacing = 2.5
         self.commands.base_velocity.debug_vis = True
+        self.events.push_robot_by_setting_velocity.params["debug_vis"] = True
         # spawn the robot randomly in the grid (instead of their terrain levels)
         self.scene.terrain.max_init_terrain_level = None
         # reduce the number of terrains to save memory

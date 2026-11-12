@@ -10,5 +10,24 @@ from .terrain_generator import TerrainGenerator
 from .terrain_generator_cfg import TerrainGeneratorCfg
 from .terrain_importer import TerrainImporter
 from .terrain_importer_cfg import TerrainImporterCfg
+from .terrain_utils import (
+    build_terrain_reset_range_tables,
+    get_terrain_mask,
+    normalize_terrain_groups,
+    range_dict_to_tensor,
+)
+from .virtual_obstacle import GreedyconcatEdgeCylinderCfg, MeshXyzRange, VirtualObstacleCfg
 
-__all__ = ["TerrainGenerator", "TerrainImporter", "TerrainImporterCfg", "TerrainGeneratorCfg"]
+__all__ = [
+    "TerrainGenerator",
+    "TerrainImporter",
+    "TerrainImporterCfg",
+    "TerrainGeneratorCfg",
+    "GreedyconcatEdgeCylinderCfg",
+    "MeshXyzRange",
+    "VirtualObstacleCfg",
+    "build_terrain_reset_range_tables",
+    "get_terrain_mask",
+    "normalize_terrain_groups",
+    "range_dict_to_tensor",
+]

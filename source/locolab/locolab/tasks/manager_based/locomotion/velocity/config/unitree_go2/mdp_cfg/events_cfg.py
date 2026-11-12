@@ -19,7 +19,7 @@ from . import BASE_LINK_NAME, FOOT_LINK_NAMES, JOINT_NAMES, OTHER_BODY_LINK_NAME
 class EventCfg:
     """Configuration for events."""
 
-    # ===== startup ===== (6 events)
+    # ===== startup ===== (7 events)
     # 1.
     randomize_feet_material = EventTerm(
         func=mdp.randomize_rigid_body_material,
@@ -79,29 +79,23 @@ class EventCfg:
         },
     )
     # 6.
-    # this term has bug!!!
-    #  randomize_joint_offsets = EventTerm(
-    #      func=mdp.randomize_joint_offsets,
-    #      mode="startup",
-    #      params={
-    #          "asset_cfg": SceneEntityCfg("robot", joint_names=JOINT_NAMES),
-    #          "offsets_distribution_params": (-0.02, 0.02),
-    #          "operation": "add",
-    #          "distribution": "gaussian",
-    #      },
-    #  )
+    randomize_joint_parameters = EventTerm(
+        func=mdp.randomize_joint_parameters,
+        mode="startup",
+        params={
+            "asset_cfg": SceneEntityCfg("robot", joint_names=JOINT_NAMES),
+            "friction_distribution_params": (0.0, 0.1),
+            "armature_distribution_params": (0.0, 0.01),
+            "operation": "add",
+            "distribution": "uniform",
+        },
+    )
     # 7.
-    #  randomize_joint_parameters = EventTerm(
-    #      func=mdp.randomize_joint_parameters,
-    #      mode="startup",
-    #      params={
-    #          "asset_cfg": SceneEntityCfg("robot", joint_names=JOINT_NAMES),
-    #          "friction_distribution_params": (0.0, 0.1),
-    #          "armature_distribution_params": (0.0, 0.01),
-    #          "operation": "add",
-    #          "distribution": "uniform",
-    #      },
-    #  )
+    randomize_joint_encoder_bias = EventTerm(
+        func=mdp.randomize_encoder_bias,
+        mode="startup",
+        params={"asset_cfg": SceneEntityCfg("robot"), "bias_range": (-0.01, 0.01)},
+    )
 
     # ===== reset ===== (2 events)
     # 1.
@@ -121,7 +115,7 @@ class EventCfg:
             "pose_range": {
                 "x": (-0.5, 0.5),
                 "y": (-0.5, 0.5),
-                "z": (0.0, 0.2),
+                "z": (0.0, 0.1),
                 "roll": (0.0, 0.0),
                 "pitch": (0.0, 0.0),
                 "yaw": (-3.14, 3.14),
@@ -143,5 +137,8 @@ class EventCfg:
         func=mdp.push_by_setting_velocity,
         mode="interval",
         interval_range_s=(10.0, 15.0),
-        params={"velocity_range": {"x": (-1.0, 1.0), "y": (-1.0, 1.0)}},
+        params={
+            "velocity_range": {"x": (-1.0, 1.0), "y": (-1.0, 1.0)},
+            "debug_vis_cfg": mdp.PushDebugVisCfg(),
+        },
     )

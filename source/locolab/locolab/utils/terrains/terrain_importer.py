@@ -14,6 +14,7 @@
 from __future__ import annotations
 
 import logging
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 import numpy as np
@@ -68,6 +69,9 @@ class TerrainImporter:
     It is set to a tensor when using curriculum-based terrain origins (generator with use_terrain_origins=True).
     """
 
+    terrain_origin_indices: torch.Tensor | None
+    """Sub-terrain index of each tile, shape (num_rows, num_cols). ``update_env_origins`` does not read this."""
+
     def __init__(self, cfg: TerrainImporterCfg):
         """Initialize the terrain importer.
 
@@ -80,6 +84,13 @@ class TerrainImporter:
             ValueError: If terrain type is 'usd' and no configuration provided for ``usd_path``.
             ValueError: If terrain type is 'usd' or 'plane' and no configuration provided for ``env_spacing``.
         """
+        # initialize virtual obstacles before calling import_mesh
+        self._virtual_obstacles: dict = {}
+        virtual_obstacles_cfg = getattr(cfg, "virtual_obstacles", {})
+        for name, vo_cfg in virtual_obstacles_cfg.items():
+            if vo_cfg is not None:
+                self._virtual_obstacles[name] = vo_cfg.class_type(vo_cfg)
+
         # check that the config is valid
         cfg.validate()
         # store inputs
@@ -89,8 +100,10 @@ class TerrainImporter:
         # create buffers for the terrains
         self.terrain_prim_paths = list()
         self.terrain_origins = None
+        self.terrain_mesh = None  # set when cfg.retain_mesh keeps a copy for external viewers
         self.env_origins = None  # assigned later when `configure_env_origins` is called
         self.env_terrain_indices = None  # assigned later when `configure_env_origins` is called
+        self.terrain_origin_indices = None  # assigned later when `configure_env_origins` is called
         # private variables
         self._terrain_flat_patches = dict()
 
@@ -103,7 +116,10 @@ class TerrainImporter:
             terrain_generator = self.cfg.terrain_generator.class_type(
                 cfg=self.cfg.terrain_generator, device=self.device
             )
-            self.import_mesh("terrain", terrain_generator.terrain_mesh)
+            self.import_mesh("terrain", terrain_generator.terrain_mesh, terrain_generator)
+            if getattr(self.cfg, "retain_mesh", False):
+                # for viser remote web viewer
+                self.terrain_mesh = terrain_generator.terrain_mesh.copy()
             if self.cfg.use_terrain_origins:
                 # configure the terrain origins based on the terrain generator
                 self.configure_env_origins(terrain_generator.terrain_origins, terrain_generator.terrain_indices)
@@ -133,6 +149,10 @@ class TerrainImporter:
     """
     Properties.
     """
+
+    @property
+    def virtual_obstacles(self) -> dict:
+        return self._virtual_obstacles.copy()
 
     @property
     def has_debug_vis_implementation(self) -> bool:
@@ -199,13 +219,14 @@ class TerrainImporter:
     Operations - Import.
     """
 
-    def import_ground_plane(self, name: str, size: tuple[float, float] = (2.0e6, 2.0e6)):
+    def import_ground_plane(self, name: str, size: tuple[float, float] | None = None):
         """Add a plane to the terrain importer.
 
         Args:
             name: The name of the imported terrain. This name is used to create the USD prim
                 corresponding to the terrain.
-            size: The size of the plane. Defaults to (2.0e6, 2.0e6).
+            size: The visual size of the plane [m]. If None, extends 50 m beyond each side
+                of the environment grid. The collision plane remains infinite.
 
         Raises:
             ValueError: If a terrain with the same name already exists.
@@ -219,6 +240,13 @@ class TerrainImporter:
             )
         # store the mesh name
         self.terrain_prim_paths.append(prim_path)
+
+        if size is None:
+            # Match Isaac Lab: oversized visual triangles lose precision in Newton GL.
+            num_rows = int(np.ceil(self.cfg.num_envs / np.sqrt(self.cfg.num_envs)))
+            num_cols = int(np.ceil(self.cfg.num_envs / num_rows))
+            spacing = self.cfg.env_spacing or 0.0
+            size = ((num_rows - 1) * spacing + 100.0, (num_cols - 1) * spacing + 100.0)
 
         # obtain ground plane color from the configured visual material
         color = (0.0, 0.0, 0.0)
@@ -234,10 +262,31 @@ class TerrainImporter:
                 )
 
         # get the mesh
-        ground_plane_cfg = sim_utils.GroundPlaneCfg(physics_material=self.cfg.physics_material, size=size, color=color)
+        ground_plane_cfg = sim_utils.GroundPlaneCfg(
+            usd_path=str(Path(__file__).resolve().parents[2] / "assets/terrains/checker_ground/default_ground_plane.usda"),
+            physics_material=self.cfg.physics_material,
+            size=size,
+            color=color,
+        )
         ground_plane_cfg.func(prim_path, ground_plane_cfg)
 
-    def import_mesh(self, name: str, mesh: trimesh.Trimesh):
+        # Isaac Lab only rescales UVs for its remote default asset; keep our local copy metric too.
+        from pxr import Gf, UsdGeom
+
+        from isaaclab.sim import get_current_stage
+
+        mesh = UsdGeom.Mesh(get_current_stage().GetPrimAtPath(f"{prim_path}/Environment/Geometry"))
+        half_u, half_v = size[0] / 4.0, size[1] / 4.0
+        UsdGeom.PrimvarsAPI(mesh).GetPrimvar("st").Set(
+            [
+                Gf.Vec2f(-half_u, -half_v),
+                Gf.Vec2f(half_u, -half_v),
+                Gf.Vec2f(half_u, half_v),
+                Gf.Vec2f(-half_u, half_v),
+            ]
+        )
+
+    def import_mesh(self, name: str, mesh: trimesh.Trimesh, terrain_generator=None):
         """Import a mesh into the simulator.
 
         The mesh is imported into the simulator under the prim path ``cfg.prim_path/{key}``. The created path
@@ -247,10 +296,41 @@ class TerrainImporter:
             name: The name of the imported terrain. This name is used to create the USD prim
                 corresponding to the terrain.
             mesh: The mesh to import.
+            terrain_generator: Optional terrain generator used to filter virtual obstacles by
+                sub-terrain name or local mesh region.
 
         Raises:
             ValueError: If a terrain with the same name already exists.
         """
+        # generate virtual obstacles from the mesh (optionally filtered by terrain name)
+        for vo_name, virtual_obstacle in self._virtual_obstacles.items():
+            vo_mesh = self._build_virtual_obstacle_mesh(vo_name, virtual_obstacle, mesh, terrain_generator)
+            if vo_mesh is None:
+                continue
+
+            has_xyz_crop = (
+                getattr(virtual_obstacle.cfg, "default_mesh_xyz_range", None) is not None
+                or bool(getattr(virtual_obstacle.cfg, "terrain_mesh_xyz_ranges", None))
+            )
+            # Auto-set terrain_size for boundary filtering if not already set.
+            # When xyz crops are used, filtering has already happened in each
+            # sub-terrain's local frame. Applying a whole-map boundary margin after
+            # concatenation removes valid obstacles in the first/last terrain rows.
+            if (
+                hasattr(virtual_obstacle.cfg, "terrain_size")
+                and virtual_obstacle.cfg.terrain_size is None
+                and terrain_generator is not None
+                and not has_xyz_crop
+            ):
+                virtual_obstacle.cfg.terrain_size = (
+                    terrain_generator.cfg.size[0] * terrain_generator.cfg.num_rows,
+                    terrain_generator.cfg.size[1] * terrain_generator.cfg.num_cols,
+                )
+
+            virtual_obstacle.generate(vo_mesh, device=self.device)
+            if getattr(virtual_obstacle.cfg, "debug_vis", False):
+                virtual_obstacle.visualize()
+
         # create prim path for the terrain
         prim_path = self.cfg.prim_path + f"/{name}"
         # check if key exists
@@ -265,6 +345,97 @@ class TerrainImporter:
         create_prim_from_mesh(
             prim_path, mesh, visual_material=self.cfg.visual_material, physics_material=self.cfg.physics_material
         )
+
+    def _build_virtual_obstacle_mesh(
+        self,
+        vo_name: str,
+        virtual_obstacle,
+        mesh: trimesh.Trimesh,
+        terrain_generator,
+    ) -> trimesh.Trimesh | None:
+        """Crop and concatenate sub-terrain meshes used to generate one virtual obstacle."""
+        selected_names = virtual_obstacle.cfg.selected_terrain_names()
+        has_xyz_crop = (
+            getattr(virtual_obstacle.cfg, "default_mesh_xyz_range", None) is not None
+            or bool(getattr(virtual_obstacle.cfg, "terrain_mesh_xyz_ranges", None))
+        )
+
+        if terrain_generator is not None and (selected_names is not None or has_xyz_crop):
+            filtered = []
+            for sub_mesh, sub_name, sub_origin in zip(
+                terrain_generator.terrain_meshes,
+                terrain_generator.terrain_mesh_names,
+                terrain_generator.terrain_mesh_origins,
+            ):
+                if selected_names is not None and sub_name not in selected_names:
+                    continue
+                xyz_range = virtual_obstacle.cfg.mesh_xyz_range_for(sub_name)
+                if xyz_range is not None:
+                    sub_mesh = self._select_mesh_region(sub_mesh, xyz_range, origin=sub_origin)
+                    if len(sub_mesh.faces) == 0:
+                        continue
+                filtered.append(sub_mesh)
+            if not filtered:
+                logger.warning("Virtual obstacle '%s' has no mesh faces after terrain/xyz filtering.", vo_name)
+                return None
+            vo_mesh = trimesh.util.concatenate(filtered)
+            center_transform = np.eye(4)
+            center_transform[:2, -1] = (
+                -terrain_generator.cfg.size[0] * terrain_generator.cfg.num_rows * 0.5,
+                -terrain_generator.cfg.size[1] * terrain_generator.cfg.num_cols * 0.5,
+            )
+            vo_mesh.apply_transform(center_transform)
+            return vo_mesh
+
+        vo_mesh = mesh
+        default_range = getattr(virtual_obstacle.cfg, "default_mesh_xyz_range", None)
+        if default_range is not None:
+            vo_mesh = self._select_mesh_region(vo_mesh, default_range)
+            if len(vo_mesh.faces) == 0:
+                logger.warning(
+                    "Virtual obstacle '%s' has no mesh faces inside default_mesh_xyz_range=%s.",
+                    vo_name,
+                    default_range,
+                )
+                return None
+        return vo_mesh
+
+    @staticmethod
+    def _select_mesh_region(
+        mesh: trimesh.Trimesh,
+        xyz_range: tuple[
+            tuple[float | None, float | None],
+            tuple[float | None, float | None],
+            tuple[float | None, float | None],
+        ],
+        origin: np.ndarray | None = None,
+    ) -> trimesh.Trimesh:
+        """Return a copy of the mesh restricted to faces overlapping the configured xyz range."""
+        if len(xyz_range) != 3:
+            raise ValueError(f"xyz range must contain x, y, z ranges, got {xyz_range}.")
+
+        triangles = np.asarray(mesh.triangles)
+        if len(triangles) == 0:
+            return mesh.copy()
+        if origin is not None:
+            triangles = triangles - origin
+
+        triangle_min = triangles.min(axis=1)
+        triangle_max = triangles.max(axis=1)
+        selector = np.ones(len(triangles), dtype=bool)
+        for axis, axis_range in enumerate(xyz_range):
+            if len(axis_range) != 2:
+                raise ValueError(f"Each xyz range axis must be a (min, max) pair, got {axis_range}.")
+            lower, upper = axis_range
+            if lower is not None:
+                selector &= triangle_max[:, axis] >= lower
+            if upper is not None:
+                selector &= triangle_min[:, axis] <= upper
+
+        selected_mesh = mesh.copy()
+        selected_mesh.update_faces(selector)
+        selected_mesh.remove_unreferenced_vertices()
+        return selected_mesh
 
     def import_usd(self, name: str, usd_path: str):
         """Import a mesh from a USD file.
@@ -330,6 +501,7 @@ class TerrainImporter:
             self.env_origins = self._compute_env_origins_grid(self.cfg.num_envs, self.cfg.env_spacing)
             # set env_terrain_indices to None for grid mode (no sub-terrain differentiation)
             self.env_terrain_indices = None
+            self.terrain_origin_indices = None
 
     def update_env_origins(self, env_ids: torch.Tensor, move_up: torch.Tensor, move_down: torch.Tensor):
         """Update the environment origins based on the terrain levels."""
@@ -347,16 +519,22 @@ class TerrainImporter:
         )
         # update the env origins
         self.env_origins[env_ids] = self.terrain_origins[self.terrain_levels[env_ids], self.terrain_types[env_ids]]
-        # Note: env_terrain_indices does not need to be updated because in curriculum mode,
-        # terrain_indices[row, col] only depends on col (not row), and terrain_types (col) doesn't change.
-        # So env_terrain_indices remains constant even when terrain_levels (row) changes.
+        # Only the row changes, so env_terrain_indices stays valid.
+
+    def assign_env_origins(self, env_ids: torch.Tensor, levels: torch.Tensor, types: torch.Tensor) -> None:
+        """Set the row, column, and origin. Refresh ``env_terrain_indices`` when the column changes."""
+        self.terrain_levels[env_ids] = levels
+        self.terrain_types[env_ids] = types
+        self.env_origins[env_ids] = self.terrain_origins[levels, types]
+        if self.terrain_origin_indices is not None:
+            self.env_terrain_indices[env_ids] = self.terrain_origin_indices[levels, types]
 
     """
     Internal helpers.
     """
 
     def _compute_env_origins_and_indices_curriculum(
-        self, num_envs: int, origins: torch.Tensor, terrain_indices: np.ndarray | torch.Tensor
+        self, num_envs: int, origins: torch.Tensor, terrain_indices: np.ndarray | torch.Tensor | None
     ) -> tuple[torch.Tensor, torch.Tensor]:
         """Compute the origins of the environments defined by the sub-terrains origins."""
         # extract number of rows and cols
@@ -376,16 +554,15 @@ class TerrainImporter:
         # create tensor based on number of environments
         env_origins = torch.zeros(num_envs, 3, device=self.device)
         env_origins[:] = origins[self.terrain_levels, self.terrain_types]
+        if terrain_indices is None:
+            self.terrain_origin_indices = None
+        elif isinstance(terrain_indices, torch.Tensor):
+            self.terrain_origin_indices = terrain_indices.to(device=self.device, dtype=torch.long)
+        else:
+            self.terrain_origin_indices = torch.as_tensor(terrain_indices, device=self.device, dtype=torch.long)
         env_terrain_indices = torch.zeros(num_envs, device=self.device, dtype=torch.long)
-        if terrain_indices is not None:
-            # convert to torch tensor if needed
-            if isinstance(terrain_indices, np.ndarray):
-                terrain_indices = torch.from_numpy(terrain_indices).to(self.device)
-            elif not isinstance(terrain_indices, torch.Tensor):
-                terrain_indices = torch.tensor(terrain_indices, device=self.device)
-            else:
-                terrain_indices = terrain_indices.to(self.device)
-            env_terrain_indices[:] = terrain_indices[self.terrain_levels, self.terrain_types]
+        if self.terrain_origin_indices is not None:
+            env_terrain_indices[:] = self.terrain_origin_indices[self.terrain_levels, self.terrain_types]
         return env_origins, env_terrain_indices
 
     def _compute_env_origins_grid(self, num_envs: int, env_spacing: float) -> torch.Tensor:

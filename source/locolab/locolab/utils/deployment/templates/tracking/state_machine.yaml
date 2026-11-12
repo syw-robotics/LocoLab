@@ -1,0 +1,54 @@
+# Arm interpolation: duration is nominal seconds (smaller = faster).
+# max_joint_speed caps each arm joint target in rad/s; null disables the cap.
+# Handoff waits until the capped targets reach their goals.
+initial: damping
+states:
+  damping:
+    type: damping
+    transitions:
+      A: move_to_default_qpos
+  move_to_default_qpos:
+    type: move_to_target_pos
+    policy: locomotion
+    target: default_q
+    duration: 2.0
+    kp: fixed_stand
+    kd: fixed_stand
+    transitions:
+      Start: locomotion
+      X: damping
+  locomotion:
+    type: policy
+    policy: locomotion
+    reset_policy: false
+    transitions:
+      B: prepare_motion
+      A: move_to_default_qpos
+      X: damping
+  prepare_motion:
+    type: arm_transition
+    direction: to_motion
+    enabled: true
+    locomotion_policy: locomotion
+    motion_policy: motion_tracking
+    duration: 2.0
+    max_joint_speed: 1.0
+    transitions:
+      done: motion_tracking
+      X: damping
+  motion_tracking:
+    type: policy
+    policy: motion_tracking
+    transitions:
+      done: return_locomotion
+      X: damping
+  return_locomotion:
+    type: arm_transition
+    direction: to_locomotion
+    locomotion_policy: locomotion
+    motion_policy: motion_tracking
+    duration: 3.0
+    max_joint_speed: 1.0
+    transitions:
+      done: locomotion
+      X: damping

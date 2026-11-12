@@ -194,7 +194,14 @@ def _height_field_to_mesh(func):
             (length_pixels - 2 * border_pixels) * cfg.horizontal_scale,
         )
         cfg.size = sub_terrain_size
-        z_gen = func(difficulty, cfg)
+        generated = func(difficulty, cfg)
+        if isinstance(generated, tuple):
+            z_gen, origin = generated
+            origin = np.array(origin, dtype=np.float64, copy=True)
+            origin[:2] += border_pixels * cfg.horizontal_scale
+        else:
+            z_gen = generated
+            origin = None
         heights[border_pixels:-border_pixels, border_pixels:-border_pixels] = z_gen
         cfg.size = terrain_size
 
@@ -202,12 +209,14 @@ def _height_field_to_mesh(func):
             heights, cfg.horizontal_scale, cfg.vertical_scale, cfg.slope_threshold
         )
         mesh = trimesh.Trimesh(vertices=vertices, faces=triangles, process=False)
-        x1 = int((cfg.size[0] * 0.5 - 1) / cfg.horizontal_scale)
-        x2 = int((cfg.size[0] * 0.5 + 1) / cfg.horizontal_scale)
-        y1 = int((cfg.size[1] * 0.5 - 1) / cfg.horizontal_scale)
-        y2 = int((cfg.size[1] * 0.5 + 1) / cfg.horizontal_scale)
-        origin_z = np.max(heights[x1:x2, y1:y2]) * cfg.vertical_scale
-        return [mesh], np.array([0.5 * cfg.size[0], 0.5 * cfg.size[1], origin_z])
+        if origin is None:
+            x1 = int((cfg.size[0] * 0.5 - 1) / cfg.horizontal_scale)
+            x2 = int((cfg.size[0] * 0.5 + 1) / cfg.horizontal_scale)
+            y1 = int((cfg.size[1] * 0.5 - 1) / cfg.horizontal_scale)
+            y2 = int((cfg.size[1] * 0.5 + 1) / cfg.horizontal_scale)
+            origin_z = np.max(heights[x1:x2, y1:y2]) * cfg.vertical_scale
+            origin = np.array([0.5 * cfg.size[0], 0.5 * cfg.size[1], origin_z])
+        return [mesh], origin
 
     return wrapper
 
@@ -238,6 +247,41 @@ def _make_border(
     return [box_mesh_left, box_mesh_right, box_mesh_top, box_mesh_bottom]
 
 
+def _make_plane(size, height=0.0, center_zero=False):
+    center = (0.0, 0.0) if center_zero else (size[0] / 2.0, size[1] / 2.0)
+    return trimesh.creation.box(
+        (size[0], size[1], 0.01),
+        trimesh.transformations.translation_matrix((center[0], center[1], height - 0.005)),
+    )
+
+
+def _make_box(length, width, height, position, angle=0.0, angle_degrees=True):
+    transform = trimesh.transformations.translation_matrix(
+        (position[0], position[1], position[2] + height / 2.0)
+    )
+    if angle:
+        transform = transform @ trimesh.transformations.rotation_matrix(
+            np.deg2rad(angle) if angle_degrees else angle, (0.0, 0.0, 1.0), (position[0], position[1], 0.0)
+        )
+    return trimesh.creation.box((length, width, height), transform)
+
+
+def _mesh_pyramid_stairs_terrain(difficulty, cfg):
+    height = cfg.step_height_range[0] + difficulty * (cfg.step_height_range[1] - cfg.step_height_range[0])
+    if getattr(cfg, "inverted", False):
+        height = -height
+    meshes = [_make_plane(cfg.size)]
+    center = (cfg.size[0] / 2.0, cfg.size[1] / 2.0)
+    step_width = cfg.step_width
+    level = 0
+    while cfg.platform_width + 2.0 * (level + 1) * step_width < min(cfg.size):
+        level += 1
+        extent = min(cfg.size) - 2.0 * (level - 1) * step_width
+        z = level * height
+        meshes.append(_make_box(extent, extent, abs(z), (center[0], center[1], min(0.0, z))))
+    return meshes, np.array([center[0], center[1], max(0.0, level * height)])
+
+
 def _install_isaaclab_preview_stubs():
     """Install the small IsaacLab API surface needed by terrain generation code."""
     isaaclab = _module("isaaclab")
@@ -260,9 +304,15 @@ def _install_isaaclab_preview_stubs():
     hf_pkg.utils = hf_utils
 
     trimesh_pkg = _module("isaaclab.terrains.trimesh")
+    mesh_terrains = _module("isaaclab.terrains.trimesh.mesh_terrains")
+    mesh_terrains.pyramid_stairs_terrain = _mesh_pyramid_stairs_terrain
+    mesh_terrains.inverted_pyramid_stairs_terrain = _mesh_pyramid_stairs_terrain
     trimesh_utils = _module("isaaclab.terrains.trimesh.utils")
     trimesh_utils.make_border = _make_border
+    trimesh_utils.make_box = _make_box
+    trimesh_utils.make_plane = _make_plane
     trimesh_pkg.utils = trimesh_utils
+    trimesh_pkg.mesh_terrains = mesh_terrains
 
 
 def _clear_imports():
@@ -309,11 +359,20 @@ def is_height_field_cfg(cfg_cls: type) -> bool:
     return any(base.__name__ in {"HfTerrainBaseCfg", "_HfTerrainBaseCfg"} for base in cfg_cls.mro())
 
 
+def is_mesh_rough_cfg(cfg_cls: type) -> bool:
+    """Return whether a cfg class reuses height-field roughness sampling on a mesh."""
+    return any(base.__name__ == "MeshRoughTerrainCfg" for base in cfg_cls.mro())
+
+
 def build_cfg(cfg_cls: type, common_kwargs: dict, hf_kwargs: dict, case_kwargs: dict):
     """Merge common preview options with terrain-specific example parameters."""
     kwargs = dict(common_kwargs)
     if is_height_field_cfg(cfg_cls):
         kwargs.update(hf_kwargs)
+    elif is_mesh_rough_cfg(cfg_cls):
+        kwargs["horizontal_scale"] = hf_kwargs["horizontal_scale"]
+        kwargs["vertical_scale"] = hf_kwargs["vertical_scale"]
+        kwargs["slope_threshold"] = hf_kwargs["slope_threshold"]
     elif "border_width" in case_kwargs:
         raise RuntimeError(f"{cfg_cls.__name__} is not a height-field terrain but defines border_width.")
     kwargs.update(case_kwargs)

@@ -1,0 +1,65 @@
+# Controls output section order and comments; field values come from the training environment.
+# Each field maps to its optional output comment; null means no field comment.
+header: LocoLab policy for unitree-deploy. See README.md beside this file.
+sections:
+
+- title: Policy and timing
+  comment: 'IMU source: pelvis = LowState; torso = rt/secondary_imu.'
+  fields:
+    robot: null
+    imu_source: null
+    policy_path: null
+    policy_class: null
+    policy_step_dt: null
+    physics_dt: null
+    decimation: null
+    runtime_command_dim: null
+    policy_input_name: null
+    policy_output_name: null
+
+- title: Joint layout
+  comment: Observation/action orders match training. SDK order matches motor indices.
+  fields:
+    obs_joint_order: null
+    sdk_joint_order: null
+    default_qpos: Default joint positions (rad), in sdk_joint_order.
+    motion_start_q: First reference frame (rad), in sdk_joint_order; arm preparation target.
+
+- title: Observations
+  comment: Terms are concatenated in this order; history_order controls frames within each term.
+  fields:
+    obs_use_scaled_prev_action: null
+    obs_prime_on_reset: null
+    obs_group_concat_mode: 'term_major: each term''s history; history_major: all terms per frame.'
+    obs_input_concat_modes: Concatenation order within each named ONNX input.
+    observation_modules: null
+    observation_types: null
+    observations: null
+
+- title: Reference motion
+  comment: Reference fields and body order must match the embedded motion or runtime source.
+  fields:
+    reference_source: null
+    root_body_name: null
+    motion_command_terms: Reference command fields in actor input order; dimensions are derived automatically.
+    anchor_body_name: null
+    body_names: null
+
+- title: Actions
+  comment: Joint targets = offset + scale * action. null disables action clipping.
+  fields:
+    action_dim: null
+    action_clip: null
+    use_reference_residual: 'true: offset is reference joint position; false: offset is default_qpos.'
+    action_joint_order: null
+    action_scale: Per-joint action scales, in sdk_joint_order.
+    action_target_clip: Position-target bounds (rad), in action_joint_order; applied after scaling and offset.
+
+- title: PD gains
+  comment: Gains and default_qpos use sdk_joint_order; action_target_clip uses action_joint_order.
+  fields:
+    kp_policy: null
+    kd_policy: null
+    kp_fixed_stand: Default-pose interpolation gains; exported from the training robot's nominal gains.
+    kd_fixed_stand: null
+    kd_damping: Damping-state gains; stiffness is zero in this state.

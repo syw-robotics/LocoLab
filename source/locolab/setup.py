@@ -11,7 +11,7 @@
 import os
 
 import toml
-from setuptools import setup
+from setuptools import find_packages, setup
 
 # Obtain the extension data from the extension.toml file
 EXTENSION_PATH = os.path.dirname(os.path.realpath(__file__))
@@ -21,12 +21,17 @@ EXTENSION_TOML_DATA = toml.load(os.path.join(EXTENSION_PATH, "config", "extensio
 # Minimum dependencies required prior to installation
 INSTALL_REQUIRES = [
     "psutil",
+    # Imported lazily by --viser and reference motion ghosts.
+    "viser>=1.0.27",
+    "mjviser==0.0.14",
+    "assetx @ git+https://github.com/syw-robotics/assetx.git",
 ]
+
 
 # Installation operation
 setup(
     name="locolab",
-    packages=["locolab"],
+    packages=find_packages(),
     author=EXTENSION_TOML_DATA["package"]["author"],
     maintainer=EXTENSION_TOML_DATA["package"]["maintainer"],
     url=EXTENSION_TOML_DATA["package"]["repository"],
@@ -36,7 +41,21 @@ setup(
     install_requires=INSTALL_REQUIRES,
     license="Apache License 2.0",
     include_package_data=True,
+    package_data={
+        "locolab": [
+            "assets/terrains/checker_ground/*.usda",
+            "assets/terrains/checker_ground/Materials/Textures/*.png",
+            "utils/deployment/templates/*.yaml",
+            "utils/deployment/templates/*/*.yaml",
+            "utils/deployment/templates/*/*.md",
+        ],
+    },
     python_requires=">=3.10",
+    entry_points={
+        "locolab.tasks": [
+            "locolab = locolab.tasks",
+        ],
+    },
     classifiers=[
         "Natural Language :: English",
         "Programming Language :: Python :: 3.10",

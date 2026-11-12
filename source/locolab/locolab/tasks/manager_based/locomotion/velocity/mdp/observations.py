@@ -8,11 +8,11 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal
 
 import torch
 
-from isaaclab.managers import SceneEntityCfg
+from isaaclab.managers import ManagerTermBase, ManagerTermBaseCfg, SceneEntityCfg
 
 if TYPE_CHECKING:
     from isaaclab.assets import Articulation
@@ -25,18 +25,15 @@ def body_mass(env: ManagerBasedRLEnv, asset_cfg: SceneEntityCfg = SceneEntityCfg
     """The mass of the specified bodies."""
     # extract the used quantities (to enable type-hinting)
     asset: Articulation = env.scene[asset_cfg.name]
-    mass_tensor = asset.root_physx_view.get_masses().to(device=env.device)
-    body_mass = mass_tensor[:, asset_cfg.body_ids]
-    return body_mass
+    return asset.data.body_mass.torch[:, asset_cfg.body_ids]
 
 
 def body_inertia(env: ManagerBasedRLEnv, asset_cfg: SceneEntityCfg = SceneEntityCfg("robot")) -> torch.Tensor:
     """The inertia of the specified bodies."""
     # extract the used quantities (to enable type-hinting)
     asset: Articulation = env.scene[asset_cfg.name]
-    inertia_tensor = asset.root_physx_view.get_inertias().to(device=env.device)
-    body_inertia = inertia_tensor[:, asset_cfg.body_ids]
-    return body_inertia.view(body_inertia.shape[0], -1)
+    body_inertia = asset.data.body_inertia.torch[:, asset_cfg.body_ids]
+    return body_inertia.reshape(body_inertia.shape[0], -1)
 
 
 # =====  feet  =====
@@ -46,7 +43,7 @@ def feet_contact_forces(
     """The contact forces of the specified bodies."""
     # extract the used quantities (to enable type-hinting)
     contact_sensor: ContactSensor = env.scene.sensors[sensor_cfg.name]
-    feet_contact_forces = contact_sensor.data.net_forces_w[:, sensor_cfg.body_ids, :]
+    feet_contact_forces = contact_sensor.data.net_forces_w.torch[:, sensor_cfg.body_ids, :]
     # Flatten to (num_envs, num_feet * 3) for concatenation with other observation terms
     return feet_contact_forces.view(feet_contact_forces.shape[0], -1)
 
@@ -57,7 +54,7 @@ def feet_contact_flag(
     """The contact forces of the specified bodies."""
     # extract the used quantities (to enable type-hinting)
     contact_sensor: ContactSensor = env.scene.sensors[sensor_cfg.name]
-    feet_contact = contact_sensor.data.net_forces_w[:, sensor_cfg.body_ids, :]
+    feet_contact = contact_sensor.data.net_forces_w.torch[:, sensor_cfg.body_ids, :]
     feet_contact_flag = torch.any(feet_contact > 1.0, dim=2).float() - 0.5
     return feet_contact_flag
 
@@ -69,9 +66,9 @@ def feet_height(env: ManagerBasedRLEnv, feet_names: list[str]) -> torch.Tensor:
         Tensor of shape (num_envs, 4) containing the average height of each foot above ground.
     """
     # Stack all sensor data at once
-    pos_z = torch.stack([env.scene.sensors[f"{name}_height_scanner"].data.pos_w[:, 2] for name in feet_names], dim=1)
+    pos_z = torch.stack([env.scene.sensors[f"{name}_height_scanner"].data.pos_w.torch[:, 2] for name in feet_names], dim=1)
     ray_hits_z = torch.stack(
-        [env.scene.sensors[f"{name}_height_scanner"].data.ray_hits_w[..., 2] for name in feet_names], dim=1
+        [env.scene.sensors[f"{name}_height_scanner"].data.ray_hits_w.torch[..., 2] for name in feet_names], dim=1
     )
 
     # Compute heights: (num_envs, 4, 1) - (num_envs, 4, num_rays) = (num_envs, 4, num_rays)
@@ -86,11 +83,47 @@ def joint_acc(env: ManagerBasedRLEnv, asset_cfg: SceneEntityCfg = SceneEntityCfg
     """The acceleration of the specified joints."""
     # extract the used quantities (to enable type-hinting)
     asset: Articulation = env.scene[asset_cfg.name]
-    joint_acc = asset.data.joint_acc[:, asset_cfg.joint_ids]
+    joint_acc = asset.data.joint_acc.torch[:, asset_cfg.joint_ids]
     return joint_acc
 
 
-# =====  Gait  =====
+class joint_pos_rel_biased(ManagerTermBase):
+    """Joint position relative to default, plus the fixed encoder zero-offset.
+
+    The offset tensor is checked once here. The step path only reads it.
+    """
+
+    def __init__(self, cfg: ManagerTermBaseCfg, env: ManagerBasedRLEnv):
+        super().__init__(cfg, env)
+        asset_cfg: SceneEntityCfg = cfg.params["asset_cfg"]
+        self._asset: Articulation = env.scene[asset_cfg.name]
+        bias = getattr(self._asset, "encoder_bias", None)
+        if not isinstance(bias, torch.Tensor):
+            raise RuntimeError(
+                f"Articulation '{asset_cfg.name}' has no encoder_bias. "
+                "The position action must be EncoderBiasJointPositionAction."
+            )
+        self._bias = bias
+
+    def __call__(
+        self, env: ManagerBasedRLEnv, asset_cfg: SceneEntityCfg = SceneEntityCfg("robot")
+    ) -> torch.Tensor:
+        joint_ids = asset_cfg.joint_ids
+        data = self._asset.data
+        return (
+            data.joint_pos.torch[:, joint_ids] + self._bias[:, joint_ids]  # add bias in obs
+            - data.default_joint_pos.torch[:, joint_ids]  # hence, subtract bias in action
+        )
+
+
+
+# =====  gait  =====
+#  def gait_phase(
+#      env: ManagerBasedRLEnv,
+#      period: float,
+#      command_name: str | None = None,
+#      command_threshold: float = 0.1,
+#  ) -> torch.Tensor:
 def gait_phase(env: ManagerBasedRLEnv, period: float) -> torch.Tensor:
     if not hasattr(env, "episode_length_buf"):
         env.episode_length_buf = torch.zeros(env.num_envs, device=env.device, dtype=torch.long)
@@ -100,4 +133,100 @@ def gait_phase(env: ManagerBasedRLEnv, period: float) -> torch.Tensor:
     phase = torch.zeros(env.num_envs, 2, device=env.device)
     phase[:, 0] = torch.sin(global_phase * torch.pi * 2.0)
     phase[:, 1] = torch.cos(global_phase * torch.pi * 2.0)
+    #  if command_name is not None:
+    #      command = env.command_manager.get_command(command_name)
+    #      moving = (torch.sum(command[:, :2].square(), dim=1) > command_threshold**2) | (
+    #          command[:, 2].abs() > command_threshold
+    #      )
+    #      phase *= moving.unsqueeze(1)
     return phase
+
+
+# =====  camera  =====
+class delayed_visualizable_image(ManagerTermBase):
+    """Return delayed frames from a noisy camera history buffer.
+
+    The camera must already store ``data_type`` as ``(N, history, H, W, C)``. The
+    returned tensor is ``(N, num_output_frames, H, W)``, oldest frame first. The
+    selected history indices are written to ``sensor._delayed_frame_indices_by_data_type``
+    so a later mask term can read the same frames.
+    """
+
+    def __init__(self, cfg: ManagerTermBaseCfg, env: ManagerBasedRLEnv):
+        super().__init__(cfg, env)
+        self._num_envs = env.num_envs
+        self._device = env.device
+        self.sensor_cfg = cfg.params.get("sensor_cfg", SceneEntityCfg("camera"))
+        self.data_type = cfg.params["data_type"]
+        if "history" not in self.data_type:
+            raise ValueError("`data_type` must refer to a history output.")
+
+        self.sensor = env.scene.sensors[self.sensor_cfg.name]
+        self.delayed_frame_ranges = cfg.params.get("delayed_frame_ranges", (0, 0))
+        self.delayed_frame_distribution = cfg.params.get("delayed_frame_distribution", "uniform")
+        self.history_skip_frames = max(cfg.params.get("history_skip_frames", 1), 1)
+        self.num_output_frames = max(cfg.params.get("num_output_frames", 1), 1)
+        self.sensor_history_length = self.sensor.data.output[self.data_type].shape[1]
+        self._num_delayed_frames = torch.zeros(env.num_envs, dtype=torch.long, device=env.device)
+        self.frame_offset = torch.arange(
+            (self.num_output_frames - 1) * self.history_skip_frames,
+            -1,
+            -self.history_skip_frames,
+            device=env.device,
+        )
+        frames_needed = (self.num_output_frames - 1) * self.history_skip_frames + 1
+        if frames_needed + self.delayed_frame_ranges[1] > self.sensor_history_length:
+            raise ValueError(
+                "Camera history is too short for the requested output frames and delay: "
+                f"need {frames_needed + self.delayed_frame_ranges[1]}, have {self.sensor_history_length}."
+            )
+
+    def reset(self, env_ids: torch.Tensor | None = None) -> None:
+        if self.delayed_frame_distribution != "uniform":
+            raise NotImplementedError("Only uniform delayed-frame sampling is supported.")
+        ids = (
+            torch.arange(self._num_envs, device=self._device)
+            if env_ids is None or isinstance(env_ids, slice)
+            else torch.as_tensor(env_ids, device=self._device, dtype=torch.long)
+        )
+        if isinstance(env_ids, slice):
+            ids = ids[env_ids]
+        min_delay, max_delay = self.delayed_frame_ranges
+        self._num_delayed_frames[ids] = torch.randint(
+            min_delay,
+            max_delay + 1,
+            (len(ids),),
+            device=self._device,
+        )
+
+    def __call__(
+        self,
+        env: ManagerBasedRLEnv,
+        data_type: str,
+        sensor_cfg: SceneEntityCfg = SceneEntityCfg("camera"),
+        history_skip_frames: int = 1,
+        num_output_frames: int = 1,
+        delayed_frame_ranges: tuple[int, int] = (0, 0),
+        delayed_frame_distribution: Literal["uniform"] = "uniform",
+    ) -> torch.Tensor:
+        del env, data_type, sensor_cfg, history_skip_frames, num_output_frames
+        del delayed_frame_ranges, delayed_frame_distribution
+
+        images = self.sensor.data.output[self.data_type].squeeze(-1)
+        frame_indices = (
+            self.sensor_history_length
+            - self.frame_offset.unsqueeze(0)
+            - self._num_delayed_frames.unsqueeze(1)
+            - 1
+        )
+        if (frame_indices < 0).any():
+            raise RuntimeError("Delayed camera frame index is out of bounds.")
+
+        indices_by_type = getattr(self.sensor, "_delayed_frame_indices_by_data_type", None)
+        if indices_by_type is None:
+            indices_by_type = {}
+            self.sensor._delayed_frame_indices_by_data_type = indices_by_type
+        indices_by_type[self.data_type] = frame_indices
+
+        batch_indices = torch.arange(images.shape[0], device=images.device).unsqueeze(1)
+        return images[batch_indices, frame_indices]

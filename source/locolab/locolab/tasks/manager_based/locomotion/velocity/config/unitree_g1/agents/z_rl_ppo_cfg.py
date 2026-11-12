@@ -6,8 +6,6 @@
 # All rights reserved.
 # Modifications are licensed under BSD-3-Clause.
 
-from isaaclab.utils import configclass
-
 from z_rl.adaptor.isaaclab import (
     ZRlMLPModelCfg,
     ZRlOnPolicyRunnerCfg,
@@ -15,13 +13,15 @@ from z_rl.adaptor.isaaclab import (
     ZRlSymmetryCfg,
 )
 
+from isaaclab.utils import configclass
+
 
 @configclass
 class G1RoughPPOBaseRunnerCfg(ZRlOnPolicyRunnerCfg):
     num_steps_per_env = 24
-    max_iterations = 20000
+    max_iterations = 10000
     save_interval = 500
-    experiment_name = "g1_rough"
+    experiment_name = "g1_rough_velocity"
     obs_groups = {"actor": ["policy"], "critic": ["critic"]}
     algorithm = ZRlPpoAlgorithmCfg(
         num_learning_epochs=5,
@@ -35,17 +35,17 @@ class G1RoughPPOBaseRunnerCfg(ZRlOnPolicyRunnerCfg):
         learning_rate=1.0e-3,
         max_grad_norm=1.0,
         optimizer="adamw",
+        use_muon=True,  # using muon seems to accelerate learning convergence
         use_clipped_value_loss=True,
         schedule="adaptive",
         desired_kl=0.01,
-        #  symmetry_cfg=ZRlSymmetryCfg(
-        #      use_data_augmentation=True,
-        #      use_mirror_loss=True,
-        #      mirror_loss_coeff=1.0,
-        #      data_augmentation_func=(
-        #          "locolab.tasks.manager_based.locomotion.velocity.mdp.symmetry.g1:compute_symmetric_states"
-        #      ),
-        #  ),
+        symmetry_augmentation=True,
+        # Train on mirrored samples without optimizing mirror loss; log a detached diagnostic.
+        symmetry_cfg=ZRlSymmetryCfg(
+            use_mirror_loss=False,
+            log_mirror_loss=True,
+            mirror_loss_log_interval=100,
+        ),
     )
 
 
@@ -54,14 +54,14 @@ class G1RoughPPORunnerCfg(G1RoughPPOBaseRunnerCfg):
     actor = ZRlMLPModelCfg(
         hidden_dims=[512, 256, 128],
         activation="elu",
-        obs_normalization=False,
+        obs_normalization=True,
         distribution_cfg=ZRlMLPModelCfg.GaussianDistributionCfg(init_std=1.0),
         init_weights=0.01,  # Use orthogonal init, which helps symmetry learning
     )
     critic = ZRlMLPModelCfg(
         hidden_dims=[512, 256, 128],
         activation="elu",
-        obs_normalization=False,
+        obs_normalization=True,
         init_weights=0.01,  # Use orthogonal init, which helps symmetry learning
     )
 
@@ -71,5 +71,5 @@ class G1FlatPPORunnerCfg(G1RoughPPORunnerCfg):
     def __post_init__(self):
         super().__post_init__()
 
-        self.max_iterations = 10000
-        self.experiment_name = "g1_flat"
+        self.max_iterations = 3000
+        self.experiment_name = "g1_flat_velocity"

@@ -12,14 +12,14 @@ from isaaclab.utils import configclass
 
 import locolab.tasks.manager_based.locomotion.velocity.mdp as mdp
 
-from . import FOOT_LINK_NAMES, TORSO_LINK_NAME
+from . import FOOT_LINK_NAMES, OTHER_BODY_LINK_NAMES, TORSO_LINK_NAME
 
 
 @configclass
 class EventCfg:
     """Configuration for events."""
 
-    # ===== startup ===== (2 events)
+    # ===== startup ===== (4 events)
     # 1.
     randomize_feet_material = EventTerm(
         func=mdp.randomize_rigid_body_material,
@@ -47,16 +47,33 @@ class EventCfg:
         },
     )
     # 3.
+    randomize_other_bodies_mass = EventTerm(
+        func=mdp.randomize_rigid_body_mass,
+        mode="startup",
+        params={
+            "asset_cfg": SceneEntityCfg("robot", body_names=OTHER_BODY_LINK_NAMES),
+            "mass_distribution_params": (0.96, 1.04),
+            "operation": "scale",
+            "recompute_inertia": True,
+        },
+    )
+    # 4.
     randomize_base_com = EventTerm(
         func=mdp.randomize_rigid_body_com,
         mode="startup",
         params={
             "asset_cfg": SceneEntityCfg("robot", body_names=TORSO_LINK_NAME),
-            "com_range": {"x": (-0.05, 0.05), "y": (-0.05, 0.05), "z": (-0.05, 0.05)},
+            "com_range": {"x": (-0.025, 0.025), "y": (-0.05, 0.05), "z": (-0.05, 0.05)},
         },
     )
+    # 5.
+    randomize_joint_encoder_bias = EventTerm(
+        func=mdp.randomize_encoder_bias,
+        mode="startup",
+        params={"asset_cfg": SceneEntityCfg("robot"), "bias_range": (-0.01, 0.01)},
+    )
 
-    # ===== reset ===== (3 events)
+    # ===== reset ===== (2 events)
     # 1.
     reset_base = EventTerm(
         func=mdp.reset_root_state_uniform,
@@ -64,7 +81,7 @@ class EventCfg:
         params={
             "pose_range": {"x": (-0.5, 0.5), "y": (-0.5, 0.5), "yaw": (-3.14, 3.14)},
             "velocity_range": {
-                "x": (0.0, 0.0),
+                "x": (0.5, 0.0),
                 "y": (0.0, 0.0),
                 "z": (0.0, 0.0),
                 "roll": (0.0, 0.0),
@@ -78,7 +95,7 @@ class EventCfg:
         func=mdp.reset_joints_by_offset,
         mode="reset",
         params={
-            "position_range": (-0.2, 0.2),
+            "position_range": (-0.25, 0.25),
             "velocity_range": (0.0, 0.0),
         },
     )
@@ -88,6 +105,13 @@ class EventCfg:
     push_robot_by_setting_velocity = EventTerm(
         func=mdp.push_by_setting_velocity,
         mode="interval",
-        interval_range_s=(12.0, 16.0),
-        params={"velocity_range": {"x": (-0.5, 0.5), "y": (-0.5, 0.5)}},
+        interval_range_s=(8.0, 12.0),
+        params={
+            "velocity_range": {"x": (-0.1, 0.1), "y": (-0.1, 0.1)},
+            "debug_vis_cfg": mdp.PushDebugVisCfg(),
+        },
     )
+
+@configclass
+class RoughEventCfg(EventCfg):
+    pass

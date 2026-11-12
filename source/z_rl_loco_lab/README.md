@@ -1,5 +1,8 @@
 # z_rl_loco_lab
 
+> 🚧 **This package is deprecated now. To be updated !**
+
+
 `z_rl_loco_lab` is a `z_rl` plugin with locomotion-specific PPO variants and actor models.
 
 It currently provides:

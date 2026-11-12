@@ -62,6 +62,8 @@ section-order = [
     "omniverse-extensions",
     # Group Isaac Lab extensions together since they are all part of the Isaac Lab project
     "isaaclab",
+    "isaaclab-physx",
+    "isaaclab-newton",
     "isaaclab-contrib",
     "isaaclab-rl",
     "isaaclab-mimic",
@@ -86,6 +88,8 @@ section-order = [
 ]
 
 "isaaclab" = ["isaaclab"]
+"isaaclab-physx" = ["isaaclab_physx"]
+"isaaclab-newton" = ["isaaclab_newton"]
 "isaaclab-assets" = ["isaaclab_assets"]
 "isaaclab-contrib" = ["isaaclab_contrib"]
 "isaaclab-rl" = ["isaaclab_rl"]

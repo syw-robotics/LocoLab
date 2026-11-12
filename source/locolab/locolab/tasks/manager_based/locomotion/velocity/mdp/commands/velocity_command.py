@@ -22,7 +22,7 @@ from isaaclab.markers import VisualizationMarkers
 if TYPE_CHECKING:
     from isaaclab.envs import ManagerBasedEnv
 
-    from .commands_cfg import UniformVelocityCommandCfg
+    from .commands_cfg import UniformVelocityCommandByTerrainCfg, UniformVelocityCommandCfg
 
 # import logger
 logger = logging.getLogger(__name__)
@@ -42,7 +42,7 @@ class UniformVelocityCommand(CommandTerm):
 
     .. math::
 
-        \omega_z = \frac{1}{2} \text{wrap_to_pi}(\theta_{\text{target}} - \theta_{\text{current}})
+        \omega_z = k \, \text{wrap_to_pi}(\theta_{\text{target}} - \theta_{\text{current}})
 
     """
 
@@ -62,8 +62,6 @@ class UniformVelocityCommand(CommandTerm):
         # initialize the base class
         super().__init__(cfg, env)
 
-        # initialize terrain-related attributes
-
         # check configuration
         if self.cfg.heading_command and self.cfg.ranges.heading is None:
             raise ValueError(
@@ -75,22 +73,38 @@ class UniformVelocityCommand(CommandTerm):
                 f"The velocity command has the 'ranges.heading' attribute set to '{self.cfg.ranges.heading}'"
                 " but the heading command is not active. Consider setting the flag for the heading command to True."
             )
+        mode_probabilities = {
+            "rel_standing_envs": self.cfg.rel_standing_envs,
+            "rel_zero_lin_vel_envs": self.cfg.rel_zero_lin_vel_envs,
+            "rel_only_lin_vel_x_envs": self.cfg.rel_only_lin_vel_x_envs,
+        }
+        for name, probability in mode_probabilities.items():
+            if not 0.0 <= probability <= 1.0:
+                raise ValueError(f"Expected {name} to be in [0, 1], got {probability}.")
+        mode_probability = sum(mode_probabilities.values())
+        if mode_probability > 1.0:
+            raise ValueError(
+                "Expected the standing, in-place, and x-only probabilities to sum to at most 1, "
+                f"got {mode_probability}."
+            )
+        if not isinstance(self.cfg.metrics_update_interval, int) or self.cfg.metrics_update_interval < 1:
+            raise ValueError(
+                "Expected metrics_update_interval to be a positive integer, "
+                f"got {self.cfg.metrics_update_interval}."
+            )
 
-        # obtain the robot asset
-        # -- robot
         self.robot: Articulation = env.scene[cfg.asset_name]
 
-        # crete buffers to store the command
-        # -- command: x vel, y vel, yaw vel, heading
+        # command: x vel, y vel, yaw vel
         self.vel_command_b = torch.zeros(self.num_envs, 3, device=self.device)
         self.heading_target = torch.zeros(self.num_envs, device=self.device)
         self.is_heading_env = torch.zeros(self.num_envs, dtype=torch.bool, device=self.device)
-        self.is_only_lin_vel_x_env = torch.zeros_like(self.is_heading_env)
-        # commands are set to zero if the velocity xy is below the threshold
-        self.zero_velocity_threshold = self.cfg.zero_velocity_threshold
-        # -- metrics
         self.metrics["error_vel_xy"] = torch.zeros(self.num_envs, device=self.device)
         self.metrics["error_vel_yaw"] = torch.zeros(self.num_envs, device=self.device)
+        self._metrics_update_counter = 0
+        self._metrics_update_scale = (
+            self.cfg.metrics_update_interval * self._env.step_dt / self.cfg.resampling_time_range[1]
+        )
 
     def __str__(self) -> str:
         """Return a string representation of the command generator."""
@@ -100,9 +114,11 @@ class UniformVelocityCommand(CommandTerm):
         msg += f"\tHeading command: {self.cfg.heading_command}\n"
         if self.cfg.heading_command:
             msg += f"\tHeading probability: {self.cfg.rel_heading_envs}\n"
+        msg += f"\tStanding probability: {self.cfg.rel_standing_envs}\n"
+        msg += f"\tIn-place probability: {self.cfg.rel_zero_lin_vel_envs}\n"
         msg += f"\tOnly lin_vel_x probability: {self.cfg.rel_only_lin_vel_x_envs}\n"
-        if self.zero_velocity_threshold is not None:
-            msg += f"\tVelocity threshold: {self.zero_velocity_threshold}\n"
+        msg += f"\tVelocity threshold: {self.cfg.zero_velocity_threshold}\n"
+        msg += f"\tMetrics update interval: {self.cfg.metrics_update_interval} control steps\n"
         return msg
 
     """
@@ -119,63 +135,65 @@ class UniformVelocityCommand(CommandTerm):
     """
 
     def _update_metrics(self):
-        # time for which the command was executed
-        max_command_time = self.cfg.resampling_time_range[1]
-        max_command_step = max_command_time / self._env.step_dt
+        self._metrics_update_counter = (self._metrics_update_counter + 1) % self.cfg.metrics_update_interval
+        if self._metrics_update_counter != 0:
+            return
+
         # logs data
-        # TODO: add velocity error metric for each type of terrain, this could be helpful for evaluation
-        self.metrics["error_vel_xy"] += (
-            torch.norm(self.vel_command_b[:, :2] - self.robot.data.root_lin_vel_b[:, :2], dim=-1) / max_command_step
+        self.metrics["error_vel_xy"].add_(
+            torch.norm(self.vel_command_b[:, :2] - self.robot.data.root_lin_vel_b.torch[:, :2], dim=-1),
+            alpha=self._metrics_update_scale,
         )
-        self.metrics["error_vel_yaw"] += (
-            torch.abs(self.vel_command_b[:, 2] - self.robot.data.root_ang_vel_b[:, 2]) / max_command_step
+        self.metrics["error_vel_yaw"].add_(
+            torch.abs(self.vel_command_b[:, 2] - self.robot.data.root_ang_vel_b.torch[:, 2]),
+            alpha=self._metrics_update_scale,
         )
 
-    def _resample_command(self, env_ids: Sequence[int]):
-        # sample velocity commands
-        r = torch.empty(len(env_ids), device=self.device)
-        # -- linear velocity - x direction
-        self.vel_command_b[env_ids, 0] = r.uniform_(*self.cfg.ranges.lin_vel_x)
-        # -- linear velocity - y direction
-        self.vel_command_b[env_ids, 1] = r.uniform_(*self.cfg.ranges.lin_vel_y)
-        # -- ang vel yaw - rotation around z
-        self.vel_command_b[env_ids, 2] = r.uniform_(*self.cfg.ranges.ang_vel_z)
-        # heading target
+    def _resample_command(self, env_ids: Sequence[int] | slice):
+        num_envs = len(range(self.num_envs)[env_ids]) if isinstance(env_ids, slice) else len(env_ids)
+        # Read ranges here so a curriculum that mutates cfg.ranges changes the next sample.
+        ranges = self.cfg.ranges
+        bounds = torch.tensor(
+            [ranges.lin_vel_x, ranges.lin_vel_y, ranges.ang_vel_z],
+            device=self.device,
+            dtype=torch.float32,
+        )
+        commands = bounds[:, 0] + (bounds[:, 1] - bounds[:, 0]) * torch.rand(num_envs, 3, device=self.device)
+        r = torch.empty(num_envs, device=self.device)
         if self.cfg.heading_command:
-            self.heading_target[env_ids] = r.uniform_(*self.cfg.ranges.heading)
-            # update heading envs
+            self.heading_target[env_ids] = r.uniform_(*ranges.heading)
             self.is_heading_env[env_ids] = r.uniform_(0.0, 1.0) <= self.cfg.rel_heading_envs
+        self._apply_command_modes(env_ids, commands, r)
 
-        # update only_lin_vel_x envs
-        self.is_only_lin_vel_x_env[env_ids] = r.uniform_(0.0, 1.0) <= self.cfg.rel_only_lin_vel_x_envs
+    def _apply_command_modes(self, env_ids: Sequence[int] | slice, commands: torch.Tensor, r: torch.Tensor) -> None:
+        """Zero small planar commands, then apply standing / in-place / x-only modes."""
+        commands[:, :2] *= (torch.norm(commands[:, :2], dim=1) > self.cfg.zero_velocity_threshold).unsqueeze(1)
 
-        # set small commands to zero
-        self.vel_command_b[env_ids, :2] *= (
-            torch.norm(self.vel_command_b[env_ids, :2], dim=1) > self.cfg.zero_velocity_threshold
-        ).unsqueeze(1)
+        mode_sample = r.uniform_(0.0, 1.0)
+        standing_end = self.cfg.rel_standing_envs
+        in_place_end = standing_end + self.cfg.rel_zero_lin_vel_envs
+        only_lin_vel_x_end = in_place_end + self.cfg.rel_only_lin_vel_x_envs
+        is_standing = mode_sample < standing_end
+        is_zero_lin_vel = (mode_sample >= standing_end) & (mode_sample < in_place_end)
+        is_only_lin_vel_x = (mode_sample >= in_place_end) & (mode_sample < only_lin_vel_x_end)
 
-        # set y and yaw vel to zero for only_x_envs
-        only_x_env_ids = self.is_only_lin_vel_x_env.nonzero(as_tuple=False).flatten()
-        self.vel_command_b[only_x_env_ids, 1] = 0.0
-        self.vel_command_b[only_x_env_ids, 2] = 0.0
+        # Standing and x-only modes do not track a heading target.
+        if self.cfg.heading_command:
+            self.is_heading_env[env_ids] = self.is_heading_env[env_ids] & ~(is_standing | is_only_lin_vel_x)
+
+        commands[is_zero_lin_vel, :2] = 0.0
+        commands[is_standing] = 0.0
+        commands[is_only_lin_vel_x, 1:] = 0.0
+        self.vel_command_b[env_ids] = commands
 
     def _update_command(self):
-        """Post-processes the velocity command.
-
-        This function computes angular
-        velocity from heading direction if the heading_command flag is set.
-        """
-        # Compute angular velocity from heading direction
-        if self.cfg.heading_command:
-            # resolve indices of heading envs
-            env_ids = self.is_heading_env.nonzero(as_tuple=False).flatten()
-            # compute angular velocity
-            heading_error = math_utils.wrap_to_pi(self.heading_target[env_ids] - self.robot.data.heading_w[env_ids])
-            self.vel_command_b[env_ids, 2] = torch.clip(
-                self.cfg.heading_control_stiffness * heading_error,
-                min=self.cfg.ranges.ang_vel_z[0],
-                max=self.cfg.ranges.ang_vel_z[1],
-            )
+        """Turn heading error into a yaw-rate command."""
+        if not self.cfg.heading_command:
+            return
+        heading_error = math_utils.wrap_to_pi(self.heading_target - self.robot.data.heading_w.torch)
+        ang_min, ang_max = self.cfg.ranges.ang_vel_z
+        ang_vel = (self.cfg.heading_control_stiffness * heading_error).clamp(min=ang_min, max=ang_max)
+        self.vel_command_b[:, 2] = torch.where(self.is_heading_env, ang_vel, self.vel_command_b[:, 2])
 
     def _set_debug_vis_impl(self, debug_vis: bool):
         # set visibility of markers
@@ -202,11 +220,11 @@ class UniformVelocityCommand(CommandTerm):
             return
         # get marker location
         # -- base state
-        base_pos_w = self.robot.data.root_pos_w.clone()
+        base_pos_w = self.robot.data.root_pos_w.torch.clone()
         base_pos_w[:, 2] += self.cfg.vel_visualizer_offset_z
         # -- resolve the scales and quaternions
         vel_des_arrow_scale, vel_des_arrow_quat = self._resolve_xy_velocity_to_arrow(self.command[:, :2])
-        vel_arrow_scale, vel_arrow_quat = self._resolve_xy_velocity_to_arrow(self.robot.data.root_lin_vel_b[:, :2])
+        vel_arrow_scale, vel_arrow_quat = self._resolve_xy_velocity_to_arrow(self.robot.data.root_lin_vel_b.torch[:, :2])
         # display markers
         self.goal_vel_visualizer.visualize(base_pos_w, vel_des_arrow_quat, vel_des_arrow_scale)
         self.current_vel_visualizer.visualize(base_pos_w, vel_arrow_quat, vel_arrow_scale)
@@ -227,7 +245,108 @@ class UniformVelocityCommand(CommandTerm):
         zeros = torch.zeros_like(heading_angle)
         arrow_quat = math_utils.quat_from_euler_xyz(zeros, zeros, heading_angle)
         # convert everything back from base to world frame
-        base_quat_w = self.robot.data.root_quat_w
+        base_quat_w = self.robot.data.root_quat_w.torch
         arrow_quat = math_utils.quat_mul(base_quat_w, arrow_quat)
 
         return arrow_scale, arrow_quat
+
+
+_COMMAND_RANGE_KEYS = ("lin_vel_x", "lin_vel_y", "ang_vel_z", "heading")
+
+
+class UniformVelocityCommandByTerrain(UniformVelocityCommand):
+    """Uniform velocity command whose ranges depend on the sub-terrain.
+
+    ``cfg.ranges`` is the default row. ``cfg.terrain_groups`` overrides a subset of
+    ``lin_vel_x`` / ``lin_vel_y`` / ``ang_vel_z`` / ``heading`` for named sub-terrains.
+    The per-type table is built once. Resampling and heading clip index that table.
+    """
+
+    cfg: UniformVelocityCommandByTerrainCfg
+
+    def __init__(self, cfg: UniformVelocityCommandByTerrainCfg, env: ManagerBasedEnv):
+        super().__init__(cfg, env)
+
+        default_ranges = {
+            "lin_vel_x": self.cfg.ranges.lin_vel_x,
+            "lin_vel_y": self.cfg.ranges.lin_vel_y,
+            "ang_vel_z": self.cfg.ranges.ang_vel_z,
+            "heading": self.cfg.ranges.heading if self.cfg.ranges.heading is not None else (0.0, 0.0),
+        }
+        default_bounds = torch.tensor(
+            [default_ranges[key] for key in _COMMAND_RANGE_KEYS], device=self.device, dtype=torch.float32
+        )
+
+        terrain = self._env.scene.terrain
+        type_indices = terrain.env_terrain_indices
+        sub_terrains = terrain.cfg.terrain_generator.sub_terrains
+        if type_indices is None or not sub_terrains:
+            raise ValueError(
+                "UniformVelocityCommandByTerrain requires a terrain generator with per-environment sub-terrain indices."
+            )
+
+        terrain_names = list(sub_terrains.keys())
+        name_to_index = {name: index for index, name in enumerate(terrain_names)}
+        range_table = default_bounds.unsqueeze(0).expand(len(terrain_names), -1, -1).clone()
+
+        unknown_names: list[str] = []
+        for group in (self.cfg.terrain_groups or {}).values():
+            if group is None:
+                continue
+            if not isinstance(group, dict):
+                raise TypeError("Each velocity command terrain group must be a dict with a 'terrain_names' list.")
+            names = group.get("terrain_names")
+            if not names:
+                raise ValueError("Each velocity command terrain group must provide a non-empty 'terrain_names' list.")
+            overrides = group.get("ranges") or {}
+            unknown_keys = set(overrides) - set(_COMMAND_RANGE_KEYS)
+            if unknown_keys:
+                raise ValueError(f"Unknown velocity command range keys: {sorted(unknown_keys)}.")
+            merged = {**default_ranges, **overrides}
+            bounds = torch.tensor(
+                [merged[key] for key in _COMMAND_RANGE_KEYS], device=self.device, dtype=torch.float32
+            )
+            for name in names:
+                index = name_to_index.get(name)
+                if index is None:
+                    unknown_names.append(name)
+                    continue
+                range_table[index] = bounds
+        if unknown_names:
+            logger.warning(
+                "UniformVelocityCommandByTerrain ignored unknown sub-terrains: %s. Available: %s.",
+                sorted(set(unknown_names)),
+                terrain_names,
+            )
+
+        self._terrain_type_indices = type_indices.to(device=self.device, dtype=torch.long)
+        self._command_range_table = range_table
+        # Terrain type does not change when the curriculum row changes, so clip bounds are fixed per env.
+        ang_bounds = range_table[self._terrain_type_indices, 2]
+        self._ang_vel_min = ang_bounds[:, 0]
+        self._ang_vel_max = ang_bounds[:, 1]
+
+    def __str__(self) -> str:
+        msg = super().__str__().replace("UniformVelocityCommand:", "UniformVelocityCommandByTerrain:", 1)
+        group_names = list(self.cfg.terrain_groups) if self.cfg.terrain_groups else []
+        msg += f"\tTerrain groups: {group_names}\n"
+        return msg
+
+    def _resample_command(self, env_ids: Sequence[int] | slice):
+        num_envs = len(range(self.num_envs)[env_ids]) if isinstance(env_ids, slice) else len(env_ids)
+        bounds = self._command_range_table[self._terrain_type_indices[env_ids]]
+        samples = bounds[:, :, 0] + (bounds[:, :, 1] - bounds[:, :, 0]) * torch.rand(num_envs, 4, device=self.device)
+        r = torch.empty(num_envs, device=self.device)
+        if self.cfg.heading_command:
+            self.heading_target[env_ids] = samples[:, 3]
+            self.is_heading_env[env_ids] = r.uniform_(0.0, 1.0) <= self.cfg.rel_heading_envs
+        self._apply_command_modes(env_ids, samples[:, :3], r)
+
+    def _update_command(self):
+        if not self.cfg.heading_command:
+            return
+        heading_error = math_utils.wrap_to_pi(self.heading_target - self.robot.data.heading_w.torch)
+        ang_vel = (self.cfg.heading_control_stiffness * heading_error).clamp(
+            min=self._ang_vel_min, max=self._ang_vel_max
+        )
+        self.vel_command_b[:, 2] = torch.where(self.is_heading_env, ang_vel, self.vel_command_b[:, 2])

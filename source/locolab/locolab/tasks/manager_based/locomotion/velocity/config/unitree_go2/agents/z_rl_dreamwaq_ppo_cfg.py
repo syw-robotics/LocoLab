@@ -16,16 +16,16 @@ from .z_rl_ppo_cfg import Go2RoughPPOBaseRunnerCfg
 
 @configclass
 class Go2RoughDreamWaQPPORunnerCfg(Go2RoughPPOBaseRunnerCfg):
-    experiment_name = "go2_rough_dreamwaq"
+    experiment_name = "go2_rough_velocity_dreamwaq"
     obs_group_concat_mode = "history_major"
     actor = DreamWaQEncoderMLPModelCfg(
         hidden_dims=[512, 256, 128],
         activation="elu",
-        obs_normalization=False,
+        obs_normalization=True,
         distribution_cfg=ZRlMLPModelCfg.GaussianDistributionCfg(init_std=1.0),
         vae_latent_dim=32,
         vae_encoder_hidden_dims=[128, 64],
-        vae_decoder_hidden_dims=[64, 32],
+        vae_decoder_hidden_dims=[64, 128],
         #  vae_decoder_output_dim=30,
         vae_decoder_output_dim=42,
         vae_activation="elu",
@@ -36,7 +36,7 @@ class Go2RoughDreamWaQPPORunnerCfg(Go2RoughPPOBaseRunnerCfg):
     critic = ZRlMLPModelCfg(
         hidden_dims=[512, 256, 128],
         activation="elu",
-        obs_normalization=False,
+        obs_normalization=True,
         init_weights=0.01,  # Use orthogonal init, which helps symmetry learning
     )
     algorithm = DreamWaQPpoAlgorithmCfg(

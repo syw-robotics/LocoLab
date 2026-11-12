@@ -16,6 +16,8 @@ from __future__ import annotations
 from dataclasses import MISSING
 from typing import TYPE_CHECKING, Literal
 
+from isaaclab_physx.sim.spawners.materials import PhysxRigidBodyMaterialCfg
+
 import isaaclab.sim as sim_utils
 from isaaclab.terrains.terrain_importer_cfg import (
     TerrainImporterCfg as _TerrainImporterCfg,
@@ -26,6 +28,7 @@ from .terrain_importer import TerrainImporter
 
 if TYPE_CHECKING:
     from .terrain_generator_cfg import TerrainGeneratorCfg
+    from .virtual_obstacle import VirtualObstacleCfg
 
 
 @configclass
@@ -36,6 +39,15 @@ class TerrainImporterCfg(_TerrainImporterCfg):
     """The class to use for the terrain importer.
 
     Defaults to :class:`locolab.utils.terrains.terrain_importer.TerrainImporter`.
+    """
+
+    virtual_obstacles: dict[str, VirtualObstacleCfg] = {}
+    """Named virtual obstacles generated from the terrain mesh at import time.
+
+    Use :attr:`VirtualObstacleCfg.terrain_names` plus :attr:`VirtualObstacleCfg.default_mesh_xyz_range`
+    for a shared crop, or :attr:`VirtualObstacleCfg.terrain_mesh_xyz_ranges` when gap / stairs /
+    climb occupy different local regions. Keep :attr:`VirtualObstacleCfg.debug_vis` False in
+    training; generation is once, but drawing markers is not free.
     """
 
     collision_group: int = -1
@@ -99,7 +111,7 @@ class TerrainImporterCfg(_TerrainImporterCfg):
       to the grid color of the imported ground plane.
     """
 
-    physics_material: sim_utils.RigidBodyMaterialCfg = sim_utils.RigidBodyMaterialCfg()
+    physics_material: PhysxRigidBodyMaterialCfg = PhysxRigidBodyMaterialCfg()
     """The physics material of the terrain. Defaults to a default physics material.
 
     The material is created at the path: ``{prim_path}/physicsMaterial``.
@@ -121,3 +133,10 @@ class TerrainImporterCfg(_TerrainImporterCfg):
 
     debug_vis: bool = False
     """Whether to enable visualization of terrain origins for the terrain. Defaults to False."""
+
+    retain_mesh: bool = False
+    """Keep a CPU copy of a generated terrain mesh. Defaults to False.
+
+    Play sets this when ``--viser`` is passed, so the browser viewer can draw the
+    same ground the simulator imported. Training leaves it off.
+    """

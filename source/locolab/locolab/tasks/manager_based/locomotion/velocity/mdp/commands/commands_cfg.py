@@ -9,13 +9,18 @@
 
 from dataclasses import MISSING
 
+from isaaclab.envs.mdp.commands.commands_cfg import (
+    TerrainBasedPose2dCommandCfg as IsaacTerrainBasedPose2dCommandCfg,
+)
 from isaaclab.managers import CommandTermCfg
 from isaaclab.markers import VisualizationMarkersCfg
 from isaaclab.utils import configclass
 
-from locolab.utils.markers import GREEN_ARROW_X_MARKER_CFG, RED_ARROW_X_MARKER_CFG
+from locolab.utils.debug_viz.markers import GREEN_ARROW_X_MARKER_CFG, RED_ARROW_X_MARKER_CFG
 
-from .velocity_command import UniformVelocityCommand
+from .flat_patch_velocity_command import FlatPatchVelocityCommand
+from .pose_2d_command import TerrainBasedPose2dCommand
+from .velocity_command import UniformVelocityCommand, UniformVelocityCommandByTerrain
 
 
 @configclass
@@ -29,6 +34,9 @@ class UniformVelocityCommandCfg(CommandTermCfg):
 
     zero_velocity_threshold: float = 0.2
     """Velocity threshold for the command generator. Defaults to 0.2."""
+
+    metrics_update_interval: int = 200
+    """Number of control steps between metric updates. Defaults to 200."""
 
     heading_command: bool = False
     """Whether to use heading command or angular velocity command. Defaults to False.
@@ -54,6 +62,19 @@ class UniformVelocityCommandCfg(CommandTermCfg):
 
     This allows creating a mix of environments where some robots only move forward/backward in x-direction
     while others have full 3-DOF velocity commands.
+    """
+
+    rel_zero_lin_vel_envs: float = 0.0
+    """The sampled probability of in-place environments with zero x/y velocity.
+
+    The yaw command is preserved so these environments can learn in-place turning. This mode,
+    :attr:`rel_standing_envs`, and :attr:`rel_only_lin_vel_x_envs` are mutually exclusive. Defaults to 0.0.
+    """
+
+    rel_standing_envs: float = 0.0
+    """The sampled probability of environments with a fully zero velocity command.
+
+    This is a separate, mutually exclusive command mode. Defaults to 0.0.
     """
 
     @configclass
@@ -94,3 +115,83 @@ class UniformVelocityCommandCfg(CommandTermCfg):
 
     # Marker z offset
     vel_visualizer_offset_z: float = 0.5
+
+
+@configclass
+class UniformVelocityCommandByTerrainCfg(UniformVelocityCommandCfg):
+    """Uniform velocity command with per-sub-terrain range overrides.
+
+    ``ranges`` applies to every sub-terrain that no group names. Each group overrides
+    only the axes it sets. Later groups win when the same sub-terrain is listed twice.
+    """
+
+    class_type: type = UniformVelocityCommandByTerrain
+
+    terrain_groups: dict | None = None
+    """Named sub-terrain groups. Omitted range keys inherit :attr:`ranges`.
+
+    Example::
+
+        {
+            "only_forward": {
+                "terrain_names": ["gap", "climb"],
+                "ranges": {
+                    "lin_vel_x": (-0.0, 1.0),
+                    "lin_vel_y": (-0.0, 0.0),
+                    "ang_vel_z": (-0.2, 0.2),
+                    "heading": (-0.5, 0.5)},
+            },
+        }
+    """
+
+
+@configclass
+class FlatPatchVelocityCommandCfg(CommandTermCfg):
+    """Velocity command that follows a sampled flat patch on the current sub-terrain.
+
+    The terrain generator must provide ``flat_patch_sampling`` under ``flat_patch_key``
+    for every sub-terrain and use terrain-based environment origins.
+    """
+
+    class_type: type = FlatPatchVelocityCommand
+
+    asset_name: str = MISSING
+    """Name of the robot asset."""
+
+    flat_patch_key: str = "target"
+    """Key of the terrain's flat patch samples."""
+
+    velocity_control_stiffness: float = 1.0
+    """Linear speed per meter of distance to the target."""
+
+    heading_control_stiffness: float = 1.0
+    """Yaw speed per radian of heading error."""
+
+    max_linear_velocity: float = 1.0
+    """Maximum planar speed in m/s."""
+
+    max_angular_velocity: float = 1.0
+    """Maximum absolute yaw speed in rad/s."""
+
+    target_distance_threshold: float = 0.2
+    """Stop when the planar distance to the target is at most this value, in meters."""
+
+    rel_standing_envs: float = 0.0
+    """Probability of sampling a standing command instead of moving to the target."""
+
+    metrics_update_interval: int = 200
+    """Number of control steps between metric updates."""
+
+
+@configclass
+class TerrainBasedPose2dCommandCfg(IsaacTerrainBasedPose2dCommandCfg):
+    """2D pose target sampled from ``flat_patch_key`` on the current sub-terrain.
+
+    The terrain generator must provide this flat-patch key for every sub-terrain.
+    The command is ``(relative_x, relative_y, relative_z, heading_error)``.
+    """
+
+    class_type: type = TerrainBasedPose2dCommand
+
+    flat_patch_key: str = "target"
+    """Key of the terrain's flat patch samples."""

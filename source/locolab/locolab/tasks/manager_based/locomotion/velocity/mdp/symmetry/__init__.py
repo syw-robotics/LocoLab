@@ -11,3 +11,5 @@
 These functions are used to augment the observations and actions of the environment.
 They are specific to the velocity task and the choice of the robot.
 """
+
+from .transforms import *  # noqa: F401, F403

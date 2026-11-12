@@ -6,10 +6,4 @@
 # All rights reserved.
 # Modifications are licensed under BSD-3-Clause.
 
-# Copyright (c) 2022-2025, The Isaac Lab Project Developers.
-# All rights reserved.
-#
-# SPDX-License-Identifier: BSD-3-Clause
-
 """Package containing asset and sensor configurations."""
-from .unitree import UNITREE_G1_29DOF_BEYONDMIMIC_CFG, UNITREE_GO2_CFG, UNITREE_B2_CFG

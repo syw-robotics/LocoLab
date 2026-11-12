@@ -20,18 +20,18 @@ class Go2RoughPPORunnerCfg(RslRlOnPolicyRunnerCfg):
     num_steps_per_env = 24
     max_iterations = 10000
     save_interval = 500
-    experiment_name = "go2_rough"
+    experiment_name = "go2_rough_velocity"
     obs_groups = {"actor": ["policy"], "critic": ["critic"]}
     actor = RslRlMLPModelCfg(
         hidden_dims=[512, 256, 128],
         activation="elu",
-        obs_normalization=False,
+        obs_normalization=True,
         distribution_cfg=RslRlMLPModelCfg.GaussianDistributionCfg(init_std=1.0),
     )
     critic = RslRlMLPModelCfg(
         hidden_dims=[512, 256, 128],
         activation="elu",
-        obs_normalization=False,
+        obs_normalization=True,
     )
     algorithm = RslRlPpoAlgorithmCfg(
         num_learning_epochs=5,
@@ -56,4 +56,4 @@ class Go2FlatPPORunnerCfg(Go2RoughPPORunnerCfg):
         super().__post_init__()
 
         self.max_iterations = 2000
-        self.experiment_name = "go2_flat"
+        self.experiment_name = "go2_flat_velocity"

@@ -19,15 +19,15 @@ from . import BASE_LINK_NAME, FOOT_LINK_NAMES, JOINT_NAMES, OTHER_BODY_LINK_NAME
 class EventCfg:
     """Configuration for events."""
 
-    # ===== startup ===== (6 events)
+    # ===== startup ===== (7 events)
     # 1.
     randomize_feet_material = EventTerm(
         func=mdp.randomize_rigid_body_material,
         mode="startup",
         params={
             "asset_cfg": SceneEntityCfg("robot", body_names=FOOT_LINK_NAMES),
-            "static_friction_range": (0.2, 1.5),
-            "dynamic_friction_range": (0.2, 1.5),
+            "static_friction_range": (0.2, 1.2),
+            "dynamic_friction_range": (0.2, 1.2),
             "restitution_range": (0.0, 0.5),
             "num_buckets": 64,
             "make_consistent": (
@@ -41,7 +41,7 @@ class EventCfg:
         mode="startup",
         params={
             "asset_cfg": SceneEntityCfg("robot", body_names=BASE_LINK_NAME),
-            "mass_distribution_params": (-3.0, 20.0),
+            "mass_distribution_params": (-2.0, 25.0),
             "operation": "add",
             "recompute_inertia": True,
         },
@@ -63,7 +63,7 @@ class EventCfg:
         mode="startup",
         params={
             "asset_cfg": SceneEntityCfg("robot", body_names=BASE_LINK_NAME),
-            "com_range": {"x": (-0.20, 0.20), "y": (-0.08, 0.08), "z": (-0.08, 0.08)},
+            "com_range": {"x": (-0.10, 0.20), "y": (-0.08, 0.08), "z": (-0.08, 0.12)},
         },
     )
     # 5.
@@ -79,29 +79,23 @@ class EventCfg:
         },
     )
     # 6.
-    # this term has bug!!!
-    #  randomize_joint_offsets = EventTerm(
-    #      func=mdp.randomize_joint_offsets,
-    #      mode="startup",
-    #      params={
-    #          "asset_cfg": SceneEntityCfg("robot", joint_names=JOINT_NAMES),
-    #          "offsets_distribution_params": (-0.02, 0.02),
-    #          "operation": "add",
-    #          "distribution": "gaussian",
-    #      },
-    #  )
+    randomize_joint_parameters = EventTerm(
+        func=mdp.randomize_joint_parameters,
+        mode="startup",
+        params={
+            "asset_cfg": SceneEntityCfg("robot", joint_names=JOINT_NAMES),
+            "friction_distribution_params": (0.75, 5.0),
+            "armature_distribution_params": (0.75, 2.5),
+            "operation": "scale",
+            "distribution": "uniform",
+        },
+    )
     # 7.
-    #  randomize_joint_parameters = EventTerm(
-    #      func=mdp.randomize_joint_parameters,
-    #      mode="startup",
-    #      params={
-    #          "asset_cfg": SceneEntityCfg("robot", joint_names=JOINT_NAMES),
-    #          "friction_distribution_params": (0.0, 0.1),
-    #          "armature_distribution_params": (0.0, 0.01),
-    #          "operation": "add",
-    #          "distribution": "uniform",
-    #      },
-    #  )
+    randomize_joint_encoder_bias = EventTerm(
+        func=mdp.randomize_encoder_bias,
+        mode="startup",
+        params={"asset_cfg": SceneEntityCfg("robot"), "bias_range": (-0.01, 0.01)},
+    )
 
     # ===== reset ===== (2 events)
     # 1.
@@ -121,7 +115,7 @@ class EventCfg:
             "pose_range": {
                 "x": (-0.5, 0.5),
                 "y": (-0.5, 0.5),
-                "z": (0.0, 0.2),
+                "z": (0.0, 0.1),
                 "roll": (0.0, 0.0),
                 "pitch": (0.0, 0.0),
                 "yaw": (-3.14, 3.14),
@@ -143,5 +137,8 @@ class EventCfg:
         func=mdp.push_by_setting_velocity,
         mode="interval",
         interval_range_s=(10.0, 15.0),
-        params={"velocity_range": {"x": (-1.0, 1.0), "y": (-1.0, 1.0)}},
+        params={
+            "velocity_range": {"x": (-1.0, 1.0), "y": (-1.0, 1.0)},
+            "debug_vis_cfg": mdp.PushDebugVisCfg(),
+        },
     )

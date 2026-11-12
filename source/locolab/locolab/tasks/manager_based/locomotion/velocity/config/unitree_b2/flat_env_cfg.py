@@ -6,14 +6,17 @@
 # All rights reserved.
 # Modifications are licensed under BSD-3-Clause.
 
-import isaaclab.sim as sim_utils
+from isaaclab_physx.sim.spawners.materials import PhysxRigidBodyMaterialCfg
+
 from isaaclab.assets import ArticulationCfg, AssetBaseCfg
 from isaaclab.envs import ManagerBasedRLEnvCfg
 from isaaclab.scene import InteractiveSceneCfg
 from isaaclab.sensors import ContactSensorCfg
+from isaaclab.sim.schemas import UsdPhysicsCollisionCfg
 from isaaclab.utils import configclass
 
-from locolab.utils.scene import flat_terrain_visual_material_cfg, blue_sky_light_cfg
+from locolab.utils.physics import set_self_collisions, set_locomotion_physics
+from locolab.utils.scene import flat_rough_terrain_visual_material_cfg, blue_sky_light_cfg
 from locolab.utils.terrains import TerrainImporterCfg
 
 #  from isaaclab.utils.assets import ISAAC_NUCLEUS_DIR
@@ -30,8 +33,10 @@ from locolab.tasks.manager_based.locomotion.velocity.config.unitree_b2.mdp_cfg i
     PrivObsCfg,
     PropObsCfg,
     FlatTerminationsCfg,
+    FLAT_CONTACT_SENSOR_LINK_NAMES,
 )
-from locolab.assets import UNITREE_B2_CFG  # isort: skip
+from locolab.assets.robots.unitree.B2.b2 import UNITREE_B2_CFG  # isort: skip
+from locolab.utils.terrains.terrains_cfg import FLAT_ROUGH_TERRAINS_CFG  # isort: skip
 
 
 ##
@@ -57,14 +62,15 @@ class B2FlatSceneCfg(InteractiveSceneCfg):
     # =====  terrain  =====
     terrain: TerrainImporterCfg = TerrainImporterCfg(
         prim_path="/World/ground",
-        terrain_type="plane",
-        physics_material=sim_utils.RigidBodyMaterialCfg(
+        terrain_type="generator",
+        terrain_generator=FLAT_ROUGH_TERRAINS_CFG,
+        physics_material=PhysxRigidBodyMaterialCfg(
             friction_combine_mode="multiply",
             restitution_combine_mode="multiply",
             static_friction=1.0,
             dynamic_friction=1.0,
         ),
-        visual_material=flat_terrain_visual_material_cfg(),
+        visual_material=flat_rough_terrain_visual_material_cfg(),
         debug_vis=False,
     )
 
@@ -73,7 +79,7 @@ class B2FlatSceneCfg(InteractiveSceneCfg):
 
     # =====  sensors  =====
     contact_forces: ContactSensorCfg = ContactSensorCfg(
-        prim_path="{ENV_REGEX_NS}/Robot/.*", history_length=3, track_air_time=True
+        prim_path=f"{{ENV_REGEX_NS}}/Robot/{FLAT_CONTACT_SENSOR_LINK_NAMES}", history_length=3, track_air_time=True
     )
 
     # =====  lights  =====
@@ -86,6 +92,8 @@ class B2FlatSceneCfg(InteractiveSceneCfg):
 @configclass
 class B2FlatEnvCfg(ManagerBasedRLEnvCfg):
     """Configuration for the B2 flat environment."""
+
+    seed: int = 42
 
     # Scene settings
     scene: B2FlatSceneCfg = B2FlatSceneCfg(num_envs=4096, env_spacing=2.5)
@@ -107,10 +115,25 @@ class B2FlatEnvCfg(ManagerBasedRLEnvCfg):
         self.sim.dt = 0.005
         self.sim.render_interval = self.decimation
         self.sim.physics_material = self.scene.terrain.physics_material
-        self.sim.physx.gpu_max_rigid_patch_count = 10 * 2**15
+        # physics settings
+        set_locomotion_physics(
+            self.sim, rigid_patch_count=2**16,
+            num_substeps=1, cone="elliptic", impratio=5.0, njmax=128, nconmax=24
+        )
+        # disable self collisions
+        set_self_collisions(self.scene.robot.spawn, False)
+        # barely keeping feet goes faster; keeping calf is safer
+        self.scene.robot.spawn.collision_props["/(?!.*foot).*"] = [
+            UsdPhysicsCollisionCfg(collision_enabled=False)
+        ]
+        #  self.scene.robot.spawn.collision_props["/(?!.*(foot|calf)).*"] = [
+        #      UsdPhysicsCollisionCfg(collision_enabled=False)
+        #  ]
+
         # update sensor update periods
         # we tick all the sensors based on the smallest update period (physics update period)
         self.scene.contact_forces.update_period = self.sim.dt
+        # disable self collisions for flat terrain
 
 
 @configclass
@@ -123,3 +146,4 @@ class B2FlatEnvCfg_PLAY(B2FlatEnvCfg):
         self.scene.num_envs = 10
         self.scene.env_spacing = 2.5
         self.commands.base_velocity.debug_vis = True
+        self.events.push_robot_by_setting_velocity.params["debug_vis"] = True
