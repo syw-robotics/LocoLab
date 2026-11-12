@@ -14,7 +14,7 @@ Play scripts call three functions:
 
 - `prepare_play_viewer` before `gym.make`, so the terrain mesh is kept for the browser.
 - `open_play_viewer` after the env exists. Without `--viser` this returns an idle object.
-- `viewer.after_step()` in the loop. When `viewer.paces` is true, skip the script's own `--realtime` sleep.
+- `viewer.after_step(obs)` in the loop. When `viewer.paces` is true, skip the script's own `--realtime` sleep.
 
 Robot layers are **Visual** and **Collision** (green enabled, gray disabled by the
 environment). **Convex hull** selects the shared mesh mode for Visual and browser
@@ -41,6 +41,14 @@ moves the whole scene consistently. Playback pause/reset/speed and task-specific
 debug/terrain controls remain in LocoLab. **Controls → Navigation → Move speed (m/s)**
 adjusts WASDQE camera translation from 0.1 to 20 m/s (default 2 m/s).
 It runs in the browser and is independent of simulation playback speed.
+
+For tasks with a normalized `depth_image` observation group, **Controls → Depth
+observation → Show** previews the selected environment's latest observation frame
+(including noise and delay). It defaults to off. Enabling it copies only that
+frame to the CPU at most 20 Hz; unchanged images are not re-encoded or sent.
+Hover over the image and click the expand icon, then drag the expanded window's
+bottom-right corner to resize it. Image scaling happens entirely in the browser
+(`install.sh` applies the frontend patches and builds them automatically).
 
 Velocity Play configs enable push arrows in both native and browser viewers.
 The thin blue arrow starts at the pushed articulation's root link and shows
