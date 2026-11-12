@@ -15,6 +15,8 @@ import logging
 import threading
 import time
 
+import numpy as np
+
 from locolab.utils.debug_viz.push.push_debug_vis import PushDebugVis
 
 from ._viser import viser
@@ -113,6 +115,9 @@ class ViserPlayViewer:
             for label, obj in self._debug_terms
         }
         self._status_html = ""
+        self._depth_checkbox = None
+        self._depth_image = None
+        self._last_depth_update = 0.0
         self._prepare_ground(scene)
 
         _quiet_probe_handshakes()
@@ -150,13 +155,13 @@ class ViserPlayViewer:
         reset_policy(torch.ones(env.unwrapped.num_envs, dtype=torch.bool, device=env.unwrapped.device))
         return True
 
-    def after_step(self) -> bool:
+    def after_step(self, observations=None) -> bool:
         """Push the latest pose to the browser. Return True while playback is paused.
 
         While running, sleep so the loop matches ``step_dt / speed``. The play
         script should skip its own ``--realtime`` sleep when ``paces`` is true.
         """
-        self.update()
+        self.update(observations)
         if self.paused:
             self._pace_time = None
             time.sleep(0.05)
@@ -174,7 +179,7 @@ class ViserPlayViewer:
         self._pace_time = time.perf_counter()
         return False
 
-    def update(self) -> None:
+    def update(self, observations=None) -> None:
         """Copy simulated body poses into the visible robots."""
         if self._release_on_client and self._server.get_clients():
             self._release_if_waiting()
@@ -192,6 +197,9 @@ class ViserPlayViewer:
             self._debug_scene.set_ghost_hulls(self._robot_view.visual_hulls)
             self._debug_scene.distance_lod = self._robot_view.distance_lod
             draw_debug(self._debug_scene, self._debug_terms, self._debug_enabled, selector)
+
+        if self._depth_checkbox is not None and self._depth_checkbox.value:
+            self._update_depth_image(observations, env_idx, now)
 
         shown = f"all {self._num_envs}" if show_all else f"{env_idx} / {self._num_envs - 1}"
         tracking = f"env {env_idx}" if scene.camera_tracking_enabled else "off"
@@ -317,12 +325,58 @@ class ViserPlayViewer:
                         self._apply_camera_move_speed(client)
 
             self._robot_view.create_scene_gui()
+            self._build_depth_gui()
             self._build_debug_gui()
 
         with tabs.add_tab("Visualization", icon=viser.Icon.EYE):
             self._build_robot_vis_gui()
             if self._terrain_mesh is not None:
                 self._build_terrain_gui()
+
+    def _build_depth_gui(self) -> None:
+        """Offer a preview for the normalized depth_image observation group."""
+        manager = getattr(self._env.unwrapped, "observation_manager", None)
+        if manager is None:
+            return
+        term_dims = manager.group_obs_term_dim.get("depth_image", [])
+        if len(term_dims) != 1 or len(term_dims[0]) not in (2, 3):
+            return
+        self._depth_shape = term_dims[0][-2:]
+        with self._server.gui.add_folder("Depth observation") as self._depth_folder:
+            self._depth_checkbox = self._server.gui.add_checkbox(
+                "Show", initial_value=False,
+                hint="Latest depth_image observation frame for the selected env; black = 0, white = 1.",
+            )
+
+            @self._depth_checkbox.on_update
+            def _(event) -> None:
+                self._last_depth_update = 0.0
+                if self._depth_image is not None:
+                    self._depth_image.visible = bool(event.target.value)
+
+    def _update_depth_image(self, observations, env_idx: int, now: float) -> None:
+        # Preview at most 20 Hz; transfer only one selected observation frame.
+        if now - self._last_depth_update < 0.05 or observations is None:
+            return
+        depth = observations.get("depth_image")
+        if depth is None:
+            return
+        if isinstance(depth, dict):
+            depth = next(iter(depth.values()))
+        frame = depth[env_idx].reshape(-1, *self._depth_shape)[-1]
+        frame = frame.detach().float().cpu().numpy()
+        pixels = (np.clip(np.nan_to_num(frame), 0.0, 1.0) * 255.0).astype(np.uint8)
+        pixels = np.repeat(pixels[..., None], 3, axis=-1)
+        label = f"Env {env_idx} · latest obs frame"
+        if self._depth_image is None:
+            with self._depth_folder:
+                self._depth_image = self._server.gui.add_image(pixels, label=label, format="png")
+        else:
+            if not np.array_equal(pixels, self._depth_image.image):
+                self._depth_image.image = pixels
+            self._depth_image.label = label
+            self._depth_image.visible = True
+        self._last_depth_update = now
 
     def _build_debug_gui(self) -> None:
         if not self._debug_terms:

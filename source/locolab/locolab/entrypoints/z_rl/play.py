@@ -285,7 +285,7 @@ def _play(args_cli, env_cfg, agent_cfg, resume_path, load_cfg, screen, *, wrap_e
                     obs, _, dones, _ = env.step(actions)
                     # reset recurrent states for episodes that have terminated
                     policy.reset(dones)
-            if viewer.after_step():
+            if viewer.after_step(obs):
                 continue
 
             # -------------------- Print Data for Debugging --------------------

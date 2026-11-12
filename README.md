@@ -6,13 +6,13 @@
 
 
 
-<!-- [![IsaacSim](https://img.shields.io/badge/IsaacSim-5.1.0-silver.svg)](https://docs.omniverse.nvidia.com/isaacsim/latest/overview.html) -->
-[![Isaac Lab](https://img.shields.io/badge/IsaacLab-3.0-brightgreen?logo=nvidia&logoColor=white)](https://isaac-sim.github.io/IsaacLab)
-[![Z RL](https://img.shields.io/badge/Z_RL-Flexible_RL_Lib-orange?logo=python&logoColor=white)](https://github.com/syw-robotics/z_rl)
+<!-- [![IsaacSim](https://img.shields.io/badge/IsaacSim-5.1.0-7D828A.svg)](https://docs.omniverse.nvidia.com/isaacsim/latest/overview.html) -->
+[![Isaac Lab](https://img.shields.io/badge/IsaacLab-3.0-6F8575?logo=nvidia&logoColor=white)](https://isaac-sim.github.io/IsaacLab)
+[![Z RL](https://img.shields.io/badge/Z_RL-Flexible_RL_Lib-9B866B?logo=python&logoColor=white)](https://github.com/syw-robotics/z_rl)
 
-<!-- [![Linux platform](https://img.shields.io/badge/platform-linux--64-orange.svg)](https://releases.ubuntu.com/22.04/)
-[![Windows platform](https://img.shields.io/badge/platform-windows--64-orange.svg)](https://www.microsoft.com/en-us/) -->
-<!-- [![License](https://img.shields.io/badge/license-BSD--3--Clause-blue.svg)](LICENSE) -->
+<!-- [![Linux platform](https://img.shields.io/badge/platform-linux--64-9B866B.svg)](https://releases.ubuntu.com/22.04/)
+[![Windows platform](https://img.shields.io/badge/platform-windows--64-9B866B.svg)](https://www.microsoft.com/en-us/) -->
+<!-- [![License](https://img.shields.io/badge/license-BSD--3--Clause-7D828A.svg)](LICENSE) -->
 
 
 </div>

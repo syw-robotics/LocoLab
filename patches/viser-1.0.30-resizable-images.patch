@@ -1,0 +1,32 @@
+--- a/src/components/Image.tsx
++++ b/src/components/Image.tsx
+@@ -31,6 +31,7 @@
+         <img
+           src={imageUrl}
+           style={{
++            width: "100%",
+             maxWidth: "100%",
+             height: "auto",
+             display: "block",
+@@ -119,10 +120,21 @@
+         onClose={close}
+         size={modalSize}
+         title={props.label}
++        styles={{
++          content: {
++            resize: "both",
++            overflow: "auto",
++            flex: "0 0 auto",
++            width: modalSize,
++            minWidth: 240,
++            minHeight: 160,
++          },
++        }}
+       >
+         <img
+           src={imageUrl}
+           style={{
++            width: "100%",
+             maxWidth: "100%",
+             height: "auto",
+             display: "block",

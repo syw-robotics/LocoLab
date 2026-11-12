@@ -223,7 +223,7 @@ def _play(args_cli, env_cfg, agent_cfg, resume_path, screen):
                     obs, _, dones, _ = env.step(actions)
                     # reset recurrent states for episodes that have terminated
                     policy.reset(dones)
-            if viewer.after_step():
+            if viewer.after_step(obs):
                 continue
             if args_cli.video:
                 timestep += 1

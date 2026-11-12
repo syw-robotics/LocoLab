@@ -18,7 +18,7 @@ class _IdlePlayViewer:
     def apply_reset(self, env, reset_policy) -> bool:
         return False
 
-    def after_step(self) -> bool:
+    def after_step(self, observations=None) -> bool:
         return False
 
     def close(self) -> None:

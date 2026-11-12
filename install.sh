@@ -48,8 +48,16 @@ fi
 # Use Isaac Lab's lockfile without rewriting it, retaining unrelated installed packages.
 uv sync --project "$1" --active --inexact --locked "${extras[@]}"
 
+# Keep the Viser version selected by Isaac Lab's lockfile.
+viser_requirement="$("$VIRTUAL_ENV/bin/python" -c 'from importlib.metadata import version; print("viser==" + version("viser"))')"
+
 # Install the supplied Z-RL checkout, LocoLab, and its extension in editable mode with dependencies.
 uv pip install --python "$VIRTUAL_ENV/bin/python" \
+    "$viser_requirement" \
+    'nodeenv>=1.9.1,<2' \
     -e "$2" \
     -e "$repo_root/source/locolab" \
     -e "$repo_root/source/z_rl_loco_lab"
+
+# Build the Viser frontend fixes once, outside the simulation runtime.
+"$VIRTUAL_ENV/bin/python" "$repo_root/scripts/tools/patch_viser.py"

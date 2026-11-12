@@ -1,0 +1,46 @@
+--- a/src/mesh/BatchedGlbAsset.tsx
++++ b/src/mesh/BatchedGlbAsset.tsx
+@@ -52,11 +52,43 @@
+       }
+     });
+ 
++    // GLBs may mix colored and uncolored primitives. Give every primitive
++    // compatible RGBA attributes; white leaves its material color unchanged.
++    if (geometries.some((geometry) => geometry.hasAttribute("color"))) {
++      for (const geometry of geometries) {
++        const source = geometry.getAttribute("color");
++        const colors = new Float32Array(geometry.attributes.position.count * 4).fill(1);
++        if (source) {
++          for (let i = 0; i < source.count; i++) {
++            colors[i * 4] = source.getX(i);
++            colors[i * 4 + 1] = source.getY(i);
++            colors[i * 4 + 2] = source.getZ(i);
++            if (source.itemSize === 4) colors[i * 4 + 3] = source.getW(i);
++          }
++        }
++        geometry.setAttribute("color", new THREE.BufferAttribute(colors, 4));
++      }
++    }
++
++    // Untextured primitives need neutral UVs when sharing a batch with
++    // textured/material primitives that already have texture coordinates.
++    if (geometries.some((geometry) => geometry.hasAttribute("uv"))) {
++      for (const geometry of geometries) {
++        if (!geometry.hasAttribute("uv")) {
++          geometry.setAttribute("uv", new THREE.BufferAttribute(
++            new Float32Array(geometry.attributes.position.count * 2), 2,
++          ));
++        }
++      }
++    }
++
+     // Merge geometries if needed.
+     const mergedGeometry =
+       geometries.length === 1
+         ? geometries[0].clone()
+         : mergeBufferGeometries(geometries, true);
++    // Merging creates a new geometry without the source bounding spheres.
++    mergedGeometry?.computeBoundingSphere();
+ 
+     // Use either a single material or an array.
+     const finalMaterial = materials.length === 1 ? materials[0] : materials;

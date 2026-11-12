@@ -202,7 +202,7 @@ class MjviserRobot:
         self.set_visibility(self.has_visual, not self.has_visual and self.has_collision, False)
 
     def create_scene_gui(self) -> None:
-        """Keep mjviser's environment slider synchronized with robot clicks."""
+        """Keep the environment slider synchronized with optional robot clicks."""
         self.scene.create_scene_gui()
         if self.scene.num_envs <= 1:
             return
@@ -214,13 +214,28 @@ class MjviserRobot:
         )
         handles = [(group.handle, len(group.body_ids)) for group in self.scene._mesh_groups]
         handles += [(handle, 1) for handle, _ in self.scene._hull_dynamic_handles]
+        callbacks = []
         for handle, bodies_per_env in handles:
-            @handle.on_click
-            def _(event, count=bodies_per_env) -> None:
+            def select_env(event, count=bodies_per_env) -> None:
                 if event.instance_index is None or self.scene.show_only_selected:
                     return
                 # Instances are flattened in environment, then body order.
                 env_slider.value = int(event.instance_index) // count
+            callbacks.append((handle, select_env))
+
+        environment_folder = self.scene.server.gui._container_handle_from_uuid[env_slider._impl.parent_container_id]
+        with environment_folder:
+            cursor_select = self.scene.server.gui.add_checkbox(
+                "Cursor select", initial_value=False, hint="Click a robot to select its environment."
+            )
+
+        @cursor_select.on_update
+        def _(_event) -> None:
+            for handle, callback in callbacks:
+                if cursor_select.value:
+                    handle.on_click(callback)
+                else:
+                    handle.remove_click_callback(callback)
 
     def set_visibility(self, visual: bool, collision: bool, hull: bool) -> None:
         """Select one shared visual/ghost mesh mode; collision stays independent."""
