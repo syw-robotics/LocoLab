@@ -103,6 +103,7 @@ class DebugScene:
             "shaft": _unit_shaft(),
             "head": _unit_head(),
             "point": trimesh.creation.icosphere(subdivisions=2, radius=1.0),
+            "box": trimesh.creation.box(extents=(1.0, 1.0, 1.0)),
         }
 
     def show(
@@ -140,9 +141,22 @@ class DebugScene:
         handle.batched_wxyzs = wxyz
 
     def show_obstacle(self, label: str, obstacle) -> None:
-        """Upload static edge cylinders once, until their debug layer is cleared."""
+        """Upload static edge obstacles once, until their debug layer is cleared."""
         name = f"{label}/edges"
         if name in self._batches:
+            return
+        if hasattr(obstacle, "box_bounds_pyt"):
+            bounds = as_numpy(obstacle.box_bounds_pyt, slice(None)).reshape(-1, 6)
+            if len(bounds) == 0:
+                return
+            marker = obstacle.cfg.visualizer.markers["box"]
+            material = marker.visual_material
+            color = tuple(int(c * 255) for c in material.diffuse_color)
+            self.show(
+                name, "box", (bounds[:, :3] + bounds[:, 3:]) * 0.5,
+                np.tile((1.0, 0.0, 0.0, 0.0), (len(bounds), 1)),
+                bounds[:, 3:] - bounds[:, :3], color, opacity=float(material.opacity),
+            )
             return
         edges = as_numpy(obstacle.edges_pyt, slice(None)).reshape(-1, 6)
         directions = edges[:, 3:] - edges[:, :3]

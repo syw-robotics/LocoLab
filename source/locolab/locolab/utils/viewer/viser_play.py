@@ -98,6 +98,7 @@ class ViserPlayViewer:
         self._speed_index = SPEEDS.index(1.0)
         self._speed = SPEEDS[self._speed_index]
         self._pace_time: float | None = None
+        self._last_orbit_update: float | None = None
 
         self._terrain_mesh = None
         self._terrain_handle = None
@@ -197,6 +198,8 @@ class ViserPlayViewer:
             self._debug_scene.set_ghost_hulls(self._robot_view.visual_hulls)
             self._debug_scene.distance_lod = self._robot_view.distance_lod
             draw_debug(self._debug_scene, self._debug_terms, self._debug_enabled, selector)
+            if self._auto_orbit.value:
+                self._update_camera_orbit(now)
 
         if self._depth_checkbox is not None and self._depth_checkbox.value:
             self._update_depth_image(observations, env_idx, now)
@@ -315,7 +318,7 @@ class ViserPlayViewer:
                     min=0.1,
                     max=20.0,
                     step=0.1,
-                    initial_value=2.0,
+                    initial_value=5.0,
                     hint="Camera translation speed for W/A/S/D/Q/E.",
                 )
 
@@ -329,9 +332,47 @@ class ViserPlayViewer:
             self._build_debug_gui()
 
         with tabs.add_tab("Visualization", icon=viser.Icon.EYE):
+            self._build_camera_orbit_gui()
             self._build_robot_vis_gui()
             if self._terrain_mesh is not None:
                 self._build_terrain_gui()
+
+    def _build_camera_orbit_gui(self) -> None:
+        with self._server.gui.add_folder("Camera orbit"):
+            self._auto_orbit = self._server.gui.add_checkbox(
+                "Auto orbit", initial_value=False,
+                hint="Orbit around the selected environment, including while simulation is paused.",
+            )
+            self._orbit_speed = self._server.gui.add_slider(
+                "Orbit speed (°/s)",
+                min=-90.0,
+                max=90.0,
+                step=1.0,
+                initial_value=15.0,
+                disabled=True,
+                hint="Degrees per wall-clock second. Negative values reverse the orbit direction.",
+            )
+
+            @self._auto_orbit.on_update
+            def _(_event) -> None:
+                self._last_orbit_update = None
+                self._orbit_speed.disabled = not self._auto_orbit.value
+
+    def _update_camera_orbit(self, now: float) -> None:
+        """Rotate cached camera offsets; no additional simulation data transfer."""
+        previous = self._last_orbit_update
+        self._last_orbit_update = now
+        elapsed = 0.0 if previous is None else now - previous
+        angle = np.deg2rad(float(self._orbit_speed.value)) * elapsed
+        cosine, sine = np.cos(angle), np.sin(angle)
+        scene = self._robot_view.scene
+        body_id = scene._tracked_body_id or 1
+        center = scene._last_body_xpos[scene.env_idx, body_id] + scene.fixed_bodies_frame.position
+        for client in self._server.get_clients().values():
+            offset = client.camera.position - client.camera.look_at
+            x, y, z = offset
+            client.camera.position = center + (cosine * x - sine * y, sine * x + cosine * y, z)
+            client.camera.look_at = center
 
     def _build_depth_gui(self) -> None:
         """Offer a preview for the normalized depth_image observation group."""

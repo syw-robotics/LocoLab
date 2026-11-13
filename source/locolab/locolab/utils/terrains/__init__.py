@@ -16,7 +16,7 @@ from .terrain_utils import (
     normalize_terrain_groups,
     range_dict_to_tensor,
 )
-from .virtual_obstacle import GreedyconcatEdgeCylinderCfg, MeshXyzRange, VirtualObstacleCfg
+from .virtual_obstacle import EdgeBoxCfg, GreedyconcatEdgeCylinderCfg, MeshXyzRange, VirtualObstacleCfg
 
 __all__ = [
     "TerrainGenerator",
@@ -24,6 +24,7 @@ __all__ = [
     "TerrainImporterCfg",
     "TerrainGeneratorCfg",
     "GreedyconcatEdgeCylinderCfg",
+    "EdgeBoxCfg",
     "MeshXyzRange",
     "VirtualObstacleCfg",
     "build_terrain_reset_range_tables",

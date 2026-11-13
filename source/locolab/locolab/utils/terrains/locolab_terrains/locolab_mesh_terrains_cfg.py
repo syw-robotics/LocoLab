@@ -110,6 +110,7 @@ class MeshFloatingPyramidStairsTerrainCfg(MeshRoughTerrainCfg):
 
     Ascending stairs sit above a ground plane at ``z = 0``. Inverted stairs keep
     the outer border at ``z = 0`` and add a pit floor one step below the center slab.
+    For inverted ``cross`` stairs, the border absorbs any leftover span so it meets the outer treads.
     """
 
     function = locolab_mesh_terrains.mesh_floating_pyramid_stairs_terrain

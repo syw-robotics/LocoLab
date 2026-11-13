@@ -1,3 +1,4 @@
+from .edge_box_cfg import EdgeBoxCfg
 from .edge_cylinder_cfg import (
     EdgeCylinderCfg,
     GreedyconcatEdgeCylinderCfg,

@@ -641,15 +641,17 @@ def undesired_contacts(env: ManagerBasedRLEnv, threshold: float, sensor_cfg: Sce
 
 
 def volume_points_penetration(
-    env: ManagerBasedRLEnv, sensor_cfg: SceneEntityCfg, tolerance: float = 0.0
+    env: ManagerBasedRLEnv, sensor_cfg: SceneEntityCfg, tolerance: float = 0.0, min_speed: float = 0.0
 ) -> torch.Tensor:
-    """Penalize volume points penetrating into virtual obstacles (e.g., gap edges)."""
+    """Penalize virtual-obstacle penetration; optional speed floor also penalizes static feet."""
     volume_sensor: VolumePoints = env.scene.sensors[sensor_cfg.name]
     penetration = volume_sensor.data.penetration_offset.flatten(1, 2)  # (N, B*P, 3)
     penetration_depth = torch.norm(penetration, dim=-1)  # (N, B*P)
     in_obstacle = (penetration_depth > tolerance).float()
     points_vel = volume_sensor.data.points_vel_w.flatten(1, 2)  # (N, B*P, 3)
     points_vel_norm = torch.norm(points_vel, dim=-1)
+    if min_speed > 0.0:
+        points_vel_norm.clamp_min_(min_speed)
     return torch.sum(in_obstacle * (points_vel_norm + 1e-6) * penetration_depth, dim=-1)
 
 
