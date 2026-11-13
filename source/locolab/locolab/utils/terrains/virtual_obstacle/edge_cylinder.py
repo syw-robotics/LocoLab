@@ -206,7 +206,7 @@ class EdgeCylinder(VirtualObstacleBase):
             self._cylinder_visualizer.set_visibility(False)
 
     def visualize(self):
-        if self.edges_pyt.numel() == 0:
+        if not hasattr(self, "edges_pyt") or self.edges_pyt.numel() == 0:
             return
 
         if not hasattr(self, "_cylinder_visualizer"):

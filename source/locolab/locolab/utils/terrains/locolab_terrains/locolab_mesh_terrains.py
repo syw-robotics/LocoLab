@@ -257,6 +257,10 @@ def mesh_floating_pyramid_stairs_terrain(
         if cfg.border_width > 0.0:
             border_center = [0.5 * cfg.size[0], 0.5 * cfg.size[1], -0.5 * stair_height]
             border_inner_size = (cfg.size[0] - 2 * cfg.border_width, cfg.size[1] - 2 * cfg.border_width)
+            if stair_type == "cross":
+                # Whole treads can leave a remainder; extend the approach to meet all four flights.
+                flight_span = center_platform_width + 2 * num_steps * stair_width
+                border_inner_size = (flight_span, flight_span)
             meshes_list += make_border(cfg.size, border_inner_size, stair_height, border_center)
         floor_z = center_top - cfg.stair_thickness - stair_height
         floor_size = terrain_size if cfg.extend_center_platform_under_stairs else center_size
