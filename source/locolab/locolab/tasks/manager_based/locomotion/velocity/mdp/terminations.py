@@ -19,7 +19,7 @@ from typing import TYPE_CHECKING
 import torch
 
 from isaaclab.assets import Articulation, RigidObject
-from isaaclab.managers import SceneEntityCfg
+from isaaclab.managers import ManagerTermBase, SceneEntityCfg, TerminationTermCfg
 from isaaclab.sensors import ContactSensor
 
 if TYPE_CHECKING:
@@ -170,33 +170,35 @@ Terrain terminations.
 """
 
 
-def terrain_out_of_bounds(
-    env: ManagerBasedRLEnv, asset_cfg: SceneEntityCfg = SceneEntityCfg("robot"), distance_buffer: float = 3.0
-) -> torch.Tensor:
-    """Terminate when the actor move too close to the edge of the terrain.
+class terrain_out_of_bounds(ManagerTermBase):
+    """Terminate beyond the generated terrain grid, excluding its surrounding border.
 
-    If the actor moves too close to the edge of the terrain, the termination is activated. The distance
-    to the edge of the terrain is calculated based on the size of the terrain and the distance buffer.
+    ``out_of_bounds_distance`` is measured in meters from the grid edge along each axis.
+    Positive values allow travel outside the grid (4.0 allows 4 m); zero terminates
+    on crossing the edge, and negative values terminate inside the grid.
     """
-    if env.scene.cfg.terrain.terrain_type == "plane":
-        # we have infinite terrain because it is a plane
-        return torch.zeros(env.num_envs, dtype=torch.bool, device=env.device)
-    elif env.scene.cfg.terrain.terrain_type == "generator":
-        # obtain the size of the sub-terrains
+
+    def __init__(self, cfg: TerminationTermCfg, env: ManagerBasedRLEnv):
+        super().__init__(cfg, env)
+        if env.scene.cfg.terrain.terrain_type != "generator":
+            raise ValueError("'terrain_out_of_bounds' only apllies to one terrain type: 'generator'.")
+
         terrain_gen_cfg = env.scene.terrain.cfg.terrain_generator
         grid_width, grid_length = terrain_gen_cfg.size
-        n_rows, n_cols = terrain_gen_cfg.num_rows, terrain_gen_cfg.num_cols
-        border_width = terrain_gen_cfg.border_width
-        # compute the size of the map
-        map_width = n_rows * grid_width + 2 * border_width
-        map_height = n_cols * grid_length + 2 * border_width
+        # Cache the terrain grid half-extents without the surrounding border.
+        self._half_width = 0.5 * terrain_gen_cfg.num_rows * grid_width
+        self._half_height = 0.5 * terrain_gen_cfg.num_cols * grid_length
 
+    def __call__(
+        self,
+        env: ManagerBasedRLEnv,
+        asset_cfg: SceneEntityCfg = SceneEntityCfg("robot"),
+        out_of_bounds_distance: float = 4.0,
+    ) -> torch.Tensor:
         # extract the used quantities (to enable type-hinting)
         asset: RigidObject = env.scene[asset_cfg.name]
 
         # check if the agent is out of bounds
-        x_out_of_bounds = torch.abs(asset.data.root_pos_w.torch[:, 0]) > 0.5 * map_width - distance_buffer
-        y_out_of_bounds = torch.abs(asset.data.root_pos_w.torch[:, 1]) > 0.5 * map_height - distance_buffer
+        x_out_of_bounds = torch.abs(asset.data.root_pos_w.torch[:, 0]) > self._half_width + out_of_bounds_distance
+        y_out_of_bounds = torch.abs(asset.data.root_pos_w.torch[:, 1]) > self._half_height + out_of_bounds_distance
         return torch.logical_or(x_out_of_bounds, y_out_of_bounds)
-    else:
-        raise ValueError("Received unsupported terrain type, must be either 'plane' or 'generator'.")

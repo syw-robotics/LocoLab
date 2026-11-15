@@ -44,6 +44,9 @@ setup(
     include_package_data=True,
     package_data={
         "locolab": [
+            "assets/sensors/mid360/mid360.npy",
+            "assets/sensors/mid360/LICENSE",
+            "assets/sensors/mid360/README.md",
             "assets/terrains/checker_ground/*.usda",
             "assets/terrains/checker_ground/Materials/Textures/*.png",
             "utils/deployment/templates/*.yaml",

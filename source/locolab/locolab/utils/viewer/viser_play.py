@@ -21,7 +21,7 @@ from locolab.utils.debug_viz.push.push_debug_vis import PushDebugVis
 
 from ._viser import viser
 from .browser import CAMERA_MOVE_SPEED_JS
-from .debug_vis import DebugScene, debug_sources, draw_debug
+from .debug_vis import DebugScene, debug_sources, draw_debug, sensor_debug_kind
 from .mjviser_robot import MjviserRobot
 from .terrain import HEIGHT_COLOR_SCALE_M, SOLID_COLOR, paint_terrain
 
@@ -115,6 +115,10 @@ class ViserPlayViewer:
             else bool(getattr(getattr(obj, "cfg", None), "debug_vis", False))
             for label, obj in self._debug_terms
         }
+        self._sensor_debug = {
+            label: {"point_cloud": True, "origin": False, **({"frustum": False} if kind == "camera" else {})}
+            for label, obj in self._debug_terms if (kind := sensor_debug_kind(obj)) is not None
+        }
         self._status_html = ""
         self._depth_checkbox = None
         self._depth_image = None
@@ -197,7 +201,7 @@ class ViserPlayViewer:
             self._robot_view.update(selector, env_idx)
             self._debug_scene.set_ghost_hulls(self._robot_view.visual_hulls)
             self._debug_scene.distance_lod = self._robot_view.distance_lod
-            draw_debug(self._debug_scene, self._debug_terms, self._debug_enabled, selector)
+            draw_debug(self._debug_scene, self._debug_terms, self._debug_enabled, selector, self._sensor_debug)
             if self._auto_orbit.value:
                 self._update_camera_orbit(now)
 
@@ -334,6 +338,7 @@ class ViserPlayViewer:
         with tabs.add_tab("Visualization", icon=viser.Icon.EYE):
             self._build_camera_orbit_gui()
             self._build_robot_vis_gui()
+            self._build_sensor_debug_gui()
             if self._terrain_mesh is not None:
                 self._build_terrain_gui()
 
@@ -445,6 +450,20 @@ class ViserPlayViewer:
                     @count.on_update
                     def _(event, key=label) -> None:
                         self._debug_scene.ghost_max_envs[key] = int(event.target.value)
+
+    def _build_sensor_debug_gui(self) -> None:
+        if not self._sensor_debug:
+            return
+        labels = {"point_cloud": "Point cloud", "origin": "Origin axes", "frustum": "Camera frustum"}
+        with self._server.gui.add_folder("Sensors"):
+            for name, options in self._sensor_debug.items():
+                with self._server.gui.add_folder(name):
+                    for key, initial in options.items():
+                        checkbox = self._server.gui.add_checkbox(labels[key], initial_value=initial)
+
+                        @checkbox.on_update
+                        def _(event, sensor=name, layer=key) -> None:
+                            self._sensor_debug[sensor][layer] = bool(event.target.value)
 
     def _build_robot_vis_gui(self) -> None:
         with self._server.gui.add_folder("Robot"):

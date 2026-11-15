@@ -7,8 +7,8 @@
 
 
 <!-- [![IsaacSim](https://img.shields.io/badge/IsaacSim-5.1.0-7D828A.svg)](https://docs.omniverse.nvidia.com/isaacsim/latest/overview.html) -->
-[![Isaac Lab](https://img.shields.io/badge/IsaacLab-3.0-6F8575?logo=nvidia&logoColor=white)](https://isaac-sim.github.io/IsaacLab)
-[![Z RL](https://img.shields.io/badge/Z_RL-Flexible_RL_Lib-9B866B?logo=python&logoColor=white)](https://github.com/syw-robotics/z_rl)
+[![Isaac Lab](https://img.shields.io/badge/IsaacLab-3.0-6F8575?logo=nvidia&logoColor=white?style=flat-square)](https://isaac-sim.github.io/IsaacLab)
+[![Z RL](https://img.shields.io/badge/Z_RL-Flexible_RL_Lib-9B866B?logo=python&logoColor=white?style=flat-square)](https://github.com/syw-robotics/z_rl)
 
 <!-- [![Linux platform](https://img.shields.io/badge/platform-linux--64-9B866B.svg)](https://releases.ubuntu.com/22.04/)
 [![Windows platform](https://img.shields.io/badge/platform-windows--64-9B866B.svg)](https://www.microsoft.com/en-us/) -->
@@ -415,9 +415,10 @@ rights to those assets.
 - [ ] **G1**: Refine Velocity-Flat-G1 baseline, add AMP, SMP baselines
 - [ ] **WM**: Add supermimic style world model [SHAC](https://arxiv.org/abs/2204.07137) baseline 
 - [ ] **Go2**: Refine Velocity-Rough-Go2 baseline
+- [ ] **Go2W**: Add Velocity-Flat-Go2W, Velocity-Rough-Go2W baseline
 - [ ] **B2**: Add Velocity-Rough-B2 baseline
 - [ ] **Warp MDP**: This is isaaclab3.0 experimental feature, not recommended as daily use. This accelerates rollout a bit, but probably comes with less simulation stability
-- [ ] **MjWarp**: Study more about `newton_mjwarp`, we observe physx still shows more stable simulation in especially non-flat terrain tasks
+<!-- - [ ] **MjWarp**: Study more about `newton_mjwarp`, we observe physx still shows more stable simulation in especially non-flat terrain tasks -->
 - [ ] **AGENTS.md / SKILLS**: Comprehensive and clean guidance for ai agents
 
 <!-- - [ ] **Active Adaptation Port**: Migrate LocoLab tasks to (AA)[https://github.com/Agent-3154/active-adaptation] -->

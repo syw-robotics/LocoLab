@@ -95,6 +95,7 @@ class DebugScene:
         self._server = server
         self._batches: dict[str, _Batch] = {}
         self._frames: dict[str, object] = {}
+        self._lines: dict[str, object] = {}
         self._ghosts: dict[str, tuple] = {}
         self._ghost_hulls = False
         self.ghost_max_envs: dict[str, int] = {}
@@ -119,13 +120,16 @@ class DebugScene:
             self._batches[name] = batch
         batch.sync(self._server, positions, wxyzs, scales, color, opacity, opacities=opacities)
 
-    def show_frames(self, name: str, positions) -> None:
+    def show_frames(
+        self, name: str, positions, wxyzs=None, *, length=_FRAME_LENGTH_M, radius=_FRAME_RADIUS_M,
+    ) -> None:
         points = np.asarray(positions, dtype=np.float32).reshape(-1, 3)
         count = len(points)
         if count == 0:
             self._drop_frame(name)
             return
-        wxyz = np.tile(np.array([1.0, 0.0, 0.0, 0.0], dtype=np.float32), (count, 1))
+        wxyz = (np.tile(np.array([1.0, 0.0, 0.0, 0.0], dtype=np.float32), (count, 1))
+                if wxyzs is None else np.asarray(wxyzs, dtype=np.float32))
         handle = self._frames.get(name)
         if handle is None or len(handle.batched_positions) != count:
             self._drop_frame(name)
@@ -133,12 +137,29 @@ class DebugScene:
                 f"/fixed_bodies/debug/{name}",
                 batched_wxyzs=wxyz,
                 batched_positions=points,
-                axes_length=_FRAME_LENGTH_M,
-                axes_radius=_FRAME_RADIUS_M,
+                axes_length=length,
+                axes_radius=radius,
             )
             return
         handle.batched_positions = points
         handle.batched_wxyzs = wxyz
+
+    def show_lines(self, name: str, points, color) -> None:
+        points = np.asarray(points, dtype=np.float32).reshape(-1, 2, 3)
+        if len(points) == 0:
+            self.clear(name)
+            return
+        # Viser treats uniform line colors as sRGB, but mesh instance colors as
+        # linear RGB. Per-vertex line colors use the same linear RGB as our points.
+        colors = np.broadcast_to(color, points.shape).astype(np.uint8)
+        handle = self._lines.get(name)
+        if handle is None:
+            self._lines[name] = self._server.scene.add_line_segments(
+                f"/fixed_bodies/debug/{name}", points=points, colors=colors, line_width=1.5,
+            )
+        else:
+            handle.points = points
+            handle.colors = colors
 
     def show_obstacle(self, label: str, obstacle) -> None:
         """Upload static edge obstacles once, until their debug layer is cleared."""
@@ -244,14 +265,18 @@ class DebugScene:
         if label is None:
             names = list(self._batches)
             frames = list(self._frames)
+            lines = list(self._lines)
         else:
             prefix = label + "/"
-            names = [name for name in self._batches if name.startswith(prefix)]
-            frames = [name for name in self._frames if name.startswith(prefix)]
+            names = [name for name in self._batches if name == label or name.startswith(prefix)]
+            frames = [name for name in self._frames if name == label or name.startswith(prefix)]
+            lines = [name for name in self._lines if name == label or name.startswith(prefix)]
         for name in names:
             self._batches.pop(name).remove()
         for name in frames:
             self._drop_frame(name)
+        for name in lines:
+            self._lines.pop(name).remove()
 
     def _drop_frame(self, name: str) -> None:
         handle = self._frames.pop(name, None)
@@ -259,19 +284,26 @@ class DebugScene:
             handle.remove()
 
 
-def draw_debug(scene: DebugScene, terms: list[tuple[str, object]], enabled: dict[str, bool], selector) -> None:
+def draw_debug(
+    scene: DebugScene, terms: list[tuple[str, object]], enabled: dict[str, bool], selector, sensor_options=None,
+) -> None:
     """Refresh every enabled term. ``selector`` matches the robots currently shown."""
     for label, obj in terms:
+        options = (sensor_options or {}).get(label)
         if not enabled.get(label, False):
             scene.hide(label)
             continue
         try:
-            if isinstance(obj, PushDebugVis):
+            if options is not None:
+                _draw_sensor(scene, label, obj, selector, options)
+            elif isinstance(obj, PushDebugVis):
                 _draw_push(scene, label, obj, selector)
             elif hasattr(obj, "motion") and hasattr(obj, "time_steps"):
                 scene.show_motion(label, obj, selector)
             elif hasattr(obj, "vel_command_b"):
                 _draw_velocity(scene, label, obj, selector)
+            elif hasattr(obj, "pos_command_w") and hasattr(obj, "heading_command_w"):
+                _draw_goal_pose(scene, label, obj, selector)
             elif hasattr(obj, "terrain_origins"):
                 _draw_terrain(scene, label, obj)
             elif hasattr(obj, "edges_pyt"):
@@ -295,9 +327,99 @@ def _drawable(obj) -> bool:
     if hasattr(obj, "vel_command_b"):
         robot = getattr(obj, "robot", None)
         return getattr(robot, "data", None) is not None
+    if hasattr(obj, "pos_command_w") and hasattr(obj, "heading_command_w"):
+        return True
     if _terrain_origins(obj) is not None:
         return True
-    return _ray_hits(obj) is not None
+    return sensor_debug_kind(obj) is not None
+
+
+def sensor_debug_kind(obj):
+    """Identify cameras and ray sensors that can expose independent browser layers."""
+    data = getattr(obj, "data", None)
+    if getattr(data, "intrinsic_matrices", None) is not None:
+        return "camera"
+    if getattr(data, "pos_w", None) is not None and _ray_hits(obj) is not None:
+        return "ray"
+    return None
+
+
+def _sensor_pose(obj, selector):
+    data = obj.data
+    if getattr(data, "intrinsic_matrices", None) is not None:
+        # Optical axes: +Z forward, +X right, +Y down, matching the pinhole projection.
+        return as_numpy(data.pos_w, selector), xyzw_to_wxyz(as_numpy(data.quat_w_ros, selector))
+    pose_fn = getattr(obj, "get_debug_vis_pose", None)
+    if pose_fn is not None:
+        pos, quat = pose_fn()
+        return as_numpy(pos, selector), xyzw_to_wxyz(as_numpy(quat, selector))
+    pos = as_numpy(data.pos_w, selector)
+    quat = xyzw_to_wxyz(as_numpy(data.quat_w, selector))
+    # Standard RayCaster data stores the parent pose; offset is baked into its rays.
+    offset = obj.cfg.offset
+    pos = pos + rotate_wxyz(quat, np.asarray(offset.pos))
+    local = xyzw_to_wxyz(np.asarray(offset.rot))
+    xyz = quat[:, :1] * local[1:] + local[0] * quat[:, 1:] + np.cross(quat[:, 1:], local[1:])
+    w = quat[:, 0] * local[0] - np.sum(quat[:, 1:] * local[1:], axis=-1)
+    return pos, np.column_stack((w, xyz))
+
+
+def _draw_sensor(scene, label, obj, selector, options):
+    if options["point_cloud"]:
+        if _ray_hits(obj) is not None:
+            _draw_rays(scene, label, obj, selector)
+        else:
+            _draw_depth_points(scene, label, obj, selector)
+    else:
+        scene.clear(f"{label}/points")
+    if not options["origin"]:
+        scene.clear(f"{label}/origin")
+    if not options.get("frustum", False):
+        scene.clear(f"{label}/frustum")
+    if not options["origin"] and not options.get("frustum", False):
+        return
+    pos, quat = _sensor_pose(obj, selector)
+    if options["origin"]:
+        scene.show_frames(f"{label}/origin", pos, quat, length=0.15, radius=0.004)
+    if options.get("frustum", False):
+        data = obj.data
+        height, width = data.image_shape
+        intrinsic = as_numpy(data.intrinsic_matrices, selector)
+        pixels = np.array([[0, 0, 1], [width, 0, 1], [width, height, 1], [0, height, 1]])
+        corners = np.einsum("nij,kj->nki", np.linalg.inv(intrinsic), pixels) * 0.25
+        corners = pos[:, None] + rotate_wxyz(quat[:, None], corners)
+        vertices = np.concatenate((pos[:, None], corners), axis=1)
+        edges = np.array([[0, 1], [0, 2], [0, 3], [0, 4], [1, 2], [2, 3], [3, 4], [4, 1]])
+        _, color = _sphere_style_from_marker_cfg(
+            getattr(obj.cfg, "visualizer_cfg", None), "hit", 0.02, _BLUE_RAY_HIT_COLOR,
+        )
+        scene.show_lines(f"{label}/frustum", vertices[:, edges], color)
+
+
+def _draw_depth_points(scene, label, obj, selector):
+    """Unproject depth for renderer cameras without a ray-hit buffer."""
+    data = obj.data
+    key = next((key for key in ("distance_to_image_plane", "distance_to_camera") if key in data.output), None)
+    if key is None:
+        scene.clear(f"{label}/points")
+        return
+    height, width = data.image_shape
+    depth = as_numpy(data.output[key], selector).reshape(-1, height * width)
+    step = max(1, int(np.ceil(depth.size / _MAX_RAY_POINTS)))
+    pixels = np.arange(0, height * width, step)
+    uv = np.column_stack((pixels % width, pixels // width, np.ones(len(pixels))))
+    rays = np.einsum("nij,kj->nki", np.linalg.inv(as_numpy(data.intrinsic_matrices, selector)), uv)
+    if key == "distance_to_camera":
+        rays /= np.linalg.norm(rays, axis=-1, keepdims=True)
+    ranges = depth[:, pixels]
+    pos, quat = _sensor_pose(obj, selector)
+    valid = np.isfinite(ranges) & (ranges > 0)
+    points = pos[:, None] + rotate_wxyz(quat[:, None], rays * np.where(valid, ranges, 0.0)[..., None])
+    points = points[valid].astype(np.float32)
+    vis = getattr(obj.cfg, "visualizer_cfg", None)
+    radius, color = _sphere_style_from_marker_cfg(vis, "hit", _BLUE_RAY_HIT_RADIUS, _BLUE_RAY_HIT_COLOR)
+    scene.show(f"{label}/points/hit", "point", points, np.tile([1., 0., 0., 0.], (len(points), 1)),
+               np.full((len(points), 3), radius, dtype=np.float32), color)
 
 
 def _terrain_origins(obj):
@@ -354,6 +476,20 @@ def _draw_velocity(scene: DebugScene, label: str, obj, selector) -> None:
         gain,
         _marker_color(obj, "current_vel_visualizer_cfg", _CURRENT_COLOR),
     )
+
+
+def _draw_goal_pose(scene, label, obj, selector) -> None:
+    position = as_numpy(obj.pos_command_w, selector)
+    heading = as_numpy(obj.heading_command_w, selector)
+    identity = np.tile((1.0, 0.0, 0.0, 0.0), (len(position), 1))
+    direction = np.column_stack((np.cos(heading), np.sin(heading)))
+    color = _marker_color(obj, "goal_pose_visualizer_cfg", _GOAL_COLOR)
+    _draw_arrow(scene, f"{label}/goal", position, identity, direction, 0.5, color)
+    scene.show(
+        f"{label}/target", "point", position, identity, np.full((len(position), 3), 0.08), color,
+    )
+    robot_position = as_numpy(obj.robot.data.root_pos_w, selector)
+    scene.show_lines(f"{label}/path", np.stack((robot_position, position), axis=1), color)
 
 
 def _draw_push(scene, label, obj, selector) -> None:
@@ -416,7 +552,7 @@ def _draw_rays(scene: DebugScene, label: str, obj, selector) -> None:
         stride = int(np.ceil(len(points) / _MAX_RAY_POINTS))
         points, indices = points[::stride], indices[::stride]
     if len(points) == 0:
-        scene.clear(label)
+        scene.clear(f"{label}/points")
         return
     vis = getattr(getattr(obj, "cfg", None), "visualizer_cfg", None)
     markers = getattr(vis, "markers", {"hit": None})

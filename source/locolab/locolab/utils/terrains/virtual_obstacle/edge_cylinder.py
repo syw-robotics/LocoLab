@@ -110,6 +110,13 @@ class EdgeCylinder(VirtualObstacleBase):
         The walkable face has ``normal.z`` above ``min_upward_normal_z``. The other
         face lies below that plane, so the edge is a lip and not the foot of a wall.
         """
+        excluded = mesh.face_attributes.get("exclude_virtual_obstacle")
+        if excluded is not None and excluded.any():
+            # Exclude sides from both candidate edges and the exposed-lip probes,
+            # so a wall cannot hide the stair edges beneath/next to it.
+            mesh = mesh.copy()
+            mesh.update_faces(~excluded)
+            mesh.remove_unreferenced_vertices()
         adjacency = mesh.face_adjacency
         if len(adjacency) == 0:
             return np.empty((0, 6), dtype=np.float32)

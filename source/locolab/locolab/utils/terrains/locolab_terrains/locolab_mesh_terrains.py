@@ -112,16 +112,18 @@ def mesh_pyramid_stairs_terrain(
     return apply_mesh_surface_details(meshes, origin, cfg, difficulty)
 
 
-# Mesh Floating Pyramid Stairs Terrain Definition
-def mesh_floating_pyramid_stairs_terrain(
-    difficulty: float, cfg: locolab_mesh_terrains_cfg.MeshFloatingPyramidStairsTerrainCfg
+# Mesh Diverse Stairs Terrain Definition
+def mesh_diverse_stairs_terrain(
+    difficulty: float, cfg: locolab_mesh_terrains_cfg.MeshDiverseStairsTerrainCfg
 ) -> tuple[list[trimesh.Trimesh], np.ndarray]:
-    """Generate floating stairs around a center platform.
+    """Generate diverse stairs around a center platform.
 
-    ``pyramid`` follows Isaac Lab pyramid stair footprints. ``cross`` keeps four
-    flights whose width equals the center platform. ``random`` chooses one of
-    those footprints per sub-terrain. Treads are ``stair_thickness`` tall,
-    measured down from the tread surface.
+    Pyramid layouts follow Isaac Lab stair footprints. Cross layouts keep four
+    flights whose width equals the center platform. ``cross_probability`` chooses
+    between those footprints per sub-terrain. ``floating_probability`` independently
+    selects floating slabs or solid steps once for the whole sub-terrain.
+    Optional wall segments, continuous
+    walls, or railings line all four ``cross`` flights without narrowing them.
     """
     stair_height = cfg.stair_height_range[0] + difficulty * (cfg.stair_height_range[1] - cfg.stair_height_range[0])
     if stair_height < 0.0:
@@ -136,12 +138,32 @@ def mesh_floating_pyramid_stairs_terrain(
         raise ValueError(
             f"Sampled stair width must be positive, got {stair_width} from {cfg.stair_width} + {cfg.stair_width_noise_range}."
         )
-    if cfg.stair_type == "random":
-        stair_type = "cross" if np.random.random() < 0.5 else "pyramid"
-    elif cfg.stair_type in ("pyramid", "cross"):
-        stair_type = cfg.stair_type
-    else:
-        raise ValueError(f"stair_type must be 'pyramid', 'cross', or 'random', got {cfg.stair_type!r}.")
+    if not 0.0 <= cfg.cross_probability <= 1.0:
+        raise ValueError(f"cross_probability must be within [0, 1], got {cfg.cross_probability}.")
+    cross = cfg.cross_probability == 1.0 or (
+        cfg.cross_probability > 0.0 and np.random.random() < cfg.cross_probability
+    )
+    if not 0.0 <= cfg.floating_probability <= 1.0:
+        raise ValueError(f"floating_probability must be within [0, 1], got {cfg.floating_probability}.")
+    floating = cfg.floating_probability == 1.0 or (
+        cfg.floating_probability > 0.0 and np.random.random() < cfg.floating_probability
+    )
+    if not 0.0 <= cfg.wall_probability <= 1.0:
+        raise ValueError(f"wall_probability must be within [0, 1], got {cfg.wall_probability}.")
+    if cross and cfg.wall_probability > 0.0:
+        wall_types = (cfg.wall_type, cfg.wall_type) if isinstance(cfg.wall_type, str) else cfg.wall_type
+        if len(wall_types) != 2 or any(
+            kind not in ("segments", "continuous", "railing", "random") for kind in wall_types
+        ):
+            raise ValueError(f"Unsupported wall_type: {cfg.wall_type!r}.")
+        for name in ("wall_height_range", "wall_thickness_range"):
+            lower, upper = getattr(cfg, name)
+            if lower <= 0.0 or lower > upper:
+                raise ValueError(f"Invalid {name}: {(lower, upper)}.")
+        if any(kind in ("railing", "random") for kind in wall_types) and not 0.0 < cfg.railing_thickness < min(
+            cfg.wall_height_range[0], stair_width
+        ):
+            raise ValueError("railing_thickness must be positive and smaller than wall height and tread width.")
     if cfg.stair_thickness <= 0.0:
         raise ValueError(f"stair_thickness must be positive, got {cfg.stair_thickness}.")
     width_min, width_max = cfg.center_platform_width
@@ -159,21 +181,22 @@ def mesh_floating_pyramid_stairs_terrain(
     span_x = (terrain_size[0] - center_platform_width) // (2 * stair_width)
     span_y = (terrain_size[1] - center_platform_width) // (2 * stair_width)
     # Pyramid rings absorb the remainder into their widths so the center matches the sampled width.
-    extra_ring = 1 if stair_type == "pyramid" else 0
+    extra_ring = 0 if cross else 1
     num_steps = int(min(span_x, span_y) + extra_ring)
     if num_steps < 1:
         raise ValueError(
-            "Floating stairs need at least one step: "
+            "Diverse stairs need at least one step: "
             f"size={cfg.size}, stair_width={stair_width}, center_platform_width={center_platform_width}."
         )
 
     meshes_list: list[trimesh.Trimesh] = []
+    side_mesh_indices: set[int] = set()
     terrain_center = [0.5 * cfg.size[0], 0.5 * cfg.size[1], 0.0]
     cx, cy = terrain_center[0], terrain_center[1]
     # Ascending stairs rise toward the center. Inverted stairs drop into a pit.
     level_sign = -1.0 if cfg.inverted else 1.0
 
-    if stair_type == "pyramid":
+    if not cross:
         center_size = (center_platform_width, center_platform_width)
         ring_width_x = (terrain_size[0] - center_platform_width) / (2 * num_steps)
         ring_width_y = (terrain_size[1] - center_platform_width) / (2 * num_steps)
@@ -239,6 +262,62 @@ def mesh_floating_pyramid_stairs_terrain(
                 meshes_list, stair_width, center_platform_width, cfg.stair_thickness, cx - half_platform - inset, cy, top_z
             )
 
+        if cfg.wall_probability > 0.0:
+            flight_length = num_steps * stair_width
+            mean_top = level_sign * (num_steps + 1) * stair_height / 2.0
+            for axis in (0, 1):
+                for direction in (-1, 1):
+                    for side, wall_type in zip((-1, 1), wall_types):
+                        if wall_type == "random":
+                            wall_type = np.random.choice(("segments", "continuous", "railing"))
+                        if wall_type != "segments":
+                            if np.random.random() >= cfg.wall_probability:
+                                continue
+                            height = float(np.random.uniform(*cfg.wall_height_range))
+                            thickness = (
+                                cfg.railing_thickness
+                                if wall_type == "railing"
+                                else float(np.random.uniform(*cfg.wall_thickness_range))
+                            )
+                            # Shearing keeps the ends vertical and inside the flight span.
+                            # The solid wall extends below every tread; the handrail stays open beneath.
+                            depth = (
+                                thickness if wall_type == "railing"
+                                else height + stair_height / 2.0 + cfg.stair_thickness
+                            )
+                            position = [cx, cy, mean_top + height - depth / 2.0]
+                            position[axis] += direction * (half_platform + flight_length / 2.0)
+                            position[1 - axis] += side * (half_platform + thickness / 2.0)
+                            extents = [thickness, thickness, depth]
+                            extents[axis] = flight_length
+                            wall = trimesh.creation.box(extents, trimesh.transformations.translation_matrix(position))
+                            slope = -direction * level_sign * stair_height / stair_width
+                            wall.vertices[:, 2] += slope * (wall.vertices[:, axis] - position[axis])
+                            side_mesh_indices.add(len(meshes_list))
+                            meshes_list.append(wall)
+                            if wall_type == "continuous":
+                                continue
+                        for k in range(num_steps):
+                            if wall_type == "segments":
+                                if np.random.random() >= cfg.wall_probability:
+                                    continue
+                                height = float(np.random.uniform(*cfg.wall_height_range))
+                                thickness = float(np.random.uniform(*cfg.wall_thickness_range))
+                            inset = (num_steps - k - 0.5) * stair_width
+                            top_z = level_sign * (k + 1) * stair_height
+                            position = [cx, cy, top_z + height / 2.0]
+                            position[axis] += direction * (half_platform + inset)
+                            position[1 - axis] += side * (half_platform + thickness / 2.0)
+                            extents = [thickness, thickness, height]
+                            extents[axis] = thickness if wall_type == "railing" else stair_width
+                            side_mesh_indices.add(len(meshes_list))
+                            meshes_list.append(
+                                trimesh.creation.box(
+                                    extents,
+                                    trimesh.transformations.translation_matrix(position),
+                                )
+                            )
+
     center_top = level_sign * (num_steps + 1) * stair_height
     _add_floating_slab(
         meshes_list,
@@ -250,6 +329,13 @@ def mesh_floating_pyramid_stairs_terrain(
         center_top,
     )
 
+    if not floating:
+        base_z = center_top - cfg.stair_thickness - stair_height if cfg.inverted else -cfg.stair_thickness
+        for index, mesh in enumerate(meshes_list):
+            if index not in side_mesh_indices:
+                bottom = mesh.vertices[:, 2] < mesh.bounds[1, 2] - 0.5 * cfg.stair_thickness
+                mesh.vertices[bottom, 2] = base_z
+
     if cfg.inverted:
         # The approach surface stays at z = 0. The pit floor sits one step below the center slab.
         if cfg.floor_thickness <= 0.0:
@@ -257,7 +343,7 @@ def mesh_floating_pyramid_stairs_terrain(
         if cfg.border_width > 0.0:
             border_center = [0.5 * cfg.size[0], 0.5 * cfg.size[1], -0.5 * stair_height]
             border_inner_size = (cfg.size[0] - 2 * cfg.border_width, cfg.size[1] - 2 * cfg.border_width)
-            if stair_type == "cross":
+            if cross:
                 # Whole treads can leave a remainder; extend the approach to meet all four flights.
                 flight_span = center_platform_width + 2 * num_steps * stair_width
                 border_inner_size = (flight_span, flight_span)
@@ -276,7 +362,13 @@ def mesh_floating_pyramid_stairs_terrain(
         meshes_list.append(make_plane(cfg.size, height=0.0, center_zero=False))
 
     origin = np.array([terrain_center[0], terrain_center[1], center_top])
-    return apply_mesh_surface_details(meshes_list, origin, cfg, difficulty)
+    meshes_list, origin = apply_mesh_surface_details(meshes_list, origin, cfg, difficulty)
+    # Surface details preserve mesh order; mark after roughness has tessellated the faces.
+    for index, mesh in enumerate(meshes_list):
+        mesh.face_attributes["exclude_virtual_obstacle"] = np.full(
+            len(mesh.faces), index in side_mesh_indices, dtype=bool
+        )
+    return meshes_list, origin
 
 
 # Mesh Straight Gap Terrain Definition
