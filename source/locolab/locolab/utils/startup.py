@@ -13,11 +13,14 @@ from typing import Any
 
 import yaml
 
-import omni.client
-
-# Set this before Isaac Lab imports can initialize OmniClient and start Hub.
-# Keep errors visible while suppressing its informational and retry-warning logs.
-omni.client.set_log_level(omni.client.LogLevel.ERROR)
+try:
+    import omni.client
+except ModuleNotFoundError:
+    pass
+else:
+    # Set this before Isaac Lab imports can initialize OmniClient and start Hub.
+    # Keep errors visible while suppressing its informational and retry-warning logs.
+    omni.client.set_log_level(omni.client.LogLevel.ERROR)
 
 from isaaclab.app.loading_screen import LoadingScreen
 from isaaclab.envs import DirectMARLEnvCfg, ManagerBasedRLEnvCfg
