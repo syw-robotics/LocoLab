@@ -36,6 +36,61 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
+def _make_terrain_seam(
+    mesh_a: trimesh.Trimesh, mesh_b: trimesh.Trimesh, axis: int, position: float
+) -> trimesh.Trimesh | None:
+    """Join the exposed heights of two tile edges without closing the space above them."""
+    def boundary_edges(mesh):
+        triangles = mesh.triangles[mesh.face_normals[:, 2] > 1e-6]
+        on_edge = np.isclose(triangles[:, :, axis], position, atol=1e-6, rtol=0.0)
+        selected = on_edge.sum(axis=1) == 2
+        edges = triangles[selected][on_edge[selected]].reshape(-1, 2, 3)[:, :, [1 - axis, 2]]
+        edges = edges[np.abs(edges[:, 1, 0] - edges[:, 0, 0]) > 1e-6]
+        return edges
+
+    def heights(edges, points):
+        midpoints = 0.5 * (points[:-1] + points[1:])
+        start, end = edges[:, 0], edges[:, 1]
+        slopes = (end[:, 1] - start[:, 1]) / (end[:, 0] - start[:, 0])
+        covered = (midpoints[:, None] >= np.minimum(start[:, 0], end[:, 0])) & (
+            midpoints[:, None] <= np.maximum(start[:, 0], end[:, 0])
+        )
+        z = start[:, 1] + (midpoints[:, None] - start[:, 0]) * slopes
+        highest = np.where(covered, z, -np.inf).argmax(axis=1)
+        result = start[highest, 1, None] + (
+            np.column_stack((points[:-1], points[1:])) - start[highest, 0, None]
+        ) * slopes[highest, None]
+        result[~covered.any(axis=1)] = np.nan
+        return result
+
+    edges_a, edges_b = boundary_edges(mesh_a), boundary_edges(mesh_b)
+    if len(edges_a) == 0 or len(edges_b) == 0:
+        return None
+    points = np.unique(np.concatenate((edges_a[:, :, 0].ravel(), edges_b[:, :, 0].ravel())))
+    za, zb = heights(edges_a, points), heights(edges_b, points)
+    difference = za - zb
+    crossing = difference[:, 0] * difference[:, 1] < 0.0
+    if crossing.any():
+        fraction = difference[crossing, 0] / (difference[crossing, 0] - difference[crossing, 1])
+        points = np.unique(np.r_[points, points[:-1][crossing] + np.diff(points)[crossing] * fraction])
+        za, zb = heights(edges_a, points), heights(edges_b, points)
+    selected = np.isfinite(za).all(axis=1) & np.isfinite(zb).all(axis=1)
+    selected &= (np.abs(za - zb) > 1e-6).any(axis=1) & (np.diff(points) > 1e-6)
+    if not selected.any():
+        return None
+    spans = np.column_stack((points[:-1], points[1:]))[selected]
+    za, zb = za[selected], zb[selected]
+    vertices = np.zeros((len(spans), 4, 3))
+    vertices[:, :, axis] = position
+    vertices[:, :, 1 - axis] = spans[:, [0, 1, 1, 0]]
+    vertices[:, :, 2] = np.column_stack((za[:, 0], za[:, 1], zb[:, 1], zb[:, 0]))
+    faces = (np.array([[0, 1, 2], [0, 2, 3]]) + 4 * np.arange(len(spans))[:, None, None]).reshape(-1, 3)
+    seam = trimesh.Trimesh(vertices=vertices.reshape(-1, 3), faces=faces, process=False)
+    seam.update_faces(seam.area_faces > 1e-12)
+    seam.faces = np.vstack((seam.faces, seam.faces[:, ::-1]))
+    return seam
+
+
 class TerrainGenerator:
     r"""Terrain generator to handle different terrain generation functions.
 
@@ -169,6 +224,7 @@ class TerrainGenerator:
         self.flat_patches = {}
         # create a list of all sub-terrains
         self.terrain_meshes = list()
+        self._terrain_meshes_by_cell = {}
         self.terrain_mesh_origins = list()
         self.terrain_mesh_names = list()  # sub-terrain name for each mesh
         self.terrain_origins = np.zeros((self.cfg.num_rows, self.cfg.num_cols, 3))
@@ -185,6 +241,8 @@ class TerrainGenerator:
         # add a border around the terrains
         self._add_terrain_border()
         # combine all the sub-terrains into a single mesh
+        for mesh in self.terrain_meshes:
+            mesh.face_attributes.setdefault("exclude_virtual_obstacle", np.zeros(len(mesh.faces), dtype=bool))
         self.terrain_mesh = trimesh.util.concatenate(self.terrain_meshes)
 
         # color the terrain mesh
@@ -311,8 +369,30 @@ class TerrainGenerator:
         # update the faces to have minimal triangles
         selector = ~(np.asarray(border.triangles)[:, :, 2] < -0.1).any(1)
         border.update_faces(selector)
+        self._add_terrain_seams(border)
         # add the border to the list of meshes
         self.terrain_meshes.append(border)
+
+    def _add_terrain_seams(self, border: trimesh.Trimesh):
+        """Fill actual height differences between neighboring tiles and the outer border."""
+        seams = []
+        for cell, mesh in self._terrain_meshes_by_cell.items():
+            for axis in (0, 1):
+                for side in (0, 1):
+                    if side == 0 and cell[axis] > 0:
+                        continue  # Each internal boundary is joined from its lower-index tile.
+                    neighbor = list(cell)
+                    neighbor[axis] += 2 * side - 1
+                    other = self._terrain_meshes_by_cell.get(tuple(neighbor))
+                    if other is None:
+                        if self.cfg.border_width <= 0.0:
+                            continue
+                        other = border
+                    seam = _make_terrain_seam(mesh, other, axis, (cell[axis] + side) * self.cfg.size[axis])
+                    if seam is not None:
+                        seams.append(seam)
+        if seams:
+            self.terrain_meshes.append(trimesh.util.concatenate(seams))
 
     def _add_sub_terrain(
         self,
@@ -365,6 +445,7 @@ class TerrainGenerator:
         mesh.apply_transform(transform)
         # add mesh to the list
         self.terrain_meshes.append(mesh)
+        self._terrain_meshes_by_cell[row, col] = mesh
         self.terrain_mesh_origins.append(origin + transform[:3, -1])
         sub_terrain_name = list(self.cfg.sub_terrains.keys())[sub_terrain_index]
         self.terrain_mesh_names.append(sub_terrain_name)
@@ -402,17 +483,21 @@ class TerrainGenerator:
         sub_terrain_obj_filename = os.path.join(sub_terrain_cache_dir, "mesh.obj")
         sub_terrain_csv_filename = os.path.join(sub_terrain_cache_dir, "origin.csv")
         sub_terrain_meta_filename = os.path.join(sub_terrain_cache_dir, "cfg.yaml")
+        sub_terrain_exclusion_filename = os.path.join(sub_terrain_cache_dir, "exclude_virtual_obstacle.npy")
 
         # check if hash exists - if true, load the mesh and origin and return
-        if self.cfg.use_cache and os.path.exists(sub_terrain_obj_filename):
+        if self.cfg.use_cache and os.path.exists(sub_terrain_obj_filename) and os.path.exists(sub_terrain_exclusion_filename):
             # load existing mesh
             mesh = trimesh.load_mesh(sub_terrain_obj_filename, process=False)
+            mesh.face_attributes["exclude_virtual_obstacle"] = np.load(sub_terrain_exclusion_filename)
             origin = np.loadtxt(sub_terrain_csv_filename, delimiter=",")
             # return the generated mesh
             return mesh, origin
 
         # generate the terrain
         meshes, origin = cfg.function(difficulty, cfg)
+        for mesh in meshes:
+            mesh.face_attributes.setdefault("exclude_virtual_obstacle", np.zeros(len(mesh.faces), dtype=bool))
         mesh = trimesh.util.concatenate(meshes)
         # offset mesh such that they are in their center
         transform = np.eye(4)
@@ -427,6 +512,7 @@ class TerrainGenerator:
             os.makedirs(sub_terrain_cache_dir, exist_ok=True)
             # save the data
             mesh.export(sub_terrain_obj_filename)
+            np.save(sub_terrain_exclusion_filename, mesh.face_attributes["exclude_virtual_obstacle"])
             np.savetxt(sub_terrain_csv_filename, origin, delimiter=",", header="x,y,z")
             dump_yaml(sub_terrain_meta_filename, cfg)
         # return the generated mesh

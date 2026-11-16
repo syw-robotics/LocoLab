@@ -93,27 +93,26 @@ class MeshInvertedPyramidStairsTerrainCfg(MeshPyramidStairsTerrainCfg):
 
 
 @configclass
-class MeshFloatingPyramidStairsTerrainCfg(MeshRoughTerrainCfg):
-    """Pyramid stairs whose treads are floating slabs instead of solid blocks.
+class MeshDiverseStairsTerrainCfg(MeshRoughTerrainCfg):
+    """Diverse stairs with pyramid/cross layouts and optional walls or railings.
 
     The center platform and the stair treads use the same heights as
-    :class:`MeshPyramidStairsTerrainCfg`. Each tread is a box of height
+    :class:`MeshPyramidStairsTerrainCfg`. Floating treads are boxes of height
     :attr:`stair_thickness` measured downward from that tread surface. The open
     gap under a tread, down to the next lower tread, is
     ``stair_height - stair_thickness``. Keep the thickness below the stair height
     to leave that gap open.
 
-    :attr:`stair_type` selects the footprint. ``pyramid`` builds full concentric
-    rings. ``cross`` builds four flights of width :attr:`center_platform_width`, one
-    on each side of the center platform. ``random`` picks one of those two
-    footprints with equal probability for each generated sub-terrain.
+    :attr:`cross_probability` selects the footprint once per sub-terrain. Pyramid
+    layouts build full concentric rings. Cross layouts build four flights of width
+    :attr:`center_platform_width`, one on each side of the center platform.
 
     Ascending stairs sit above a ground plane at ``z = 0``. Inverted stairs keep
     the outer border at ``z = 0`` and add a pit floor one step below the center slab.
     For inverted ``cross`` stairs, the border absorbs any leftover span so it meets the outer treads.
     """
 
-    function = locolab_mesh_terrains.mesh_floating_pyramid_stairs_terrain
+    function = locolab_mesh_terrains.mesh_diverse_stairs_terrain
 
     stair_height_range: tuple[float, float] = MISSING
     """The minimum and maximum stair height (in m). Scales with difficulty."""
@@ -124,23 +123,64 @@ class MeshFloatingPyramidStairsTerrainCfg(MeshRoughTerrainCfg):
     stair_width_noise_range: tuple[float, float] = (0.0, 0.0)
     """Uniform noise added to :attr:`stair_width` for each sub-terrain (in m)."""
 
+    floating_probability: float = 1.0
+    """Probability that all stairs in this sub-terrain use floating slabs, within [0, 1].
+
+    Sampled once per sub-terrain, independently of the footprint and side obstacles.
+    Zero always fills beneath the treads and center platform down to a common base;
+    one always uses thin slabs. Top surfaces and spawn heights are identical.
+    The endpoints consume no random samples.
+    """
+
     stair_thickness: float = 0.05
-    """Vertical thickness of every floating tread and the center platform (in m)."""
+    """Floating slab thickness, or minimum depth below the lowest solid tread (in m)."""
 
     center_platform_width: tuple[float, float] = MISSING
     """Range of square center platform widths, sampled once per sub-terrain (in m).
 
-    When :attr:`stair_type` is ``cross`` this is also the width of each of the four stair flights.
+    For cross layouts this is also the width of each of the four stair flights.
     """
 
     border_width: float = 0.0
     """The width of the flat border around the terrain (in m)."""
 
-    stair_type: Literal["pyramid", "cross", "random"] = "pyramid"
-    """``pyramid`` fills concentric rings. ``cross`` keeps four equal-width flights.
+    cross_probability: float = 0.0
+    """Probability of a cross layout for the entire sub-terrain, within [0, 1].
 
-    ``random`` samples one of those two footprints uniformly for each sub-terrain.
+    Zero always uses pyramid rings; one always uses four equal-width cross flights.
+    Sampled independently of floating construction. The endpoints consume no random samples.
     """
+
+    wall_probability: float = 0.0
+    """Side obstacle probability, for ``cross`` only.
+
+    ``segments`` samples each tread side independently. ``continuous`` and
+    ``railing`` sample each whole flight side independently; selecting both sides
+    forms a corridor. Obstacles sit outside the flight width on all four flights
+    and share the terrain's collision mesh and optional roughness.
+    The center platform stays open. Zero disables walls without consuming random samples.
+    """
+
+    wall_type: Literal["segments", "continuous", "railing", "random"] | tuple[
+        Literal["segments", "continuous", "railing", "random"],
+        Literal["segments", "continuous", "railing", "random"],
+    ] = "segments"
+    """Separate wall segments, a solid sloping wall, or posts with a sloping handrail.
+
+    A string applies to both sides; ``random`` independently samples a style per
+    flight side. A pair fixes the styles on the negative/positive transverse sides
+    of each flight, e.g. ("railing", "continuous") gives a railing opposite a wall.
+    Transverse means y for x flights and x for y flights, not robot-relative left/right.
+    """
+
+    wall_height_range: tuple[float, float] = (0.4, 1.8)
+    """Height above tread centers (in m), sampled per segment or whole flight side."""
+
+    wall_thickness_range: tuple[float, float] = (0.05, 0.2)
+    """Solid wall thickness (in m), sampled per segment or whole flight side."""
+
+    railing_thickness: float = 0.05
+    """Square cross-section width of posts and handrails (in m). One post per tread."""
 
     inverted: bool = False
     """Whether to generate inverted pyramid stairs."""
@@ -153,8 +193,8 @@ class MeshFloatingPyramidStairsTerrainCfg(MeshRoughTerrainCfg):
 
 
 @configclass
-class MeshInvertedFloatingPyramidStairsTerrainCfg(MeshFloatingPyramidStairsTerrainCfg):
-    """Inverted floating pyramid stairs, with optional roughness."""
+class MeshInvertedDiverseStairsTerrainCfg(MeshDiverseStairsTerrainCfg):
+    """Inverted diverse stairs with optional walls, railings, and roughness."""
 
     inverted: bool = True
 

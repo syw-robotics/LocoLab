@@ -152,27 +152,103 @@ PARKOUR_TERRAINS_CFG = TerrainGeneratorCfg(
             num_poles_range=(2, 8),
             holes=False,
         ),
-        "floating_stairs": locolab_terrain_gen.MeshFloatingPyramidStairsTerrainCfg(
+        "diverse_stairs": locolab_terrain_gen.MeshDiverseStairsTerrainCfg(
            proportion=0.05,
            stair_height_range=(0.10, 0.30),
            stair_width=0.30,
            stair_width_noise_range=(-0.05, 0.05),
-           stair_thickness=0.05,
+           floating_probability=0.5,  # Probability of floating stairs for this entire sub-terrain.
+           stair_thickness=0.05,  # Floating slab thickness, or minimum solid base depth (m).
            center_platform_width=(1.5, 2.5),
            border_width=0.5,
-           stair_type="random",
+           cross_probability=0.5,  # Probability of a cross layout for this entire sub-terrain.
+           wall_probability=0.8,  # Probability of walls for cross layout
+           # Mixed-side example: cross_probability=1.0, wall_probability=1.0, wall_type=("railing", "continuous").
+           wall_type="random",  # Independently pick a style per side; or ("railing", "continuous") for mixed sides.
+           wall_height_range=(0.4, 1.8),     # Wall or handrail height range (m).
+           wall_thickness_range=(0.05, 0.2),  # Solid wall thickness (m).
+           railing_thickness=0.05,          # Post and handrail width (m).
         ),
-        "floating_stairs_inv": locolab_terrain_gen.MeshInvertedFloatingPyramidStairsTerrainCfg(
+        "diverse_stairs_inv": locolab_terrain_gen.MeshInvertedDiverseStairsTerrainCfg(
            proportion=0.05,
            stair_height_range=(0.10, 0.30),
            stair_width=0.30,
            stair_width_noise_range=(-0.05, 0.05),
-           stair_thickness=0.05,
+           floating_probability=0.5,  # Probability of floating stairs for this entire sub-terrain.
+           stair_thickness=0.05,  # Floating slab thickness, or minimum solid base depth (m).
            center_platform_width=(1.5, 2.5),
            border_width=0.5,
-           stair_type="random",
+           cross_probability=0.5,  # Probability of a cross layout for this entire sub-terrain.
+           wall_probability=0.8,  # Probability of walls for cross layout
+           # Mixed-side example: cross_probability=1.0, wall_probability=1.0, wall_type=("railing", "continuous").
+           wall_type="random",  # Independently pick a style per side; or ("railing", "continuous") for mixed sides.
+           wall_height_range=(0.9, 1.1),  # Wall or handrail height range (m).
+           wall_thickness_range=(0.05, 0.2),  # Solid wall thickness (m).
+           railing_thickness=0.05,       # Thin posts with open gaps beneath the handrail (m).
            extend_center_platform_under_stairs=True,
         ),
+        #  "floating_paramid_stairs_inv": locolab_terrain_gen.MeshDiverseStairsTerrainCfg(
+        #     proportion=0.05,
+        #     stair_height_range=(0.10, 0.30),
+        #     stair_width=0.30,
+        #     stair_width_noise_range=(-0.05, 0.05),
+        #     floating_probability=1.0,  # 0.0: solid; 1.0: floating; 0.5: 50/50 per sub-terrain.
+        #     stair_thickness=0.05,
+        #     center_platform_width=(1.5, 2.5),
+        #     border_width=0.5,
+        #     cross_probability=0.0,  # Fixed pyramid layout.
+        #     extend_center_platform_under_stairs=True,
+        #  ),
+        # "corridor_stairs_inv": locolab_terrain_gen.MeshInvertedDiverseStairsTerrainCfg(
+        #     proportion=0.05,
+        #     stair_height_range=(0.10, 0.30),
+        #     stair_width=0.30,
+        #     stair_width_noise_range=(-0.05, 0.05),
+        #     floating_probability=1.0,  # 0.0: solid; 1.0: floating; 0.5: 50/50 per sub-terrain.
+        #     stair_thickness=0.05,
+        #     center_platform_width=(1.5, 2.5),
+        #     border_width=0.5,
+        #     cross_probability=1.0,  # Fixed cross layout.
+        #     wall_probability=1.0,
+        #     wall_type="continuous",
+        #     wall_type=("railing", "continuous"),
+        #     wall_height_range=(0.9, 1.1),  # Wall/handrail top above tread centers (m).
+        #     wall_thickness_range=(0.05, 0.2),  # Solid walls only (m).
+        #     extend_center_platform_under_stairs=True,
+        # ),
+        # "railing_stairs_inv": locolab_terrain_gen.MeshInvertedDiverseStairsTerrainCfg(
+        #     proportion=0.05,
+        #     stair_height_range=(0.10, 0.30),
+        #     stair_width=0.30,
+        #     stair_width_noise_range=(-0.05, 0.05),
+        #     floating_probability=1.0,  # 0.0: solid; 1.0: floating; 0.5: 50/50 per sub-terrain.
+        #     stair_thickness=0.05,
+        #     center_platform_width=(1.5, 2.5),
+        #     border_width=0.5,
+        #     cross_probability=1.0,  # Fixed cross layout.
+        #     wall_probability=1.0,
+        #     wall_type=("railing", "continuous"),
+        #     wall_height_range=(0.9, 1.1),  # Wall/handrail top above tread centers (m).
+        #     wall_thickness_range=(0.05, 0.2),  # Solid walls only (m).
+        #     railing_thickness=0.05,  # Posts and handrail only (m).
+        #     extend_center_platform_under_stairs=True,
+        # ),
+        # "segmented_stairs_inv": locolab_terrain_gen.MeshInvertedDiverseStairsTerrainCfg(
+        #     proportion=0.05,
+        #     stair_height_range=(0.10, 0.30),
+        #     stair_width=0.30,
+        #     stair_width_noise_range=(-0.05, 0.05),
+        #     floating_probability=1.0,  # 0.0: solid; 1.0: floating; 0.5: 50/50 per sub-terrain.
+        #     stair_thickness=0.05,
+        #     center_platform_width=(1.5, 2.5),
+        #     border_width=0.5,
+        #     cross_probability=1.0,  # Fixed cross layout.
+        #     wall_probability=0.35,
+        #     wall_type="segments",
+        #     wall_height_range=(0.9, 1.1),  # Wall/handrail top above tread centers (m).
+        #     wall_thickness_range=(0.05, 0.2),  # Solid walls only (m).
+        #     extend_center_platform_under_stairs=True,
+        # ),
         #  "straight_stairs": locolab_terrain_gen.MeshStraightStairsTerrainCfg(
         #      proportion=0.05,
         #      stair_width=0.30,

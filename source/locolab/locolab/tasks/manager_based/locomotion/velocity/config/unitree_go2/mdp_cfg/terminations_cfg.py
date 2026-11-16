@@ -36,7 +36,7 @@ class RoughTerminationsCfg:
     #  terrain_out_of_bounds is needed for rough terrain
     terrain_out_of_bounds = DoneTerm(
         func=mdp.terrain_out_of_bounds,
-        params={"asset_cfg": SceneEntityCfg("robot"), "distance_buffer": 3.0},
+        params={"asset_cfg": SceneEntityCfg("robot"), "out_of_bounds_distance": 4.0},
         time_out=True,
     )
 

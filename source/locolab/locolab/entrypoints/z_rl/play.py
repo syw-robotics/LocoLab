@@ -116,7 +116,9 @@ def main(*, add_arguments=None, configure=None, wrap_env=None, export_onnx=None)
     env_cfg.sim.device = args_cli.device if args_cli.device is not None else env_cfg.sim.device
 
     if hasattr(env_cfg.curriculum, "terrain_levels"):
-        env_cfg.curriculum.terrain_levels.params["log_by_terrain_type"] = False
+        terrain_params = env_cfg.curriculum.terrain_levels.params
+        if "log_by_terrain_type" in terrain_params:
+            terrain_params["log_by_terrain_type"] = False
         #  env_cfg.scene.terrain.terrain_generator.num_cols = 20
         num_terrains = len(env_cfg.scene.terrain.terrain_generator.sub_terrains)
         env_cfg.scene.terrain.terrain_generator.num_cols = num_terrains

@@ -106,7 +106,7 @@ PREVIEW_CASES: dict[str, dict] = {
         "apply_roughness": 1.0,
         "roughness_type": "fixed",
     },
-    "MeshFloatingPyramidStairsTerrainCfg": {
+    "MeshDiverseStairsTerrainCfg": {
         "stair_height_range": (0.05, 0.22),
         "stair_width": 0.30,
         "stair_thickness": 0.04,
@@ -158,7 +158,7 @@ PREVIEW_CASES: dict[str, dict] = {
         "wall_thickness": 0.15,
         "wall_height_range": (0.8, 1.8),
     },
-    "MeshInvertedFloatingPyramidStairsTerrainCfg": {
+    "MeshInvertedDiverseStairsTerrainCfg": {
         "stair_height_range": (0.05, 0.22),
         "stair_width": 0.30,
         "stair_thickness": 0.04,

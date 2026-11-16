@@ -90,3 +90,24 @@ PURPLE_RAY_CASTER_MARKER_CFG = VisualizationMarkersCfg(
 )
 """Configuration for the purple ray-caster marker."""
 
+MUTED_RED_RAY_CASTER_MARKER_CFG = VisualizationMarkersCfg(
+    prim_path="/Visuals/RayCaster",
+    markers={
+        "hit": sim_utils.SphereCfg(
+            radius=0.02,
+            visual_material=sim_utils.PreviewSurfaceCfg(diffuse_color=(0.75, 0.40, 0.36)),
+        ),
+    },
+)
+"""Configuration for the low-saturation red ray-caster marker."""
+
+MUTED_BLUE_RAY_CASTER_MARKER_CFG = VisualizationMarkersCfg(
+    prim_path="/Visuals/RayCaster",
+    markers={
+        "hit": sim_utils.SphereCfg(
+            radius=0.02,
+            visual_material=sim_utils.PreviewSurfaceCfg(diffuse_color=(0.30, 0.50, 0.72)),
+        ),
+    },
+)
+"""Configuration for the low-saturation blue ray-caster marker."""

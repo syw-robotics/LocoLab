@@ -96,9 +96,10 @@ class HistoryObservationManager(ObservationManager):
         return super().compute_group(group_name, update_history=update_history)
 
 
-def configure_history(cfg):
+def configure_history(cfg, *, frame_dimensions=None):
     """Preserve velocity histories while disabling the unsupported upstream history path."""
     dimensions = {
+        "base_lin_vel": 3,
         "base_ang_vel": 3,
         "projected_gravity": 3,
         "velocity_commands": 3,
@@ -107,6 +108,8 @@ def configure_history(cfg):
         "joint_vel": "joint",
         "actions": "action",
     }
+    if frame_dimensions is not None:
+        dimensions.update(frame_dimensions)
     for group in vars(cfg.observations).values():
         for name, term in vars(group).items():
             if not isinstance(term, ObservationTermCfg):
