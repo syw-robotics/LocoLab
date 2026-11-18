@@ -6,8 +6,7 @@ This bundle is for unitree-deploy. Copy this **entire directory** to
 - `policy.onnx`: actor with observation normalization included.
 - `policy.yaml`: joint layout, observations, actions, timing, and PD gains.
 
-Use a unitree-deploy version with `unitree_deploy.policy.velocity:VelocityPolicy`.
-The deployment-side policy preserves clipped previous actions and per-joint position-target limits.
+The policy uses `unitree_deploy.policy.base_policy:BasePolicy` with the exported observation configuration.
 Training noise, encoder-bias randomization, and simulated actuator delays are not
 applied at deployment. Joint velocity observations require zero default joint velocities.
 A moves to the default pose, Start runs the policy, and X enters damping.

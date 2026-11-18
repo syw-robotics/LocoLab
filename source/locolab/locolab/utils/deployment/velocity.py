@@ -96,7 +96,7 @@ def export_velocity_deployment(env, path: str | Path, clip_actions: float | None
         raise ValueError("Actor output does not match the joint-position action dimension.")
     config = {
         "robot": robot_name,
-        "policy_path": path.name, "policy_class": "unitree_deploy.policy.velocity:VelocityPolicy",
+        "policy_path": path.name,
         "policy_step_dt": float(env.step_dt), "physics_dt": float(env.cfg.sim.dt),
         "decimation": env.cfg.decimation,
         "runtime_command_dim": env.command_manager.get_term("base_velocity").command.shape[-1],
