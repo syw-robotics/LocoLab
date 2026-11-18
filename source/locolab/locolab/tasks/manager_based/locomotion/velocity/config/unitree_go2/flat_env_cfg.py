@@ -128,13 +128,13 @@ class Go2FlatEnvCfg(ManagerBasedRLEnvCfg):
         )
         # disable self collisions
         set_self_collisions(self.scene.robot.spawn, False)
-        # barely keeping feet only goes faster; keeping calf is for safety
-        self.scene.robot.spawn.collision_props["/(?!.*foot).*"] = [
-            UsdPhysicsCollisionCfg(collision_enabled=False)
-        ]
-        #  self.scene.robot.spawn.collision_props["/(?!.*(foot|calf)).*"] = [
+        # barely keeping feet only goes faster; keeping calf is safer for mujoco simulation
+        #  self.scene.robot.spawn.collision_props["/(?!.*foot).*"] = [
         #      UsdPhysicsCollisionCfg(collision_enabled=False)
         #  ]
+        self.scene.robot.spawn.collision_props["/(?!.*(foot|calf)).*"] = [
+            UsdPhysicsCollisionCfg(collision_enabled=False)
+        ]
 
         # update sensor update periods
         # we tick all the sensors based on the smallest update period (physics update period)

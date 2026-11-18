@@ -74,8 +74,8 @@ class G1FlatSceneCfg(InteractiveSceneCfg):
     )
 
     # =====  robots  =====
-    #  robot: ArticulationCfg = g1_sphere_feet_cfg("torso").replace(
-    robot: ArticulationCfg = g1_sphere_feet_cfg("pelvis").replace(
+    #  robot: ArticulationCfg = g1_sphere_feet_cfg("root_link=torso").replace(
+    robot: ArticulationCfg = g1_sphere_feet_cfg(root_link="pelvis").replace(
     #  robot: ArticulationCfg = UNITREE_G1_29DOF_PELVIS_BASE_CFG.replace(
         prim_path="{ENV_REGEX_NS}/Robot",
     )

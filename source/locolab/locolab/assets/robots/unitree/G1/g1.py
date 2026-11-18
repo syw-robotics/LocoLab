@@ -144,14 +144,14 @@ UNITREE_G1_29DOF_TORSO_BASE_CFG = UNITREE_G1_29DOF_PELVIS_BASE_CFG  .replace(
 """Configuration for the torso-base Unitree G1 29DOF humanoid robot."""
 
 
-def g1_sphere_feet_cfg(base: Literal["pelvis", "torso"]) -> LocoLabArticulationCfg:
-    """Return the selected G1 base with five spheres per foot."""
+def g1_sphere_feet_cfg(root_link: Literal["pelvis", "torso"]) -> LocoLabArticulationCfg:
+    """Return the selected G1 root_link with five spheres per foot."""
     # Select the config and XML together; export only the requested variant.
     robot_cfg = {
         "pelvis": UNITREE_G1_29DOF_PELVIS_BASE_CFG,
         "torso": UNITREE_G1_29DOF_TORSO_BASE_CFG,
-    }[base]
-    sphere_feet_xml = os.path.join(_G1_XML_DIR, f"g1_29dof_{base}_base_sphere_feet.xml")
+    }[root_link]
+    sphere_feet_xml = os.path.join(_G1_XML_DIR, f"g1_29dof_{root_link}_base_sphere_feet.xml")
     spawn = assetx_export_usd_cfg(
         asset_path=sphere_feet_xml,
         foot_expression="/.*ankle_roll_link/collisions.*",

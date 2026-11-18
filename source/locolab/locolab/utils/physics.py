@@ -33,13 +33,14 @@ class LocomotionPhysicsCfg(PresetCfg):
         solver_cfg=MJWarpSolverCfg(
             njmax=256,  # Number of constraints per environment (world)
             nconmax=64,  # Number of contact points per environment (world)
-            cone="pyramidal",  # The type of contact friction cone, "pyramidal" or "elliptic"
-            impratio=1.0,
+            cone="elliptic",  # The type of contact friction cone, "pyramidal" or "elliptic"
+            impratio=10.0,
             integrator="implicitfast",  # "implicitfast" is recommended in mjlab
             # Be careful!! 
             # Mujoco contact uses convex hull for contact detection, which is not suitable for rough terrain tasks
             use_mujoco_contacts=False,  # whether to use MuJoCo's internal contact solver
             #  ls_iterations=24,
+            #  tolerance=1e-8,
         ),
         num_substeps=1,
         debug_mode=False,
