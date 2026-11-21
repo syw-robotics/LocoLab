@@ -93,6 +93,7 @@ def lin_vel_cmd_levels(
     max_lin_vel_x_ranges: tuple[float, float] = (-1.5, 1.5),
     max_lin_vel_y_ranges: tuple[float, float] = (-1.5, 1.5),
     velocity_step: float = 0.1,
+    lateral_velocity_step: float | None = None,
 ) -> torch.Tensor:
     """Curriculum based on the linear velocity command levels.
 
@@ -112,13 +113,16 @@ def lin_vel_cmd_levels(
     if env.common_step_counter % env.max_episode_length == 0:
         if reward > reward_term.weight * percentage_threshold:
             delta_command = torch.tensor([-velocity_step, velocity_step], device=env.device)
+            delta_lateral = delta_command if lateral_velocity_step is None else torch.tensor(
+                [-lateral_velocity_step, lateral_velocity_step], device=env.device
+            )
             ranges.lin_vel_x = torch.clamp(
                 torch.tensor(ranges.lin_vel_x, device=env.device) + delta_command,
                 max_ranges_x[0],
                 max_ranges_x[1],
             ).tolist()
             ranges.lin_vel_y = torch.clamp(
-                torch.tensor(ranges.lin_vel_y, device=env.device) + delta_command,
+                torch.tensor(ranges.lin_vel_y, device=env.device) + delta_lateral,
                 max_ranges_y[0],
                 max_ranges_y[1],
             ).tolist()
@@ -193,3 +197,30 @@ def push_robot_velocity_levels(
                 ).tolist()
 
     return torch.tensor(velocity_range["x"][1], device=env.device)
+
+
+def assistive_force_levels(
+    env: ManagerBasedRLEnv,
+    env_ids: Sequence[int] | slice,
+    starting_force: float,
+    success_threshold: float,
+    starting_threshold: float,
+    end_threshold: float,
+    force_cutoff: float = 10.0,
+) -> torch.Tensor:
+    """Fade torso support as each environment's episode success rate improves."""
+    if not hasattr(env, "assistive_force"):
+        env.assistive_force = torch.full((env.num_envs,), starting_force, dtype=torch.float32, device=env.device)
+        env.assistive_force_success_ema = torch.zeros_like(env.assistive_force)
+
+    reward_name = "track_lin_vel_xy_exp"
+    reward_weight = env.reward_manager.get_term_cfg(reward_name).weight
+    episode_reward = env.reward_manager._episode_sums[reward_name][env_ids]
+    success = episode_reward >= reward_weight * env.max_episode_length_s * success_threshold
+    ema = env.assistive_force_success_ema[env_ids]
+    ema = torch.where(env.episode_length_buf[env_ids] > 0, 0.8 * ema + 0.2 * success, ema)
+    env.assistive_force_success_ema[env_ids] = ema
+    progress = ((ema - starting_threshold) / (end_threshold - starting_threshold)).clamp(0.0, 1.0)
+    force = starting_force * (1.0 - progress)
+    env.assistive_force[env_ids] = torch.where(force < force_cutoff, 0.0, force)
+    return env.assistive_force.mean()

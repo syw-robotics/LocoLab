@@ -31,5 +31,6 @@ register_manager_based_rl_env(
     task_id="Velocity-Flat-G1-Mid360",
     env_cfg_module=f"{__name__}.mid360_flat_env_cfg",
     env_cfg_name="G1Mid360FlatEnvCfg",
+    play_env_cfg_name="G1Mid360EnvCfg_PLAY",
     agent_cfg_entry_points=_AGENT_CFG_ENTRY_POINTS,
 )

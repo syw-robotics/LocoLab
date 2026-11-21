@@ -45,7 +45,7 @@ def _pack_height_field(
 def flat_rough_terrain(
     difficulty: float, cfg: locolab_hf_terrains_cfg.HfFlatRoughTerrainCfg
 ) -> tuple[np.ndarray, np.ndarray]:
-    """Generate flat terrain with LocoLab fractal Perlin roughness."""
+    """Generate flat terrain with Perlin roughness and optional local pits and bumps."""
     width_pixels = int(cfg.size[0] / cfg.horizontal_scale)
     length_pixels = int(cfg.size[1] / cfg.horizontal_scale)
     hf_raw = np.zeros((width_pixels, length_pixels), dtype=np.int16)

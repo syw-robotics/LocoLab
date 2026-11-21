@@ -14,6 +14,11 @@ from isaaclab_tasks_experimental.core.velocity.mdp.rewards import (
     _track_ang_vel_z_world_exp_kernel,
 )
 
+from locolab.tasks.manager_based.locomotion.velocity.mdp.rewards import (
+    _posture_inverse_variances,
+    base_height_l2 as _torch_base_height_l2,
+)
+
 
 def track_lin_vel_xy_exp(env, out, std, command_name, asset_cfg=SceneEntityCfg("robot")):
     data = env.scene[asset_cfg.name].data
@@ -50,11 +55,16 @@ def track_ang_vel_z_exp(env, out, std, command_name, asset_cfg=SceneEntityCfg("r
 
 @wp.kernel(enable_backward=False)
 def _height(
-    pose: wp.array(dtype=wp.transform), rays: wp.array2d(dtype=wp.vec3), target: float, out: wp.array(dtype=float)
+    pose: wp.array(dtype=wp.transform), rays: wp.array2d(dtype=wp.vec3),
+    ray_indices: wp.array(dtype=int), target: float, out: wp.array(dtype=float),
 ):
     i = wp.tid()
     terrain = float(0.0)
-    if rays:
+    if ray_indices:
+        for j in range(ray_indices.shape[0]):
+            terrain += wp.clamp(rays[i, ray_indices[j]][2], -10.0, 10.0)
+        terrain /= float(ray_indices.shape[0])
+    elif rays:
         for j in range(rays.shape[1]):
             terrain += wp.clamp(rays[i, j][2], -10.0, 10.0)
         terrain /= float(rays.shape[1])
@@ -62,14 +72,26 @@ def _height(
     out[i] = error * error
 
 
-def base_height_l2(env, out, target_height, asset_cfg=SceneEntityCfg("robot"), sensor_cfg=None):
-    rays = env.scene[sensor_cfg.name].data.ray_hits_w.warp if sensor_cfg is not None else None
-    wp.launch(
-        _height,
-        dim=env.num_envs,
-        inputs=[env.scene[asset_cfg.name].data.root_link_pose_w.warp, rays, target_height, out],
-        device=env.device,
-    )
+class base_height_l2(ManagerTermBase):
+    def __init__(self, cfg, env):
+        super().__init__(cfg, env)
+        asset_cfg = cfg.params["asset_cfg"]
+        sensor_cfg = cfg.params["sensor_cfg"]
+        self._asset = env.scene[asset_cfg.name]
+        self._sensor = env.scene[sensor_cfg.name] if sensor_cfg is not None else None
+        self._ray_indices = None
+        if (size := cfg.params["center_scan_size"]) is not None:
+            indices = _torch_base_height_l2._center_height_scan_indices(self._sensor, size)
+            self._ray_indices = wp.array(indices.tolist(), dtype=int, device=env.device)
+
+    def __call__(self, env, out, target_height, asset_cfg=SceneEntityCfg("robot"), sensor_cfg=None, center_scan_size=None):
+        rays = self._sensor.data.ray_hits_w.warp if self._sensor is not None else None
+        wp.launch(
+            _height,
+            dim=env.num_envs,
+            inputs=[self._asset.data.root_link_pose_w.warp, rays, self._ray_indices, target_height, out],
+            device=env.device,
+        )
 
 
 @wp.func
@@ -100,6 +122,43 @@ def joint_power_l1(env, out, asset_cfg=SceneEntityCfg("robot")):
         inputs=[asset.data.joint_vel.warp, asset.actuators.applied_effort.warp, asset_cfg.joint_ids_wp, out],
         device=env.device,
     )
+
+
+@wp.kernel(enable_backward=False)
+def _variable_posture(
+    position: wp.array2d(dtype=float), default_position: wp.array2d(dtype=float),
+    command: wp.array2d(dtype=float), inverse_variance: wp.array(dtype=wp.vec3),
+    walking_threshold: float, running_threshold: float, out: wp.array(dtype=float),
+):
+    i = wp.tid()
+    speed = wp.length(wp.vec2(command[i, 0], command[i, 1])) + wp.abs(command[i, 2])
+    regime = int(speed >= walking_threshold) + int(speed >= running_threshold)
+    error = float(0.0)
+    for j in range(position.shape[1]):
+        delta = position[i, j] - default_position[i, j]
+        error += delta * delta * inverse_variance[j][regime]
+    out[i] = wp.exp(-error / float(position.shape[1]))
+
+
+class variable_posture(ManagerTermBase):
+    def __init__(self, cfg, env):
+        super().__init__(cfg, env)
+        params = cfg.params
+        asset = env.scene[params["asset_cfg"].name]
+        values = _posture_inverse_variances(asset.joint_names, params["std_standing"], params["std_moving"])
+        self._inverse_variance = wp.array(values, dtype=wp.vec3, device=env.device)
+
+    def __call__(self, env, out, asset_cfg, command_name, std_standing, std_moving, walking_threshold, running_threshold):
+        data = env.scene[asset_cfg.name].data
+        wp.launch(
+            _variable_posture, dim=env.num_envs,
+            inputs=[
+                data.joint_pos.warp, data.default_joint_pos.warp,
+                wp.from_torch(env.command_manager.get_command(command_name)), self._inverse_variance,
+                walking_threshold, running_threshold, out,
+            ],
+            device=env.device,
+        )
 
 
 @wp.kernel(enable_backward=False)
@@ -255,6 +314,38 @@ def feet_clearance_flat(env, out, asset_cfg, target_height, std, tanh_mult):
             std,
             tanh_mult,
             out,
+        ],
+        device=env.device,
+    )
+
+
+@wp.kernel(enable_backward=False)
+def _feet_swing_height_l2(
+    pose: wp.array2d(dtype=wp.transform), velocity: wp.array2d(dtype=wp.spatial_vector),
+    air_time: wp.array2d(dtype=float), command: wp.array2d(dtype=float),
+    body_ids: wp.array(dtype=int), sensor_ids: wp.array(dtype=int), target: float, out: wp.array(dtype=float),
+):
+    i = wp.tid()
+    error = float(0.0)
+    if _moving(command, i):
+        for k in range(sensor_ids.shape[0]):
+            if air_time[i, sensor_ids[k]] > 0.0:
+                j = body_ids[k]
+                height_error = wp.transform_get_translation(pose[i, j])[2] - target
+                v = wp.spatial_top(velocity[i, j])
+                error += height_error * height_error * wp.length(wp.vec2(v[0], v[1]))
+    out[i] = error
+
+
+def feet_swing_height_l2(env, out, command_name, sensor_cfg, asset_cfg, target_height):
+    data = env.scene[asset_cfg.name].data
+    sensor = env.scene.sensors[sensor_cfg.name]
+    wp.launch(
+        _feet_swing_height_l2, dim=env.num_envs,
+        inputs=[
+            data.body_link_pose_w.warp, data.body_com_vel_w.warp, sensor.data.current_air_time.warp,
+            wp.from_torch(env.command_manager.get_command(command_name)), asset_cfg.body_ids_wp,
+            sensor_cfg.body_ids_wp, target_height, out,
         ],
         device=env.device,
     )
@@ -419,24 +510,31 @@ def ang_vel_xy_l2(env, out, asset_cfg=SceneEntityCfg("robot"), select_bodies=Fal
 @wp.kernel(enable_backward=False)
 def _body_flat_orientation(
     pose: wp.array2d(dtype=wp.transform), gravity: wp.array(dtype=wp.vec3),
-    ids: wp.array(dtype=int), out: wp.array(dtype=float)
+    ids: wp.array(dtype=int), contact: wp.array2d(dtype=float), contact_ids: wp.array(dtype=int),
+    out: wp.array(dtype=float),
 ):
     i = wp.tid()
     total = float(0.0)
     for k in range(ids.shape[0]):
-        q = wp.transform_get_rotation(pose[i, ids[k]])
-        g = wp.quat_rotate_inv(q, wp.normalize(gravity[i]))
-        total += g[0] * g[0] + g[1] * g[1]
+        if not contact or contact[i, contact_ids[k]] > 0.0:
+            q = wp.transform_get_rotation(pose[i, ids[k]])
+            g = wp.quat_rotate_inv(q, wp.normalize(gravity[i]))
+            total += g[0] * g[0] + g[1] * g[1]
     out[i] = total
 
 
-def flat_orientation_l2(env, out, asset_cfg=SceneEntityCfg("robot"), select_bodies=False):
+def flat_orientation_l2(env, out, asset_cfg=SceneEntityCfg("robot"), select_bodies=False, sensor_cfg=None):
     if not select_bodies:
         return _root_flat_orientation_l2(env, out, asset_cfg)
     data = env.scene[asset_cfg.name].data
+    contact = None
+    contact_ids = None
+    if sensor_cfg is not None:
+        contact = env.scene.sensors[sensor_cfg.name].data.current_contact_time.warp
+        contact_ids = sensor_cfg.body_ids_wp
     wp.launch(
         _body_flat_orientation, dim=env.num_envs,
-        inputs=[data.body_link_pose_w.warp, data.GRAVITY_VEC_W.warp, asset_cfg.body_ids_wp, out],
+        inputs=[data.body_link_pose_w.warp, data.GRAVITY_VEC_W.warp, asset_cfg.body_ids_wp, contact, contact_ids, out],
         device=env.device,
     )
 
@@ -523,6 +621,41 @@ def feet_short_swing(env, out, command_name, sensor_cfg, min_air_time):
                 min_air_time, out],
         device=env.device,
     )
+
+
+@wp.kernel(enable_backward=False)
+def _feet_gait(
+    contact: wp.array2d(dtype=float), steps: wp.array(dtype=wp.int64), offsets: wp.array(dtype=float),
+    ids: wp.array(dtype=int), command: wp.array2d(dtype=float), dt: float, period: float,
+    threshold: float, out: wp.array(dtype=float),
+):
+    i = wp.tid()
+    total = float(0.0)
+    if not command or _moving(command, i):
+        phase = (float(steps[i]) * dt % period) / period
+        for k in range(ids.shape[0]):
+            in_stance = (phase + offsets[k]) % 1.0 < threshold
+            if in_stance == (contact[i, ids[k]] > 0.0):
+                total += 1.0
+    out[i] = total
+
+
+class feet_gait(ManagerTermBase):
+    def __init__(self, cfg, env):
+        super().__init__(cfg, env)
+        self._offsets = wp.array(cfg.params.get("offset", [0.0, 0.5]), dtype=float, device=env.device)
+
+    def __call__(self, env, out, period, sensor_cfg, offset=None, threshold=0.5, command_name=None):
+        sensor = env.scene.sensors[sensor_cfg.name]
+        command = wp.from_torch(env.command_manager.get_command(command_name)) if command_name is not None else None
+        wp.launch(
+            _feet_gait, dim=env.num_envs,
+            inputs=[
+                sensor.data.current_contact_time.warp, env._episode_length_buf_wp, self._offsets,
+                sensor_cfg.body_ids_wp, command, env.step_dt, period, threshold, out,
+            ],
+            device=env.device,
+        )
 
 
 @wp.kernel(enable_backward=False)

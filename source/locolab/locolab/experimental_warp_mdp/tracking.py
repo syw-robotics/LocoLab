@@ -5,7 +5,7 @@ from types import SimpleNamespace
 import warp as wp
 
 from isaaclab.utils.warp.launch_cache import _WarpLaunchCache
-from isaaclab_experimental.managers import ManagerTermBase
+from isaaclab_experimental.managers import ManagerTermBase, SceneEntityCfg
 
 from locolab.utils.motion.command import COMMAND_DIMS, command_dimension, reference_command
 
@@ -260,6 +260,32 @@ class motion_global_body_linear_velocity_error_exp(_MotionReward):
 
 class motion_global_body_angular_velocity_error_exp(_MotionReward):
     _kind = 5
+
+
+@wp.kernel(enable_backward=False)
+def _applied_torque_limits(
+    applied_effort: wp.array2d(dtype=float),
+    computed_effort: wp.array2d(dtype=float),
+    joint_ids: wp.array(dtype=int),
+    out: wp.array(dtype=float),
+):
+    i = wp.tid()
+    total = float(0.0)
+    for k in range(joint_ids.shape[0]):
+        j = joint_ids[k]
+        total += wp.abs(applied_effort[i, j] - computed_effort[i, j])
+    out[i] = total
+
+
+def applied_torque_limits(env, out, asset_cfg=SceneEntityCfg("robot")):
+    """Penalize the difference between applied and computed torques."""
+    actuators = env.scene[asset_cfg.name].actuators
+    wp.launch(
+        _applied_torque_limits,
+        dim=env.num_envs,
+        inputs=[actuators.applied_effort.warp, actuators.computed_effort.warp, asset_cfg.joint_ids_wp, out],
+        device=env.device,
+    )
 
 
 @wp.kernel(enable_backward=False)

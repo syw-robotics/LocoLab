@@ -95,7 +95,10 @@ class AS2FlatEnvCfg(ManagerBasedRLEnvCfg):
         self.sim.render_interval = self.decimation
         self.sim.physics_material = self.scene.terrain.physics_material
         set_locomotion_physics(
-            self.sim, rigid_patch_count=2**16, num_substeps=1, cone="elliptic", impratio=5.0, njmax=128, nconmax=24
+            self.sim,
+            mjwarp=dict(cone="elliptic", impratio=5.0, njmax=128, nconmax=24),
+            steel=dict(articulation_constraint_max=128),
+            physx=dict(rigid_patch_count=2**16),
         )
         set_self_collisions(self.scene.robot.spawn, False)
         self.scene.robot.spawn.collision_props["/(?!.*(foot|calf)).*"] = [

@@ -19,7 +19,7 @@ class RoughnessParamsCfg:
     """
 
     noise_range: tuple[float, float] = (-0.02, 0.02)
-    """The minimum and maximum height noise in meters."""
+    """Minimum and maximum Perlin surface offsets in meters at full roughness strength."""
 
     noise_step: float = 0.01
     """The height increment used when sampling roughness in meters."""
@@ -28,6 +28,21 @@ class RoughnessParamsCfg:
     """Minimum distance between sampled roughness points in meters.
 
     The effective distance is sampled over one octave for each sub-terrain.
+    """
+
+    enable_pits_and_bumps: bool = False
+    """Include local pits and bumps when roughness is applied to this sub-terrain."""
+
+    pit_bump_density: float = 0.5
+    """Mean number of local pits and bumps combined per square meter. Zero gives pure Perlin roughness."""
+
+    pit_bump_radius_range: tuple[float, float] = (0.15, 0.30)
+    """Range of pit and bump radii in meters, sampled uniformly per feature."""
+
+    pit_bump_noise_range: tuple[float, float] = (-0.06, 0.06)
+    """Uniform range of center offsets from the Perlin surface in meters at full strength.
+
+    Negative offsets form pits and positive offsets form bumps.
     """
 
     roughness_type: Literal["difficulty", "random", "fixed"] = "fixed"
@@ -87,7 +102,7 @@ class HfRoughTerrainCfg(RoughnessParamsCfg, PoleParamsCfg, HfTerrainBaseCfg):
 
 @configclass
 class HfFlatRoughTerrainCfg(HfRoughTerrainCfg):
-    """Configuration for flat terrain with LocoLab fractal Perlin roughness."""
+    """Configuration for flat terrain with Perlin roughness and optional local pits and bumps."""
 
     function = locolab_hf_terrains.flat_rough_terrain
 

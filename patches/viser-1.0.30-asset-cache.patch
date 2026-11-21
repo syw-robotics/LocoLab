@@ -1,0 +1,101 @@
+--- a/_viser.py
++++ b/_viser.py
+@@ -744,6 +744,8 @@
+         port: int = 8080,
+         label: str | None = None,
+         verbose: bool = True,
++        *,
++        http_asset_response=None,
+         **_deprecated_kwargs,
+     ):
+         # Check for port override environment variable.
+@@ -763,6 +765,7 @@
+             message_class=_messages.Message,
+             http_server_root=Path(__file__).resolve().parent / "client" / "build",
+             verbose=verbose,
++            http_asset_response=http_asset_response,
+         )
+         self._websock_server = server
+ 
+--- a/infra/_infra.py
++++ b/infra/_infra.py
+@@ -339,6 +339,8 @@
+         message_class: type[Message] = Message,
+         http_server_root: Path | None = None,
+         verbose: bool = True,
++        *,
++        http_asset_response: Callable[[Request], Response | None] | None = None,
+     ):
+         super().__init__()
+ 
+@@ -354,6 +356,7 @@
+         self._port = port
+         self._message_class = message_class
+         self._http_server_root = http_server_root
++        self._http_asset_response = http_asset_response
+         self._verbose = verbose
+         self._background_event_loop: asyncio.AbstractEventLoop | None = None
+ 
+@@ -609,6 +612,11 @@
+             # Ignore websocket packets.
+             if request.headers.get("Upgrade") == "websocket":
+                 return None
++
++            if self._http_asset_response is not None:
++                response = self._http_asset_response(request)
++                if response is not None:
++                    return response
+ 
+             # Strip out search params, get relative path. URL-decode so
+             # percent-encoded traversal sequences (e.g. ``%2e%2e/``)
+--- a/client/src/mesh/GlbLoaderUtils.ts
++++ b/client/src/mesh/GlbLoaderUtils.ts
+@@ -71,8 +71,8 @@
+ 
+     const loader = new GLTFLoader();
+     loader.setDRACOLoader(dracoLoader);
+-    loader.parse(
+-      new Uint8Array(glb_data).buffer,
++    const parse = (buffer: ArrayBuffer) => loader.parse(
++      buffer,
+       "",
+       (gltf) => {
+         if (cancelled) {
+@@ -130,9 +130,37 @@
+       },
+     );
+ 
++    const request = new AbortController();
++    const prefix = "LocoLabGLB1:";
++    const reference = new TextDecoder().decode(glb_data.subarray(0, prefix.length));
++    if (reference === prefix) {
++      const path = new TextDecoder().decode(glb_data.subarray(prefix.length));
++      if (/^_locolab\/assets\/[a-f0-9]{16}\/[a-f0-9]{64}\.glb$/.test(path)) {
++        fetch(new URL(path, document.baseURI), {
++          cache: "force-cache",
++          signal: request.signal,
++        })
++          .then((response) => {
++            if (!response.ok) throw new Error(`GLB fetch failed (${response.status})`);
++            return response.arrayBuffer();
++          })
++          .then((buffer) => {
++            if (!cancelled) parse(buffer);
++          })
++          .catch((error: unknown) => {
++            if (!cancelled) console.error("LocoLab GLB asset", path, error);
++          });
++      } else {
++        console.error("Invalid LocoLab GLB asset reference", path);
++      }
++    } else {
++      parse(new Uint8Array(glb_data).buffer);
++    }
++
+     // Cleanup function.
+     return () => {
+       cancelled = true;
++      request.abort();
+       if (mixerRef.current) {
+         mixerRef.current.stopAllAction();
+         mixerRef.current = null;

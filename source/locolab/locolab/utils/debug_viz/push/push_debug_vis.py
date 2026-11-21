@@ -20,6 +20,7 @@ class PushDebugVis:
         self.cfg = cfg
         self.debug_vis = True
         self.params = None
+        self.body_id = None
         self.duration_steps = max(1, round(cfg.duration_s / env.step_dt))
         self.velocity_w = torch.zeros(env.num_envs, 3, device=self.robot.device)
         self.expires = torch.full((env.num_envs,), -1, device=self.robot.device, dtype=torch.long)
@@ -45,10 +46,17 @@ class PushDebugVis:
             if self.markers is not None:
                 self.markers.set_visibility(False)
 
-    def record(self, env_ids, velocity_w):
+    def record(self, env_ids, velocity_w, body_id=None):
+        self.body_id = body_id
         self.velocity_w[env_ids] = velocity_w[:, :3]
         self.expires[env_ids] = self.env.common_step_counter + self.duration_steps
         self.episode_start[env_ids] = self.env.common_step_counter - self.env.episode_length_buf[env_ids]
+
+    @property
+    def position_w(self):
+        if self.body_id is None:
+            return self.robot.data.root_link_pos_w.torch
+        return self.robot.data.body_com_pos_w.torch[:, self.body_id]
 
     def active(self, selector):
         step = self.env.common_step_counter
@@ -83,9 +91,8 @@ class PushDebugVis:
         scale = torch.ones_like(velocity)
         scale[:, 0] = velocity.norm(dim=-1)
         scale *= active[:, None]
-        position = self.robot.data.root_link_pos_w.torch
         self.markers.set_visibility(True)
-        self.markers.visualize(position, orientation, scale, opacities=opacity)
+        self.markers.visualize(self.position_w, orientation, scale, opacities=opacity)
 
 
 def get_push_debug_vis(env, asset_name, cfg: PushDebugVisCfg | None = None):

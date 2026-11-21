@@ -14,6 +14,7 @@ from __future__ import annotations
 import logging
 import threading
 import time
+from inspect import signature
 
 import numpy as np
 
@@ -49,6 +50,10 @@ def _quiet_probe_handshakes() -> None:
 
 # 50Hz by default.
 UPDATE_INTERVAL_S = 1.0 / 50.0
+REMOTE_UPDATE_INTERVAL_S = 1.0 / 20.0
+REMOTE_DEBUG_INTERVAL_S = 1.0 / 5.0
+REMOTE_MAX_SENSOR_POINTS = 1000
+DEPTH_UPDATE_INTERVAL_S = 1.0 / 20.0
 # Playback rates for the Simulation speed buttons. 1x matches wall-clock step time.
 SPEEDS = (1 / 8, 1 / 4, 1 / 2, 1.0, 2.0, 4.0, 8.0)
 
@@ -66,6 +71,8 @@ class ViserPlayViewer:
         host: Interface to bind. ``0.0.0.0`` prints ``http://localhost``, which the browser can open.
         port: TCP port. Forward it with ``ssh -L <port>:localhost:<port>``.
         robot_name: Scene entity name of the articulation.
+        low_bandwidth: Reduce browser update rates and sensor point density for remote play.
+        cache_assets: Send cacheable HTTP references for static GLBs.
     """
 
     paces = True
@@ -76,6 +83,9 @@ class ViserPlayViewer:
         host: str = "0.0.0.0",
         port: int = 8080,
         robot_name: str = "robot",
+        *,
+        low_bandwidth: bool = False,
+        cache_assets: bool = False,
     ) -> None:
         self._env = env
         unwrapped = env.unwrapped
@@ -94,6 +104,10 @@ class ViserPlayViewer:
         self._release_on_client = True
         self._reset_requested = threading.Event()
         self._last_update = 0.0
+        self._update_interval = REMOTE_UPDATE_INTERVAL_S if low_bandwidth else UPDATE_INTERVAL_S
+        self._debug_interval = REMOTE_DEBUG_INTERVAL_S if low_bandwidth else UPDATE_INTERVAL_S
+        self._last_debug_update = 0.0
+        self._depth_interval = REMOTE_DEBUG_INTERVAL_S if low_bandwidth else DEPTH_UPDATE_INTERVAL_S
         self._step_dt = float(getattr(unwrapped, "step_dt", 0.02) or 0.02)
         self._speed_index = SPEEDS.index(1.0)
         self._speed = SPEEDS[self._speed_index]
@@ -116,7 +130,9 @@ class ViserPlayViewer:
             for label, obj in self._debug_terms
         }
         self._sensor_debug = {
-            label: {"point_cloud": True, "origin": False, **({"frustum": False} if kind == "camera" else {})}
+            label: {
+                "point_cloud": not low_bandwidth, "origin": False, **({"frustum": False} if kind == "camera" else {})
+            }
             for label, obj in self._debug_terms if (kind := sensor_debug_kind(obj)) is not None
         }
         self._status_html = ""
@@ -126,10 +142,24 @@ class ViserPlayViewer:
         self._prepare_ground(scene)
 
         _quiet_probe_handshakes()
-        self._server = viser.ViserServer(host=host, port=port, label="LocoLab")
-        self._debug_scene = DebugScene(self._server)
+        self._asset_cache = None
+        server_options = {}
+        if cache_assets:
+            from .asset_cache import SceneAssetCache
+
+            if "http_asset_response" not in signature(viser.ViserServer).parameters:
+                raise RuntimeError("Run scripts/tools/patch_viser.py in the play environment to enable asset caching.")
+            self._asset_cache = SceneAssetCache()
+            server_options["http_asset_response"] = self._asset_cache.respond
+        self._server = viser.ViserServer(host=host, port=port, label="LocoLab", **server_options)
+        self._debug_scene = (
+            DebugScene(self._server, max_sensor_points=REMOTE_MAX_SENSOR_POINTS)
+            if low_bandwidth else DebugScene(self._server)
+        )
         try:
-            self._robot_view.create_scene(self._server)
+            self._robot_view.create_scene(self._server, asset_cache=self._asset_cache)
+            if low_bandwidth and self._num_envs > 1:
+                self._robot_view.scene.show_only_selected = True
             self._add_ground()
             self._build_gui()
 
@@ -189,7 +219,7 @@ class ViserPlayViewer:
         if self._release_on_client and self._server.get_clients():
             self._release_if_waiting()
         now = time.monotonic()
-        if now - self._last_update < UPDATE_INTERVAL_S:
+        if now - self._last_update < self._update_interval:
             return
         self._last_update = now
 
@@ -199,9 +229,11 @@ class ViserPlayViewer:
         selector = slice(None) if show_all else slice(env_idx, env_idx + 1)
         with self._server.atomic():
             self._robot_view.update(selector, env_idx)
-            self._debug_scene.set_ghost_hulls(self._robot_view.visual_hulls)
-            self._debug_scene.distance_lod = self._robot_view.distance_lod
-            draw_debug(self._debug_scene, self._debug_terms, self._debug_enabled, selector, self._sensor_debug)
+            if now - self._last_debug_update >= self._debug_interval:
+                self._last_debug_update = now
+                self._debug_scene.set_ghost_hulls(self._robot_view.visual_hulls)
+                self._debug_scene.distance_lod = self._robot_view.distance_lod
+                draw_debug(self._debug_scene, self._debug_terms, self._debug_enabled, selector, self._sensor_debug)
             if self._auto_orbit.value:
                 self._update_camera_orbit(now)
 
@@ -270,13 +302,15 @@ class ViserPlayViewer:
             return
         # mjlab fixed geometry receives a light shadow and does not cast one.
         # The mesh is replaced only when the Terrain panel changes, never from update().
-        self._terrain_handle = self._server.scene.add_mesh_trimesh(
-            "/fixed_bodies/terrain",
-            self._terrain_ready,
-            cast_shadow=False,
-            receive_shadow=0.2,
-        )
+        self._terrain_handle = self._upload_terrain_mesh(self._terrain_ready)
         self._terrain_ready = None
+
+    def _upload_terrain_mesh(self, mesh):
+        name = "/fixed_bodies/terrain"
+        if self._asset_cache is not None:
+            reference = self._asset_cache.mesh_reference(name, mesh)
+            return self._server.scene.add_glb(name, reference, cast_shadow=False, receive_shadow=0.2)
+        return self._server.scene.add_mesh_trimesh(name, mesh, cast_shadow=False, receive_shadow=0.2)
 
     def _build_gui(self) -> None:
         self._status = self._server.gui.add_html("")
@@ -401,8 +435,7 @@ class ViserPlayViewer:
                     self._depth_image.visible = bool(event.target.value)
 
     def _update_depth_image(self, observations, env_idx: int, now: float) -> None:
-        # Preview at most 20 Hz; transfer only one selected observation frame.
-        if now - self._last_depth_update < 0.05 or observations is None:
+        if now - self._last_depth_update < self._depth_interval or observations is None:
             return
         depth = observations.get("depth_image")
         if depth is None:
@@ -593,10 +626,5 @@ class ViserPlayViewer:
                 return
             if self._terrain_handle is not None:
                 self._terrain_handle.remove()
-            self._terrain_handle = self._server.scene.add_mesh_trimesh(
-                "/fixed_bodies/terrain",
-                displayed,
-                cast_shadow=False,
-                receive_shadow=0.2,
-            )
+            self._terrain_handle = self._upload_terrain_mesh(displayed)
             self._terrain_signature = signature

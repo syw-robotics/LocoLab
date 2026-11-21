@@ -88,6 +88,22 @@ def generated_commands(env, out, command_name):
 
 
 @wp.kernel(enable_backward=False)
+def _gait_phase(steps: wp.array(dtype=wp.int64), dt: float, period: float, out: wp.array2d(dtype=float)):
+    i = wp.tid()
+    phase = (float(steps[i]) * dt % period) / period * (2.0 * wp.pi)
+    out[i, 0] = wp.sin(phase)
+    out[i, 1] = wp.cos(phase)
+
+
+@generic_io_descriptor_warp(out_dim=2)
+def gait_phase(env, out, period):
+    wp.launch(
+        _gait_phase, dim=env.num_envs, inputs=[env._episode_length_buf_wp, env.step_dt, period, out],
+        device=env.device,
+    )
+
+
+@wp.kernel(enable_backward=False)
 def _height_scan(
     position: wp.array(dtype=wp.vec3), hits: wp.array2d(dtype=wp.vec3), offset: float, out: wp.array2d(dtype=float)
 ):

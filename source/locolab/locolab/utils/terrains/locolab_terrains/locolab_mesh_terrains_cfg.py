@@ -14,7 +14,7 @@ from .locolab_hf_terrains_cfg import PoleParamsCfg, RoughnessParamsCfg
 
 @configclass
 class MeshRoughTerrainCfg(RoughnessParamsCfg, PoleParamsCfg, SubTerrainBaseCfg):
-    """Mesh terrain with optional Perlin roughness and obstacle poles.
+    """Mesh terrain with optional surface roughness and obstacle poles.
 
     Roughness and poles use the same parameters as :class:`HfRoughTerrainCfg`.
     The generator fills :attr:`horizontal_scale` and :attr:`vertical_scale` from

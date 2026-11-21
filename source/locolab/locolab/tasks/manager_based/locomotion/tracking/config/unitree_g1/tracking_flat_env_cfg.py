@@ -92,7 +92,7 @@ class G1TrackingEnvCfg(ManagerBasedRLEnvCfg):
         self.sim.render_interval = self.decimation
         self.sim.physics_material = self.scene.terrain.physics_material
         # Same preset as G1 velocity flat, with higher contact budget for full-body self collision.
-        set_locomotion_physics(self.sim, rigid_patch_count=2**16, njmax=256, nconmax=32)
+        set_locomotion_physics(self.sim, mjwarp=dict(njmax=256, nconmax=32), physx=dict(rigid_patch_count=2**17))
         set_self_collisions(self.scene.robot.spawn, True)
         # Foot solref is authored in the USD; Newton's default shape gains do not override it.
         self.scene.robot.spawn.collision_props["/.*ankle_roll_link/collisions.*"][0].solref = (0.01, 1.0)

@@ -65,7 +65,7 @@ The installer uses Isaac Lab's lockfile and installs Z-RL, LocoLab and its Z-RL 
 
 | Module | Default install | Add-on |
 |--------|-----------------|--------|
-| Newton MJWarp physics + Newton GL viewer | Included by Isaac Lab | |
+| Newton MJWarp and Steel physics + Newton GL viewer | Included by Isaac Lab | |
 | OVPhysX physics + Viser viewer | Included via `ovphysx` / `viser` extras | |
 | OVRTX runtime / Newton RTX viewer | | `--extra ovrtx` |
 | Isaac Sim PhysX / Kit viewer | | `--extra isaacsim` |
@@ -221,8 +221,8 @@ Run `python scripts/z_rl/train.py --help` (or `play.py`) for every flag. The tab
 | `--task` | Registered Gym task id (required). |
 | `--num_envs` | Number of parallel environments. |
 | `--device` | Simulation device, e.g. `cuda:0` or `cpu` (default `cuda:0` on Linux). |
-| `--physics` | Physics preset: `newton_mjwarp` (env default), `physx`, `ovphysx`, `isaacsim_physx`. Aliases and Hydra overrides are described in [`physics.py`](source/locolab/locolab/utils/physics.py). |
-| `--mdp_backend torch\|warp` | Environment runtime; defaults to `torch`. Warp supports Go2 Flat/Rough velocity, B2/G1 Flat velocity, G1 Flat tracking and their Play configs with Newton MJWarp. |
+| `--physics` | Locomotion presets include `newton_mjwarp` (default), `newton_steel`, `physx`, `ovphysx`, and `isaacsim_physx`. See [`physics.py`](source/locolab/locolab/utils/physics.py). |
+| `--mdp_backend torch or warp` | Environment runtime (default `torch`). Warp supports Go2 Flat/Rough velocity, AS2/B2/G1 Flat velocity, G1 Flat tracking and their Play configs with Newton MJWarp. |
 | `--viz NAME` / `--visualizer NAME` | Isaac Lab visualizer preset(s). See [**`--viz` presets**](#viz--visualizer-presets) below. Comma-separated names run multiple viewers (e.g. `--viz kit,rerun`). Omit `--viz` for the task default (LocoLab velocity tasks: headless). `--video` still pulls in Kit recording via `viz:kit`. |
 | `--info` | Print startup logs to the terminal and skip hiding them behind the Loco Lab startup banner; also enables INFO-level SimulationApp logging. |
 | `--verbose` | Same banner behavior as `--info`, plus DEBUG-level SimulationApp logs. |

@@ -128,8 +128,9 @@ class G1RoughEnvCfg(ManagerBasedRLEnvCfg):
         self.sim.render_interval = self.decimation
         self.sim.physics_material = self.scene.terrain.physics_material
         set_locomotion_physics(
-            self.sim, rigid_patch_count=2**16,
-            num_substeps=1, cone="elliptic", impratio=5.0, njmax=100, nconmax=20
+            self.sim,
+            mjwarp=dict(num_substeps=1, cone="elliptic", impratio=5.0, njmax=100, nconmax=20),
+            physx=dict(rigid_patch_count=2**16),
         )
         # update sensor update periods
         # we tick all the sensors based on the smallest update period (physics update period)

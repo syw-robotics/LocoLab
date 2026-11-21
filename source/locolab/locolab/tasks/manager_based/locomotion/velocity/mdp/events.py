@@ -46,6 +46,23 @@ _UNKNOWN_TERRAIN_RESET_WARNINGS: set[tuple[str, ...]] = set()
 _RangeDict = dict[str, tuple[float, float]]
 
 
+def apply_assistive_force(
+    env: ManagerBasedEnv,
+    env_ids: torch.Tensor | slice,
+    asset_cfg: SceneEntityCfg,
+):
+    """Apply upward support for the episode after the scene resets its wrenches."""
+    if not hasattr(env, "assistive_force"):
+        return
+    asset: Articulation = env.scene[asset_cfg.name]
+    magnitude = env.assistive_force[env_ids]
+    forces = magnitude.new_zeros((magnitude.numel(), 1, 3))
+    forces[:, 0, 2] = magnitude
+    asset.permanent_wrench_composer.add_forces_and_torques_index(
+        forces=forces, body_ids=asset_cfg.body_ids, env_ids=env_ids, is_global=True
+    )
+
+
 def push_by_setting_velocity(
     env: ManagerBasedEnv,
     env_ids: torch.Tensor | slice | None,
@@ -71,6 +88,39 @@ def push_by_setting_velocity(
     )
     asset.write_root_velocity_to_sim_index(root_velocity=velocity + delta, env_ids=env_ids)
     get_push_debug_vis(env, asset_cfg.name, debug_vis_cfg).record(env_ids, delta)
+
+
+def push_body_by_velocity_impulse(
+    env: ManagerBasedEnv,
+    env_ids: torch.Tensor | slice | None,
+    velocity_range: _RangeDict,
+    asset_cfg: SceneEntityCfg,
+    debug_vis: bool = False,
+    debug_vis_cfg: PushDebugVisCfg | None = None,
+):
+    """Apply a one-step force at a single body's CoM, using velocity ranges in m/s."""
+    if isinstance(env_ids, torch.Tensor) and env_ids.numel() == 0:
+        return
+    asset: Articulation = env.scene[asset_cfg.name]
+    env_ids = slice(None) if env_ids is None else env_ids
+    body_ids = asset_cfg.body_ids
+    if isinstance(body_ids, slice) or len(body_ids) != 1:
+        raise ValueError("push_body_by_velocity_impulse requires exactly one body.")
+    total_mass = asset.data.body_mass.torch[env_ids].sum(dim=1, keepdim=True)
+    delta = math_utils.sample_uniform_from_ranges(
+        velocity_range, ("x", "y", "z"), total_mass.shape[:-1], device=asset.device
+    )
+    # The corresponding free-system CoM impulse is M * delta_v.
+    asset.instantaneous_wrench_composer.add_forces_and_torques_index(
+        forces=(delta * (total_mass / env.physics_dt))[:, None, :],
+        body_ids=body_ids,
+        env_ids=env_ids,
+        is_global=True,
+    )
+    if debug_vis:
+        from locolab.utils.debug_viz.push.push_debug_vis import get_push_debug_vis
+
+        get_push_debug_vis(env, asset_cfg.name, debug_vis_cfg).record(env_ids, delta, int(body_ids[0]))
 
 
 # ===== root reset by terrain =====

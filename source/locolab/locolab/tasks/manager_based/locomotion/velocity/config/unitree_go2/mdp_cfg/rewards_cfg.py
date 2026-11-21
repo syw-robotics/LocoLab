@@ -13,6 +13,7 @@ from isaaclab.managers import SceneEntityCfg
 from isaaclab.utils import configclass
 
 import locolab.tasks.manager_based.locomotion.velocity.mdp as mdp
+from locolab.tasks.manager_based.locomotion.velocity.mdp.rewards import feet_air_time_variance
 
 from . import (
     FOOT_LINK_NAMES,
@@ -139,6 +140,7 @@ class RoughRewardsCfg:
         params={
             "sensor_cfg": SceneEntityCfg("height_scanner"),
             "target_height": 0.30,
+            "center_scan_size": (0.3, 0.3),
         },
     )
     flat_orientation_l2 = RewTerm(func=mdp.flat_orientation_l2, weight=-0.2)
@@ -177,10 +179,17 @@ class RoughRewardsCfg:
     # -- feet --
     feet_air_time = RewTerm(
         func=mdp.feet_air_time,
-        weight=0.1,
+        weight=0.5,
         params={
             "command_name": "base_velocity",
             "threshold": 0.5,
+            "sensor_cfg": SceneEntityCfg("contact_forces", body_names=FOOT_LINK_NAMES),
+        },
+    )
+    feet_air_time_variance = RewTerm(
+        func=mdp.feet_air_time_variance,
+        weight=-0.1,
+        params={
             "sensor_cfg": SceneEntityCfg("contact_forces", body_names=FOOT_LINK_NAMES),
         },
     )

@@ -48,6 +48,45 @@ def _sample_fractal_perlin_noise(
     return np.clip(noise / (0.5 * amplitude_sum), -1.0, 1.0)
 
 
+def _add_pits_and_bumps(height_field: np.ndarray, cfg: Any, strength: float, height_step: int) -> None:
+    """Add local metric offsets to a Perlin surface expressed in vertical grid units."""
+    density = getattr(cfg, "pit_bump_density", 0.0)
+    if density == 0.0:
+        return
+    if density < 0.0:
+        raise ValueError(f"pit_bump_density must be non-negative. Got: {density}.")
+    radius_min, radius_max = _validate_positive_range("pit_bump_radius_range", cfg.pit_bump_radius_range)
+    offset_min, offset_max = cfg.pit_bump_noise_range
+    if not offset_min <= offset_max:
+        raise ValueError(f"pit_bump_noise_range must be ordered. Got: {cfg.pit_bump_noise_range}.")
+    if offset_min == offset_max == 0.0:
+        return
+
+    rows, cols = height_field.shape
+    area = (rows - 1) * (cols - 1) * cfg.horizontal_scale**2
+    count = np.random.poisson(density * area)
+    if count == 0:
+        return
+    centers = np.random.uniform((0, 0), (rows - 1, cols - 1), size=(count, 2))
+    radii = np.random.uniform(radius_min, radius_max, size=count) / cfg.horizontal_scale
+    peaks = np.random.uniform(offset_min, offset_max, size=count)
+
+    offsets = np.zeros_like(height_field)
+    for (x, y), radius, peak in zip(centers, radii, peaks):
+        x0 = max(0, int(np.ceil(x - radius)))
+        x1 = min(rows, int(np.floor(x + radius)) + 1)
+        y0 = max(0, int(np.ceil(y - radius)))
+        y1 = min(cols, int(np.floor(y + radius)) + 1)
+        ix, iy = np.ogrid[x0:x1, y0:y1]
+        distance_sq = ((ix - x) ** 2 + (iy - y) ** 2) / radius**2
+        weight = np.maximum(1.0 - distance_sq, 0.0) ** 2
+        offsets[x0:x1, y0:y1] += weight * peak
+
+    # Limit overlaps relative to the local surface, then snap the displacement to the height step.
+    np.clip(offsets, min(0.0, offset_min), max(0.0, offset_max), out=offsets)
+    height_field += np.rint(offsets * strength / (cfg.vertical_scale * height_step)) * height_step
+
+
 def _roughness_grid_shape(cfg: Any) -> tuple[int, int]:
     return int(cfg.size[0] / cfg.horizontal_scale), int(cfg.size[1] / cfg.horizontal_scale)
 
@@ -94,7 +133,7 @@ def should_apply_roughness(cfg: Any) -> bool:
 def generate_roughness_height_field(
     cfg: Any, difficulty: float = 0.0, shape: tuple[int, int] | None = None
 ) -> np.ndarray:
-    """Sample the shared Perlin roughness as an integer height field.
+    """Sample Perlin roughness with optional local pits and bumps as an integer height field.
 
     Values are in ``vertical_scale`` units so height-field terrains can add them
     directly. Mesh terrains convert back to meters with ``* cfg.vertical_scale``.
@@ -126,7 +165,10 @@ def generate_roughness_height_field(
     scaled_max = int(np.rint(max(height_min * strength, height_max * strength) / height_step)) * height_step
     if scaled_min > scaled_max:
         return np.zeros((width_pixels, length_pixels), dtype=np.int16)
-    return np.clip(noise, scaled_min, scaled_max).astype(np.int16)
+    noise = np.clip(noise, scaled_min, scaled_max)
+    if getattr(cfg, "enable_pits_and_bumps", False):
+        _add_pits_and_bumps(noise, cfg, strength, height_step)
+    return noise.astype(np.int16)
 
 
 def sample_height_field(
@@ -155,7 +197,7 @@ def sample_height_field(
 def apply_perlin_noise(
     cfg: Any, hf_raw: np.ndarray, difficulty: float = 0.0, mask: np.ndarray | None = None
 ) -> np.ndarray:
-    """Add shared Perlin roughness onto a height-field array.
+    """Add the shared roughness field onto a height-field array.
 
     If ``mask`` is given, only those cells are updated. The noise field is still
     sampled on the full grid so neighboring walkable patches stay spatially coherent.

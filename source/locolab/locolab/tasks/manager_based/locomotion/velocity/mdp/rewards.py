@@ -14,6 +14,7 @@ import torch
 
 from isaaclab.managers import ManagerTermBase, RewardTermCfg, SceneEntityCfg
 from isaaclab.utils.math import quat_apply_inverse, yaw_quat
+from isaaclab.utils.string import resolve_matching_names_values
 
 if TYPE_CHECKING:
     from isaaclab.assets import Articulation, RigidObject
@@ -107,45 +108,73 @@ def flat_orientation_l2(
     env: ManagerBasedRLEnv,
     asset_cfg: SceneEntityCfg = SceneEntityCfg("robot"),
     select_bodies: bool = False,
+    sensor_cfg: SceneEntityCfg | None = None,
 ) -> torch.Tensor:
-    """Penalize non-flat base orientation using L2 squared kernel by penalizing projected gravity xy-components."""
+    """Penalize projected gravity xy-components, optionally only for contacting selected bodies.
+
+    The asset and sensor must select the same bodies in the same order when masking contacts.
+    """
     asset: RigidObject = env.scene[asset_cfg.name]
     if select_bodies:
         body_quat_w = asset.data.body_quat_w.torch[:, asset_cfg.body_ids]
         gravity_w = torch.nn.functional.normalize(asset.data.GRAVITY_VEC_W.torch, dim=-1)
         gravity_w = gravity_w[:, None, :].expand(*body_quat_w.shape[:-1], -1)
         projected_gravity_b = quat_apply_inverse(body_quat_w, gravity_w)
-        return torch.sum(torch.square(projected_gravity_b[..., :2]), dim=(1, 2))
+        tilt = projected_gravity_b[..., :2].square()
+        if sensor_cfg is not None:
+            sensor: ContactSensor = env.scene.sensors[sensor_cfg.name]
+            is_contact = sensor.data.current_contact_time.torch[:, sensor_cfg.body_ids] > 0.0
+            tilt *= is_contact.unsqueeze(-1)
+        return tilt.sum(dim=(1, 2))
     else:
         return torch.sum(torch.square(asset.data.projected_gravity_b.torch[:, :2]), dim=1)
 
 
-def base_height_l2(
-    env: ManagerBasedRLEnv,
-    target_height: float,
-    asset_cfg: SceneEntityCfg = SceneEntityCfg("robot"),
-    sensor_cfg: SceneEntityCfg | None = None,
-) -> torch.Tensor:
-    """Penalize asset height from its target using L2 squared kernel.
+class base_height_l2(ManagerTermBase):
+    """Penalize squared base height error.
 
-    Note:
-        For flat terrain, target height is in the world frame. For rough terrain,
-        sensor readings can adjust the target height to account for the terrain.
+    With a height scanner, the target is relative to the mean hit height.
+    Set ``center_scan_size`` to (length, width) in meters to average only rays
+    in a rectangle centered on the scan pattern. By default, use all rays.
+    Without a height scanner, the target is in the world frame.
     """
-    # extract the used quantities (to enable type-hinting)
-    asset: Articulation = env.scene[asset_cfg.name]
-    if sensor_cfg is not None:
-        sensor: RayCaster = env.scene[sensor_cfg.name]
-        # Clamp Inf value into a reasonable range
-        ray_hits_z = sensor.data.ray_hits_w.torch[..., 2].clamp(-10.0, 10.0)
-        adjusted_target_height = target_height + ray_hits_z.mean(dim=-1)
-    else:
-        # Use the provided target height directly for flat terrain
+
+    def __init__(self, cfg: RewardTermCfg, env: ManagerBasedRLEnv):
+        super().__init__(cfg, env)
+        asset_cfg = cfg.params["asset_cfg"]
+        sensor_cfg = cfg.params["sensor_cfg"]
+        self._asset: Articulation = env.scene[asset_cfg.name]
+        self._sensor: RayCaster | None = env.scene[sensor_cfg.name] if sensor_cfg is not None else None
+        self._ray_indices = None
+        if (size := cfg.params["center_scan_size"]) is not None:
+            self._ray_indices = self._center_height_scan_indices(self._sensor, size).to(env.device)
+
+    def __call__(
+        self,
+        env: ManagerBasedRLEnv,
+        target_height: float,
+        asset_cfg: SceneEntityCfg = SceneEntityCfg("robot"),
+        sensor_cfg: SceneEntityCfg | None = None,
+        center_scan_size: tuple[float, float] | None = None,
+    ) -> torch.Tensor:
         adjusted_target_height = target_height
-    # Compute the L2 squared penalty
-    reward = torch.square(asset.data.root_pos_w.torch[:, 2] - adjusted_target_height)
-    #  reward *= torch.clamp(-env.scene["robot"].data.projected_gravity_b.torch[:, 2], 0, 1.0)  # don't penalize when upside down
-    return reward
+        if self._sensor is not None:
+            ray_hits_z = self._sensor.data.ray_hits_w.torch[..., 2]
+            if self._ray_indices is not None:
+                ray_hits_z = ray_hits_z.index_select(1, self._ray_indices)
+            adjusted_target_height = target_height + ray_hits_z.clamp(-10.0, 10.0).mean(dim=-1)
+        return torch.square(self._asset.data.root_pos_w.torch[:, 2] - adjusted_target_height)
+
+    @staticmethod
+    def _center_height_scan_indices(sensor: RayCaster | None, size: tuple[float, float]) -> torch.Tensor:
+        length, width = size
+        pattern = sensor.cfg.pattern_cfg
+        ray_starts, _ = pattern.func(pattern, "cpu")
+        half_size = ray_starts.new_tensor((length / 2, width / 2))
+        # Include boundary rays despite rounding in the generated grid coordinates.
+        inside = (ray_starts[:, :2].abs() <= half_size + 1.0e-6).all(dim=1)
+        indices = inside.nonzero(as_tuple=True)[0]
+        return indices
 
 
 # -------------------- Joint Regularization Rewards -------------------- #
@@ -202,6 +231,44 @@ def joint_deviation_l2(env: ManagerBasedRLEnv, asset_cfg: SceneEntityCfg = Scene
     asset: Articulation = env.scene[asset_cfg.name]
     angle = asset.data.joint_pos.torch[:, asset_cfg.joint_ids] - asset.data.default_joint_pos.torch[:, asset_cfg.joint_ids]
     return torch.sum(torch.square(angle), dim=1)
+
+
+def _posture_inverse_variances(
+    joint_names: list[str], std_standing: float, std_moving: dict[str, tuple[float, float]]
+) -> list[tuple[float, float, float]]:
+    _, _, moving = resolve_matching_names_values(std_moving, joint_names)
+    if len(moving) != len(joint_names):
+        raise ValueError("Posture tolerances must cover every joint in the articulation.")
+    standing = 1.0 / std_standing**2
+    return [(standing, 1.0 / walking**2, 1.0 / running**2) for walking, running in moving]
+
+
+class variable_posture(ManagerTermBase):
+    """Reward the default joint pose with separate stand, walk and run tolerances."""
+
+    def __init__(self, cfg: RewardTermCfg, env: ManagerBasedRLEnv):
+        super().__init__(cfg, env)
+        params = cfg.params
+        asset = env.scene[params["asset_cfg"].name]
+        values = _posture_inverse_variances(asset.joint_names, params["std_standing"], params["std_moving"])
+        self._inverse_variance = torch.tensor(values, device=env.device).T.contiguous()
+
+    def __call__(
+        self,
+        env: ManagerBasedRLEnv,
+        asset_cfg: SceneEntityCfg,
+        command_name: str,
+        std_standing: float,
+        std_moving: dict[str, tuple[float, float]],
+        walking_threshold: float,
+        running_threshold: float,
+    ) -> torch.Tensor:
+        asset = env.scene[asset_cfg.name]
+        command = env.command_manager.get_command(command_name)
+        speed = torch.linalg.norm(command[:, :2], dim=1) + command[:, 2].abs()
+        regime = (speed >= walking_threshold).long() + (speed >= running_threshold).long()
+        error = asset.data.joint_pos.torch - asset.data.default_joint_pos.torch
+        return torch.exp(-(error.square() * self._inverse_variance[regime]).mean(dim=1))
 
 
 def joint_paired_direction_coordination(
