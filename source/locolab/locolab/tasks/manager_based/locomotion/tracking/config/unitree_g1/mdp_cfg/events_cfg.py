@@ -20,7 +20,8 @@ class EventCfg:
     """Configuration for events."""
 
     # ===== startup =====
-    physics_material = EventTerm(
+    # 1.
+    physics_feet_material = EventTerm(
         func=mdp.randomize_rigid_body_material,
         mode="startup",
         params={
@@ -32,6 +33,7 @@ class EventCfg:
             "make_consistent": True,
         },
     )
+    # 2.
     randomize_joint_encoder_bias = EventTerm(
         func=mdp.randomize_encoder_bias,
         mode="startup",
@@ -40,6 +42,7 @@ class EventCfg:
             "bias_range": (-0.01, 0.01),
         },
     )
+    # 3.
     randomize_base_com = EventTerm(
         func=mdp.randomize_rigid_body_com,
         mode="startup",

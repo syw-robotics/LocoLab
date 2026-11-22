@@ -15,6 +15,7 @@ from isaaclab.utils import configclass
 import locolab.tasks.manager_based.locomotion.velocity.mdp as mdp
 
 from . import (
+    JOINT_NAMES,
     ARM_JOINT_NAMES,
     FOOT_LINK_NAMES,
     GAIT_PERIOD,
@@ -24,7 +25,6 @@ from . import (
     WAIST_JOINT_NAMES,
 )
 
-_FOOT_BODY_NAMES = ["left_ankle_roll_link", "right_ankle_roll_link"]
 
 
 @configclass
@@ -70,7 +70,12 @@ class FlatRewardsCfg:
 
     # -- joint --
     joint_acc_l2 = RewTerm(func=mdp.joint_acc_l2, weight=-2.5e-7)
-    joint_vel_l2 = RewTerm(func=mdp.joint_vel_l2, weight=-1.0e-3)
+    #  joint_vel_l2 = RewTerm(func=mdp.joint_vel_l2, weight=-1.0e-3)
+    joint_torques_l2 = RewTerm(
+        func=mdp.joint_torques_l2,
+        weight=-1.0e-4,
+        params={"asset_cfg": SceneEntityCfg("robot", joint_names=JOINT_NAMES)},
+    )
     joint_power_l1 = RewTerm(func=mdp.joint_power_l1, weight=-2.5e-5)
     joint_pos_limits = RewTerm(func=mdp.joint_pos_limits, weight=-5.0)
     joint_deviation_arms = RewTerm(
@@ -97,15 +102,6 @@ class FlatRewardsCfg:
     action_rate = RewTerm(func=mdp.action_rate_l2, weight=-0.05)
     #  action_smoothness_l2 = RewTerm(func=mdp.action_smoothness_l2, weight=-0.01)
     # -- feet --
-#feet_flat_orientation_l2 = RewTerm(
-#        func=mdp.flat_orientation_l2,
-#        weight=-0.25,
-#        params={
-#            "select_bodies": True,
-#            "asset_cfg": SceneEntityCfg("robot", body_names=_FOOT_BODY_NAMES, preserve_order=True),
-#            "sensor_cfg": SceneEntityCfg("feet_contact_forces", body_names=_FOOT_BODY_NAMES, preserve_order=True),
-#        },
-#    )
     #  feet_standing_contact = RewTerm(
     #      func=mdp.feet_standing_contact,
     #      weight=-0.5,
@@ -166,14 +162,14 @@ class FlatRewardsCfg:
             "asset_cfg": SceneEntityCfg("robot", body_names=FOOT_LINK_NAMES),
         },
     )
-    feet_too_near = RewTerm(
-        func=mdp.feet_too_near_bipedal,
-        weight=-1.0,
-        params={
-            "threshold": 0.15,
-            "asset_cfg": SceneEntityCfg("robot", body_names=FOOT_LINK_NAMES),
-        },
-    )
+    #  feet_too_near = RewTerm(
+    #      func=mdp.feet_too_near_bipedal,
+    #      weight=-1.0,
+    #      params={
+    #          "threshold": 0.15,
+    #          "asset_cfg": SceneEntityCfg("robot", body_names=FOOT_LINK_NAMES),
+    #      },
+    #  )
 
     # -- collision --
     undesired_contacts = RewTerm(

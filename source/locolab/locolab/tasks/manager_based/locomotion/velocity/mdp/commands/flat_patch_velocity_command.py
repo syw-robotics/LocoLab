@@ -31,9 +31,6 @@ class FlatPatchVelocityCommand(CommandTerm):
             raise ValueError("Velocity and heading control stiffness must be positive.")
         if cfg.target_distance_threshold < 0.0:
             raise ValueError("target_distance_threshold must be non-negative.")
-        if not isinstance(cfg.metrics_update_interval, int) or cfg.metrics_update_interval < 1:
-            raise ValueError("metrics_update_interval must be a positive integer.")
-
         terrain = env.scene.terrain
         if cfg.flat_patch_key not in terrain.flat_patches:
             raise ValueError(f"Terrain has no flat patches named '{cfg.flat_patch_key}'.")
@@ -47,14 +44,8 @@ class FlatPatchVelocityCommand(CommandTerm):
         self._terrain = terrain
         self.target_pos_w = torch.zeros(self.num_envs, 3, device=self.device)
         self.vel_command_b = torch.zeros(self.num_envs, 3, device=self.device)
-        self.is_standing_env = torch.zeros(self.num_envs, dtype=torch.bool, device=self.device)
-
-        self.metrics["error_vel_xy"] = torch.zeros(self.num_envs, device=self.device)
-        self.metrics["error_vel_yaw"] = torch.zeros(self.num_envs, device=self.device)
-        self._metrics_update_counter = 0
-        self._metrics_update_scale = (
-            self.cfg.metrics_update_interval * self._env.step_dt / self.cfg.resampling_time_range[1]
-        )
+        self._sampled_standing = torch.zeros(self.num_envs, dtype=torch.bool, device=self.device)
+        self.is_standing_env = torch.ones_like(self._sampled_standing)
 
     @property
     def command(self) -> torch.Tensor:
@@ -68,7 +59,7 @@ class FlatPatchVelocityCommand(CommandTerm):
             self._terrain.terrain_levels[env_ids], self._terrain.terrain_types[env_ids], patch_ids
         ]
         if self.cfg.rel_standing_envs > 0.0:
-            self.is_standing_env[env_ids] = torch.rand(num_envs, device=self.device) < self.cfg.rel_standing_envs
+            self._sampled_standing[env_ids] = torch.rand(num_envs, device=self.device) < self.cfg.rel_standing_envs
 
     def _update_command(self):
         target_delta = self.target_pos_w[:, :2] - self.robot.data.root_pos_w.torch[:, :2]
@@ -77,24 +68,28 @@ class FlatPatchVelocityCommand(CommandTerm):
             torch.atan2(target_delta[:, 1], target_delta[:, 0]) - self.robot.data.heading_w.torch
         )
         speed = (distance * self.cfg.velocity_control_stiffness).clamp(max=self.cfg.max_linear_velocity)
-        active = (distance > self.cfg.target_distance_threshold) & ~self.is_standing_env
+        active = (distance > self.cfg.target_distance_threshold) & ~self._sampled_standing
         speed *= active
         self.vel_command_b[:, 0] = speed * torch.cos(heading_error)
         self.vel_command_b[:, 1] = speed * torch.sin(heading_error)
         self.vel_command_b[:, 2] = (
             heading_error * self.cfg.heading_control_stiffness
         ).clamp(-self.cfg.max_angular_velocity, self.cfg.max_angular_velocity) * active
+        torch.logical_not(active, out=self.is_standing_env)
 
     def _update_metrics(self):
-        self._metrics_update_counter = (self._metrics_update_counter + 1) % self.cfg.metrics_update_interval
-        if self._metrics_update_counter != 0:
-            return
+        """Update the metrics for the task related metrics."""
+        pass
 
-        self.metrics["error_vel_xy"].add_(
-            torch.norm(self.vel_command_b[:, :2] - self.robot.data.root_lin_vel_b.torch[:, :2], dim=-1),
-            alpha=self._metrics_update_scale,
-        )
-        self.metrics["error_vel_yaw"].add_(
-            torch.abs(self.vel_command_b[:, 2] - self.robot.data.root_ang_vel_b.torch[:, 2]),
-            alpha=self._metrics_update_scale,
-        )
+    def compute_command_metrics(self):
+        """Return a compute function for the instantaneous velocity errors."""
+
+        def compute() -> dict[str, torch.Tensor]:
+            command = self.vel_command_b
+            data = self.robot.data
+            return {
+                "error_vel_xy": torch.norm(command[:, :2] - data.root_lin_vel_b.torch[:, :2], dim=-1).mean(),
+                "error_vel_yaw": torch.abs(command[:, 2] - data.root_ang_vel_b.torch[:, 2]).mean(),
+            }
+
+        return compute

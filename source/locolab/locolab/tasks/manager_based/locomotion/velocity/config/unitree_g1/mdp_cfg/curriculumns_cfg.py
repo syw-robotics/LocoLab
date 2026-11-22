@@ -20,10 +20,7 @@ class FlatCurriculumsCfg:
         mdp.assistive_force_levels,
         params={
             "starting_force": 300.0,
-            "success_threshold": 0.75,
-            "starting_threshold": 0.20,
-            "end_threshold": 0.70,
-            "force_cutoff": 50.0,
+            "decay_steps": 12_000,
         },
     )
     lin_vel_cmd_levels = CurrTerm(

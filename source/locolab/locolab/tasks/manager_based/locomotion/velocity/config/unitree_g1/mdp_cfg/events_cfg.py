@@ -79,7 +79,7 @@ class EventCfg:
         func=mdp.reset_root_state_uniform,
         mode="reset",
         params={
-            "pose_range": {"x": (-0.5, 0.5), "y": (-0.5, 0.5), "z": (0.01, 0.04), "yaw": (-3.14, 3.14)},
+            "pose_range": {"x": (-0.5, 0.5), "y": (-0.5, 0.5), "z": (0.00, 0.01), "yaw": (-3.14, 3.14)},
             "velocity_range": {
                 "x": (0.0, 0.0),
                 "y": (0.0, 0.0),
@@ -94,7 +94,7 @@ class EventCfg:
         func=mdp.reset_joints_by_offset,
         mode="reset",
         params={
-            "position_range": (-0.25, 0.25),
+            "position_range": (-0.10, 0.10),
             "velocity_range": (0.0, 0.0),
         },
     )
@@ -125,7 +125,9 @@ class EventCfg:
 class FlatEventCfg(EventCfg):
     assistive_force = EventTerm(
         func=mdp.apply_assistive_force,
-        mode="reset",
+        mode="interval",
+        interval_range_s=(0.0, 0.0),
+        is_global_time=True,
         params={"asset_cfg": SceneEntityCfg("robot", body_names=TORSO_LINK_NAME)},
     )
 

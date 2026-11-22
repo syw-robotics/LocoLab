@@ -336,59 +336,30 @@ def joint_pos_limits(env: ManagerBasedRLEnv, asset_cfg: SceneEntityCfg = SceneEn
 
 # -------------------- Gait Rewards -------------------- #
 
-def _command_is_moving(
-    env: ManagerBasedRLEnv,
-    command_name: str,
-    threshold: float = 0.1,
-) -> torch.Tensor:
-    """ This is not a valid reward term !!! But a utility function to check if the command is moving. """
-    command = env.command_manager.get_command(command_name)
-    lin_vel_is_moving = torch.sum(command[:, :2].square(), dim=1) > threshold**2
-    ang_vel_is_moving = command[:, 2].abs() > threshold
-    return lin_vel_is_moving | ang_vel_is_moving
-
-
 def stand_still(
     env: ManagerBasedRLEnv,
     command_name: str,
     asset_cfg: SceneEntityCfg = SceneEntityCfg("robot"),
 ) -> torch.Tensor:
-    """Penalize joint position error from default on the articulation."""
+    """Penalize joint position error from default when standing is selected."""
     asset: Articulation = env.scene[asset_cfg.name]
     joint_deviation = torch.linalg.norm(
         asset.data.joint_pos.torch[:, asset_cfg.joint_ids] - asset.data.default_joint_pos.torch[:, asset_cfg.joint_ids],
         dim=1,
     )
-    return torch.where(_command_is_moving(env, command_name), 0.0, joint_deviation)
-
-
-def stand_still_contacts(
-    env: ManagerBasedRLEnv,
-    asset_cfg: SceneEntityCfg = SceneEntityCfg("robot"),
-    sensor_cfg: SceneEntityCfg = SceneEntityCfg("contact_forces"),
-) -> torch.Tensor:
-    """Penalize if none of the desired contacts are present."""
-    # extract the used quantities (to enable type-hinting)
-    asset: Articulation = env.scene[asset_cfg.name]
-    contact_sensor: ContactSensor = env.scene.sensors[sensor_cfg.name]
-    command_vel = torch.linalg.norm(env.command_manager.get_command("base_velocity"), dim=1)
-    body_vel = torch.linalg.norm(asset.data.root_lin_vel_b.torch[:, :2], dim=1)
-    forces_z = torch.abs(contact_sensor.data.net_forces_w.torch[:, sensor_cfg.body_ids, 2])
-    num_contacts = torch.sum(forces_z > 5.0, dim=1)
-    not_all_contacts = num_contacts != 4
-    is_stand_still = torch.logical_or(command_vel < 0.1, body_vel < 0.1)
-    return 1.0 * not_all_contacts * is_stand_still
+    standing = env.command_manager.get_term(command_name).is_standing_env
+    return torch.where(standing, joint_deviation, 0.0)
 
 
 def feet_air_time(
     env: ManagerBasedRLEnv, command_name: str, sensor_cfg: SceneEntityCfg, threshold: float
 ) -> torch.Tensor:
-    """Reward long steps taken by the feet using L2-kernel while respecting command magnitude."""
+    """Reward long steps taken by the feet outside the standing mode."""
     contact_sensor: ContactSensor = env.scene.sensors[sensor_cfg.name]
     first_contact = contact_sensor.compute_first_contact(env.step_dt)[:, sensor_cfg.body_ids]
     last_air_time = contact_sensor.data.last_air_time.torch[:, sensor_cfg.body_ids]
     reward = torch.sum((last_air_time - threshold) * first_contact, dim=1)
-    reward *= _command_is_moving(env, command_name)
+    reward *= ~env.command_manager.get_term(command_name).is_standing_env
     #  reward *= torch.clamp(-env.scene["robot"].data.projected_gravity_b.torch[:, 2], 0, 1.0)  # don't penalize when upside down
     return reward
 
@@ -467,10 +438,10 @@ def feet_flight(env: ManagerBasedRLEnv, sensor_cfg: SceneEntityCfg) -> torch.Ten
 def feet_standing_contact(
     env: ManagerBasedRLEnv, command_name: str, sensor_cfg: SceneEntityCfg
 ) -> torch.Tensor:
-    """Penalize each airborne foot only when the command is not moving."""
+    """Penalize each airborne foot in the standing mode."""
     sensor: ContactSensor = env.scene.sensors[sensor_cfg.name]
     airborne = sensor.data.current_contact_time.torch[:, sensor_cfg.body_ids] <= 0.0
-    return airborne.sum(dim=1) * ~_command_is_moving(env, command_name)
+    return airborne.sum(dim=1) * env.command_manager.get_term(command_name).is_standing_env
 
 
 def feet_short_swing(
@@ -482,10 +453,11 @@ def feet_short_swing(
     has_previous_stance = sensor.data.last_contact_time.torch[:, sensor_cfg.body_ids] > 0.0
     air_time = sensor.data.last_air_time.torch[:, sensor_cfg.body_ids]
     shortfall = (1.0 - air_time / min_air_time).clamp_min(0.0)
-    command = env.command_manager.get_command(command_name)
+    term = env.command_manager.get_term(command_name)
+    command = term.command
     # Small commands offer less tracking reward to offset the cost of initiating a step.
     scale = (command[:, :2].norm(dim=1) / 0.5 + command[:, 2].abs() / 1.5).clamp(max=1.0)
-    return (shortfall * first_contact * has_previous_stance).sum(dim=1) * scale * _command_is_moving(env, command_name)
+    return (shortfall * first_contact * has_previous_stance).sum(dim=1) * scale * ~term.is_standing_env
 
 
 def feet_short_single_support(
@@ -507,7 +479,8 @@ def feet_short_single_support(
     shortfall = (target_time - support).clamp_min(0.0)
     # Learn to balance before applying the full landing-time constraint.
     scale = min(max((env.common_step_counter - warmup_steps) / ramp_steps, 0.0), 1.0)
-    return (shortfall * first_contact * has_previous_stance).sum(dim=1) * _command_is_moving(env, command_name) * scale
+    standing = env.command_manager.get_term(command_name).is_standing_env
+    return (shortfall * first_contact * has_previous_stance).sum(dim=1) * ~standing * scale
 
 
 def feet_single_support(
@@ -527,7 +500,8 @@ def feet_single_support(
     bounded_swing = air_time.amax(dim=1) < threshold
     duration = torch.where(contact > 0.0, contact, air_time).amin(dim=1)
     duration_reward = 1.0 + (duration / target_air_time).clamp(max=1.0)
-    return duration_reward * (single_support & bounded_swing & _command_is_moving(env, command_name))
+    standing = env.command_manager.get_term(command_name).is_standing_env
+    return duration_reward * (single_support & bounded_swing & ~standing)
 
 
 def feet_swing_height_l2(
@@ -548,7 +522,7 @@ def feet_swing_height_l2(
     height = asset.data.body_pos_w.torch[:, asset_cfg.body_ids, 2]
     speed = asset.data.body_lin_vel_w.torch[:, asset_cfg.body_ids, :2].norm(dim=-1)
     error = torch.square(height - target_height) * speed * swing
-    return error.sum(dim=1) * _command_is_moving(env, command_name)
+    return error.sum(dim=1) * ~env.command_manager.get_term(command_name).is_standing_env
 
 
 def feet_clearance_flat(
@@ -657,7 +631,7 @@ class feet_gait(ManagerTermBase):
         reward = torch.sum(is_stance == is_contact, dim=1, dtype=torch.float)
 
         if command_name is not None:
-            reward *= _command_is_moving(env, command_name)
+            reward *= ~env.command_manager.get_term(command_name).is_standing_env
         return reward
 
 

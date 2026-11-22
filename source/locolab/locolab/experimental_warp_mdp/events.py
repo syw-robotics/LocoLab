@@ -11,20 +11,16 @@ from isaaclab_experimental.managers import ManagerTermBase, SceneEntityCfg
 from isaaclab_experimental.utils.warp import WarpCapturable
 
 from locolab.tasks.manager_based.locomotion.velocity.mdp.events import (
+    apply_assistive_force as _AssistiveForce,
     push_body_by_velocity_impulse as _push_body_by_velocity_impulse,
 )
 
 
-def apply_assistive_force(env, env_mask, asset_cfg):
-    """Apply torso support with the reset mask directly on the device."""
-    if not hasattr(env, "assistive_force"):
-        return
-    asset = env.scene[asset_cfg.name]
-    if not hasattr(env, "_assistive_force_wrenches"):
-        env._assistive_force_wrenches = env.assistive_force.new_zeros((env.num_envs, asset.num_bodies, 3))
-    forces = env._assistive_force_wrenches
-    forces[:, asset_cfg.body_ids[0], 2] = env.assistive_force
-    asset.permanent_wrench_composer.add_forces_and_torques_mask(forces=forces, env_mask=env_mask, is_global=True)
+class apply_assistive_force(_AssistiveForce, ManagerTermBase):
+    _warp_capturable = False
+
+    def reset(self, env_mask=None):
+        super().reset()
 
 
 @WarpCapturable(False, reason="Body impulses use indexed instantaneous wrenches")

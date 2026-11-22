@@ -27,6 +27,7 @@ set `mjcf_path` to a matching XML/MJCF file.
 | Controls → Navigation | WASDQE movement speed |
 | Controls → debug_viz | Master switches for sensors, commands, push arrows and motion ghosts |
 | Controls → Depth observation | Preview the selected environment's `depth_image` observation |
+| Controls → Replay | Record, scrub and export a clip |
 | Visualization → Robot | Visual/collision meshes, convex hulls and distance LOD |
 | Visualization → Terrain | Height coloring or solid color |
 | Visualization → Sensors | Per-sensor display options |
@@ -38,6 +39,38 @@ environments. Visualization settings do not change physics or RL observations.
 
 Restart the play process after editing Python visualization configs; refreshing
 the browser does not reload them.
+
+## Replay
+
+Expand **Controls → Replay** (collapsed by default), click **Start recording**, run the simulation, then click
+**Stop recording**. The status shows elapsed simulation seconds even with Replay collapsed.
+Drag **Frame** to inspect a pose or click **Play recording** to play at simulation speed.
+By default each frame stores only the robot link poses for all environments.
+Before starting a clip, enable **Record command debug** for visible command arrows,
+goals and motion ghosts, or **Record other debug** for visible virtual obstacles,
+sensor geometry and other debug layers. **Include terrain** shows the scene's
+static terrain mesh or ground grid during replay without copying it per frame.
+Debug layers keep their recorded world positions and environment selection.
+You can move the camera or mute recorded layers in **Controls → debug_viz** during replay.
+The 2D depth preview is live-only.
+
+**Return to live** restores the current simulation view. Use **Controls → Play**
+to continue stepping. The viewer keeps one clip in memory and stops recording
+at 12,000 frames or 256 MiB of recorded arrays, whichever comes first.
+Starting a new clip replaces the previous clip.
+
+For checkpoint playback, expand **Replay → Export** after stopping the recording.
+Both exports are saved in the `recordings/` folder beside the loaded checkpoint.
+
+- **MP4 quality** selects 480p, 720p or 1080p. **Export MP4** renders the full clip
+  from the requesting browser's 3D viewport. The output keeps the initial viewport
+  aspect ratio and follows camera movement, tracking and auto orbit during export.
+  Only the 3D scene appears in the video. The mouse pointer and GUI are excluded.
+  Keep that browser connected during export. Encoding uses FFmpeg with H.264.
+- **Trajectory env ID** selects one environment. **Export Blender trajectory (.usdc)**
+  writes a standalone USD animation with robot geometry and world-space link transforms
+  at the recorded simulation timestamps. In Blender, choose **File → Import → Universal Scene Description**
+  and play in a 24 fps scene (Blender's default).
 
 ## Play-script integration
 

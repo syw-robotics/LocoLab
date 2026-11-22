@@ -9,7 +9,7 @@ from __future__ import annotations
 from typing import TypedDict
 
 from isaaclab_newton.physics import (
-    MJWarpSolverCfg as _MJWarpSolverCfg ,
+    MJWarpSolverCfg,
     NewtonCfg,
     NewtonCollisionPipelineCfg,
     NewtonShapeCfg,
@@ -21,13 +21,6 @@ from isaaclab_physx.physics import PhysxCfg
 from isaaclab.physics import PhysxAutoCfg
 from isaaclab.utils import configclass
 from isaaclab_tasks.utils import PresetCfg
-
-
-@configclass
-class MJWarpSolverCfg(_MJWarpSolverCfg ):
-    """Expose Newton's solver-side normal constraints for separated contacts."""
-
-    use_speculative_contacts: bool = False
 
 
 @configclass
@@ -45,7 +38,7 @@ class LocomotionPhysicsCfg(PresetCfg):
             njmax=256,  # Number of constraints per environment (world)
             nconmax=64,  # Number of contact points per environment (world)
             cone="pyramidal",  # The type of contact friction cone, "pyramidal" or "elliptic"
-            impratio=1.0,
+            impratio=5.0,
             integrator="implicitfast",  # "implicitfast" is recommended in mjlab
             ls_iterations=50,
             ccd_iterations=35,
@@ -54,11 +47,11 @@ class LocomotionPhysicsCfg(PresetCfg):
             # Mujoco contact uses convex hull for contact detection, which is not suitable for rough terrain tasks
             use_mujoco_contacts=False,  # whether to use MuJoCo's internal contact solver
             #  tolerance=1e-8,
-            use_speculative_contacts=True,  # speculative contacts help reduce contact penetration and improve stability
         ),
         num_substeps=1,
         collision_decimation=0,
         debug_mode=False,
+        # open the speculative contact by default, do not use mujoco contact detection
         collision_cfg=NewtonCollisionPipelineCfg(speculative_contact_gap_max=0.05),
         default_shape_cfg=NewtonShapeCfg(margin=0.0, ke=160000.0, kd=1100.0),
     )
@@ -113,11 +106,13 @@ def set_locomotion_physics(
 ) -> None:
     """Install the locomotion physics preset with optional per-backend overrides.
 
-    Pass only the fields you want to change, e.g. ``mjwarp={"nconmax": None}``
-    for automatic contact capacity or ``steel={"margin": 0.001}`` for the shape
-    margin. ``mjwarp={"speculative_contact_gap_max": None}`` disables speculative
-    contacts. PhysX's patch budget applies to explicit and automatic backends.
-    Call this from ``__post_init__`` to keep the presets selectable via ``--physics``.
+    For MJWarp, ``nconmax=None`` selects automatic contact capacity. With Newton
+    collision detection, ``speculative_contact_gap_max`` caps the velocity-based
+    expansion of contact detection. ``None`` selects Newton's default pipeline.
+
+    Steel's ``margin`` overrides the shape margin. PhysX's patch budget applies
+    to explicit and automatic backends. Call this from ``__post_init__`` to keep
+    the presets selectable via ``--physics``.
     """
     physics = LocomotionPhysicsCfg()
     if physx:
@@ -126,21 +121,20 @@ def set_locomotion_physics(
             if backend is not None:
                 backend.gpu_max_rigid_patch_count = physx["rigid_patch_count"]
 
+    mjwarp_cfg = physics.newton_mjwarp
+    collision_cfg = mjwarp_cfg.collision_cfg
     if mjwarp:
-        mjwarp_cfg = physics.newton_mjwarp
         mjwarp_options = dict(mjwarp)
         mjwarp_cfg.num_substeps = mjwarp_options.pop("num_substeps", mjwarp_cfg.num_substeps)
         mjwarp_cfg.collision_decimation = mjwarp_options.pop("collision_decimation", mjwarp_cfg.collision_decimation)
-        gap = mjwarp_options.pop("speculative_contact_gap_max", mjwarp_cfg.collision_cfg.speculative_contact_gap_max)
-        solver = mjwarp_cfg.solver_cfg.replace(**mjwarp_options)
-        solver.use_speculative_contacts = gap is not None and not solver.use_mujoco_contacts
-        if solver.use_speculative_contacts:
-            mjwarp_cfg.collision_cfg.speculative_contact_gap_max = gap
-        else:
-            mjwarp_cfg.collision_cfg = None
-        mjwarp_cfg.solver_cfg = solver
-    # PresetCfg copies the default, so implicit backend selection needs the tuned instance too.
-    physics.default = physics.newton_mjwarp
+        collision_cfg.speculative_contact_gap_max = mjwarp_options.pop(
+            "speculative_contact_gap_max", collision_cfg.speculative_contact_gap_max
+        )
+        mjwarp_cfg.solver_cfg = mjwarp_cfg.solver_cfg.replace(**mjwarp_options)
+
+    # MuJoCo contact detection bypasses Newton's collision pipeline.
+    if mjwarp_cfg.solver_cfg.use_mujoco_contacts:
+        mjwarp_cfg.collision_cfg = None
 
     if steel:
         steel_cfg = physics.newton_steel
@@ -148,7 +142,10 @@ def set_locomotion_physics(
         steel_cfg.default_shape_cfg.margin = steel_options.pop("margin", steel_cfg.default_shape_cfg.margin)
         steel_cfg.solver_cfg = steel_cfg.solver_cfg.replace(**steel_options)
 
+    # PresetCfg copies the default, so implicit backend selection needs the tuned instance too.
+    physics.default = physics.newton_mjwarp  # overwrite mjwarp as options as default physics backend
     sim.physics = physics
+
     # ImplicitActuatorCfg ignores this flag and keeps its drive on the solver.
     # The flag enables native Newton actuators for explicit configs such as DCMotorCfg and IdealPDActuatorCfg.
     sim.use_newton_actuators = False

@@ -307,12 +307,16 @@ class MjviserRobot:
         position = packed[..., :3] + (rotation @ offset_position[..., None])[..., 0]
         return position, rotation @ self._body_offsets[:, :3, :3]
 
-    def update(self, selector, env_idx: int) -> None:
-        """Transfer selected body poses once and let mjviser update its instances."""
-        position, rotation = self.body_poses(selector)
-        self._positions[selector, 1:] = position
-        self._rotations[selector, 1:] = rotation
-        self.scene.show_only_selected = position.shape[0] != len(self._positions)
+    def update(self, selector, env_idx: int, *, capture: bool = False) -> tuple[np.ndarray, np.ndarray] | None:
+        """Transfer poses once, including hidden environments when capturing a frame."""
+        read_selector = slice(None) if capture else selector
+        position, rotation = self.body_poses(read_selector)
+        self._positions[read_selector, 1:] = position
+        self._rotations[read_selector, 1:] = rotation
+        if not capture:
+            self.scene.show_only_selected = position.shape[0] != len(self._positions)
 
         # mjviser caches these arrays and serializes poses on the websocket thread.
-        self.scene.update_from_arrays(self._positions.copy(), self._rotations.copy(), env_idx=env_idx)
+        poses = self._positions.copy(), self._rotations.copy()
+        self.scene.update_from_arrays(*poses, env_idx=env_idx)
+        return poses if capture else None

@@ -128,7 +128,7 @@ class G1FlatEnvCfg(ManagerBasedRLEnvCfg):
         # physics settings
         set_locomotion_physics(
             self.sim,
-            mjwarp=dict(num_substeps=1, cone="pyramidal", impratio=1.0, njmax=300, nconmax=None, ccd_iterations=50),
+            mjwarp=dict(num_substeps=1, cone="pyramidal", impratio=5.0, njmax=300, nconmax=None, ccd_iterations=50, speculative_contact_gap_max=None),
             # G1 self-contacts need more constraint rows and a smaller collision margin.
             steel=dict(margin=0.001, articulation_constraint_max=256, update_mass_matrix_interval=1),
             physx=dict(rigid_patch_count=2**16),

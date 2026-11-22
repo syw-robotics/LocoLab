@@ -411,10 +411,11 @@ rights to those assets.
 ## 📝 TODO
 - [x] **Symmetry Config Definition**: Alongside with which in Z RL
 - [x] **Muon Optimizer Support**: Alongside with which in Z RL
-- [] **G1**: Add single motion clip tracking task baseline, motion adopts [any4hdmi](https://github.com/syw-robotics/any4hdmi) format
-- [ ] **G1**: Refine Velocity-Flat-G1 baseline, add AMP, SMP baselines
+- [x] **G1**: Add single motion clip tracking task baseline, motion adopts [any4hdmi](https://github.com/syw-robotics/any4hdmi) format
+- [x] **G1**: Refine Velocity-Flat-G1 baseline
+- [ ] **G1**: Add AMP, SMP baselines
 - [ ] **WM**: Add supermimic style world model [SHAC](https://arxiv.org/abs/2204.07137) baseline 
-- [ ] **Go2**: Refine Velocity-Rough-Go2 baseline
+- [x] **Go2**: Refine Velocity-Rough-Go2 baseline
 - [ ] **Go2W**: Add Velocity-Flat-Go2W, Velocity-Rough-Go2W baseline
 - [ ] **B2**: Add Velocity-Rough-B2 baseline
 - [ ] **Warp MDP**: This is isaaclab3.0 experimental feature, not recommended as daily use. This accelerates rollout a bit, but probably comes with less simulation stability

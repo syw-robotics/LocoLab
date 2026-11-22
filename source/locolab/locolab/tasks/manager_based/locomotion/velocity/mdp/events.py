@@ -24,7 +24,7 @@ import torch
 
 import isaaclab.utils.math as math_utils
 from isaaclab.envs.mdp.events import push_by_setting_velocity as _push_by_setting_velocity
-from isaaclab.managers import SceneEntityCfg
+from isaaclab.managers import ManagerTermBase, SceneEntityCfg
 
 from locolab.utils.debug_viz.push.push_debug_vis_cfg import PushDebugVisCfg
 from locolab.utils.terrains.terrain_utils import (
@@ -33,9 +33,11 @@ from locolab.utils.terrains.terrain_utils import (
     range_dict_to_tensor,
 )
 
+from .curriculums import assistive_force_levels
+
 if TYPE_CHECKING:
     from isaaclab.assets import Articulation
-    from isaaclab.envs import ManagerBasedEnv
+    from isaaclab.envs import ManagerBasedEnv, ManagerBasedRLEnv
     from isaaclab.sensors.ray_caster import RayCaster, MultiMeshRayCaster
 
 logger = logging.getLogger(__name__)
@@ -46,21 +48,37 @@ _UNKNOWN_TERRAIN_RESET_WARNINGS: set[tuple[str, ...]] = set()
 _RangeDict = dict[str, tuple[float, float]]
 
 
-def apply_assistive_force(
-    env: ManagerBasedEnv,
-    env_ids: torch.Tensor | slice,
-    asset_cfg: SceneEntityCfg,
-):
-    """Apply upward support for the episode after the scene resets its wrenches."""
-    if not hasattr(env, "assistive_force"):
-        return
-    asset: Articulation = env.scene[asset_cfg.name]
-    magnitude = env.assistive_force[env_ids]
-    forces = magnitude.new_zeros((magnitude.numel(), 1, 3))
-    forces[:, 0, 2] = magnitude
-    asset.permanent_wrench_composer.add_forces_and_torques_index(
-        forces=forces, body_ids=asset_cfg.body_ids, env_ids=env_ids, is_global=True
-    )
+class apply_assistive_force(ManagerTermBase):
+    """Restore torso support after scene resets and update it each control step."""
+
+    def __init__(self, cfg, env: ManagerBasedRLEnv):
+        super().__init__(cfg, env)
+        self._schedule = getattr(env.cfg.curriculum, "assistive_force", None)
+        if self._schedule is None:
+            raise ValueError("events.assistive_force requires curriculum.assistive_force.")
+
+    def reset(self, env_ids=None):
+        self(self._env, env_ids, **self.cfg.params)
+
+    def __call__(self, env: ManagerBasedRLEnv, env_ids, asset_cfg: SceneEntityCfg):
+        step = env.common_step_counter
+        release_step = max(self._schedule.params["decay_steps"], 0)
+        if step > release_step + 1:
+            return
+
+        composer = env.scene[asset_cfg.name].permanent_wrench_composer
+        if step == release_step + 1:
+            # The zero wrench has reached the simulator.
+            composer.reset()
+            return
+
+        force = assistive_force_levels(env, env_ids, **self._schedule.params)
+        if force == 0.0 and not composer.active:
+            return
+        if not hasattr(self, "_forces"):
+            self._forces = torch.zeros((env.num_envs, 1, 3), device=env.device)
+        self._forces[:, 0, 2] = force
+        composer.set_forces_and_torques_index(forces=self._forces, body_ids=asset_cfg.body_ids, is_global=True)
 
 
 def push_by_setting_velocity(
