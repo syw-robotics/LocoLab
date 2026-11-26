@@ -24,7 +24,7 @@ import torch
 
 import isaaclab.utils.math as math_utils
 from isaaclab.envs.mdp.events import push_by_setting_velocity as _push_by_setting_velocity
-from isaaclab.managers import SceneEntityCfg
+from isaaclab.managers import ManagerTermBase, SceneEntityCfg
 
 from locolab.utils.debug_viz.push.push_debug_vis_cfg import PushDebugVisCfg
 from locolab.utils.terrains.terrain_utils import (
@@ -33,9 +33,11 @@ from locolab.utils.terrains.terrain_utils import (
     range_dict_to_tensor,
 )
 
+from .curriculums import assistive_force_levels
+
 if TYPE_CHECKING:
     from isaaclab.assets import Articulation
-    from isaaclab.envs import ManagerBasedEnv
+    from isaaclab.envs import ManagerBasedEnv, ManagerBasedRLEnv
     from isaaclab.sensors.ray_caster import RayCaster, MultiMeshRayCaster
 
 logger = logging.getLogger(__name__)
@@ -44,6 +46,39 @@ logger = logging.getLogger(__name__)
 _UNKNOWN_TERRAIN_RESET_WARNINGS: set[tuple[str, ...]] = set()
 
 _RangeDict = dict[str, tuple[float, float]]
+
+
+class apply_assistive_force(ManagerTermBase):
+    """Restore torso support after scene resets and update it each control step."""
+
+    def __init__(self, cfg, env: ManagerBasedRLEnv):
+        super().__init__(cfg, env)
+        self._schedule = getattr(env.cfg.curriculum, "assistive_force", None)
+        if self._schedule is None:
+            raise ValueError("events.assistive_force requires curriculum.assistive_force.")
+
+    def reset(self, env_ids=None):
+        self(self._env, env_ids, **self.cfg.params)
+
+    def __call__(self, env: ManagerBasedRLEnv, env_ids, asset_cfg: SceneEntityCfg):
+        step = env.common_step_counter
+        release_step = max(self._schedule.params["decay_steps"], 0)
+        if step > release_step + 1:
+            return
+
+        composer = env.scene[asset_cfg.name].permanent_wrench_composer
+        if step == release_step + 1:
+            # The zero wrench has reached the simulator.
+            composer.reset()
+            return
+
+        force = assistive_force_levels(env, env_ids, **self._schedule.params)
+        if force == 0.0 and not composer.active:
+            return
+        if not hasattr(self, "_forces"):
+            self._forces = torch.zeros((env.num_envs, 1, 3), device=env.device)
+        self._forces[:, 0, 2] = force
+        composer.set_forces_and_torques_index(forces=self._forces, body_ids=asset_cfg.body_ids, is_global=True)
 
 
 def push_by_setting_velocity(
@@ -71,6 +106,39 @@ def push_by_setting_velocity(
     )
     asset.write_root_velocity_to_sim_index(root_velocity=velocity + delta, env_ids=env_ids)
     get_push_debug_vis(env, asset_cfg.name, debug_vis_cfg).record(env_ids, delta)
+
+
+def push_body_by_velocity_impulse(
+    env: ManagerBasedEnv,
+    env_ids: torch.Tensor | slice | None,
+    velocity_range: _RangeDict,
+    asset_cfg: SceneEntityCfg,
+    debug_vis: bool = False,
+    debug_vis_cfg: PushDebugVisCfg | None = None,
+):
+    """Apply a one-step force at a single body's CoM, using velocity ranges in m/s."""
+    if isinstance(env_ids, torch.Tensor) and env_ids.numel() == 0:
+        return
+    asset: Articulation = env.scene[asset_cfg.name]
+    env_ids = slice(None) if env_ids is None else env_ids
+    body_ids = asset_cfg.body_ids
+    if isinstance(body_ids, slice) or len(body_ids) != 1:
+        raise ValueError("push_body_by_velocity_impulse requires exactly one body.")
+    total_mass = asset.data.body_mass.torch[env_ids].sum(dim=1, keepdim=True)
+    delta = math_utils.sample_uniform_from_ranges(
+        velocity_range, ("x", "y", "z"), total_mass.shape[:-1], device=asset.device
+    )
+    # The corresponding free-system CoM impulse is M * delta_v.
+    asset.instantaneous_wrench_composer.add_forces_and_torques_index(
+        forces=(delta * (total_mass / env.physics_dt))[:, None, :],
+        body_ids=body_ids,
+        env_ids=env_ids,
+        is_global=True,
+    )
+    if debug_vis:
+        from locolab.utils.debug_viz.push.push_debug_vis import get_push_debug_vis
+
+        get_push_debug_vis(env, asset_cfg.name, debug_vis_cfg).record(env_ids, delta, int(body_ids[0]))
 
 
 # ===== root reset by terrain =====

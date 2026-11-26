@@ -67,6 +67,8 @@ class Mid360ObservationsCfg(ObservationGroupCfg):
 class G1Mid360FlatEnvCfg(G1FlatEnvCfg):
     def __post_init__(self):
         super().__post_init__()
+        self.events.assistive_force = None
+        self.curriculum.assistive_force = None
         self.scene.num_envs = 16
         self.scene.mid360_lidar, self.scene.mid360_imu = g1_mid360_cfg(physics_dt=self.sim.dt)
         self.observations.mid360 = Mid360ObservationsCfg()

@@ -9,23 +9,24 @@ import numpy as np
 
 def _sample_perlin_noise(shape: tuple[int, int], cell_size: float) -> np.ndarray:
     """Sample 2-D gradient Perlin noise directly on the target grid."""
-    x, y = np.meshgrid(np.arange(shape[0]) / cell_size, np.arange(shape[1]) / cell_size, indexing="ij")
-    x_cell = np.floor(x).astype(np.int32)
-    y_cell = np.floor(y).astype(np.int32)
-    x -= x_cell
-    y -= y_cell
+    x = np.arange(shape[0])[:, None] / cell_size
+    y = np.arange(shape[1]) / cell_size
+    ix, iy = x.astype(np.int32), y.astype(np.int32)
+    x -= ix
+    y -= iy
 
-    angles = np.random.uniform(0.0, 2.0 * np.pi, size=(x_cell.max() + 2, y_cell.max() + 2))
-    gradients = np.stack((np.cos(angles), np.sin(angles)), axis=-1)
-
-    def dot_grid(offset_x: int, offset_y: int) -> np.ndarray:
-        gradient = gradients[x_cell + offset_x, y_cell + offset_y]
-        return (x - offset_x) * gradient[..., 0] + (y - offset_y) * gradient[..., 1]
+    angles = np.random.uniform(0.0, 2.0 * np.pi, size=(ix.max() + 2, iy.max() + 2))
+    gx, gy = np.cos(angles), np.sin(angles)
+    # Project each corner gradient onto the displacement from that corner.
+    n00 = x * gx[ix, iy] + y * gy[ix, iy]
+    n10 = (x - 1) * gx[ix + 1, iy] + y * gy[ix + 1, iy]
+    n01 = x * gx[ix, iy + 1] + (y - 1) * gy[ix, iy + 1]
+    n11 = (x - 1) * gx[ix + 1, iy + 1] + (y - 1) * gy[ix + 1, iy + 1]
 
     fade_x = 6.0 * x**5 - 15.0 * x**4 + 10.0 * x**3
     fade_y = 6.0 * y**5 - 15.0 * y**4 + 10.0 * y**3
-    noise_x0 = dot_grid(0, 0) * (1.0 - fade_x) + dot_grid(1, 0) * fade_x
-    noise_x1 = dot_grid(0, 1) * (1.0 - fade_x) + dot_grid(1, 1) * fade_x
+    noise_x0 = n00 * (1.0 - fade_x) + n10 * fade_x
+    noise_x1 = n01 * (1.0 - fade_x) + n11 * fade_x
     return np.sqrt(2.0) * (noise_x0 * (1.0 - fade_y) + noise_x1 * fade_y) * 0.5 + 0.5
 
 
@@ -33,23 +34,51 @@ def _sample_fractal_perlin_noise(
     shape: tuple[int, int], horizontal_scale: float, downsampled_scale: float
 ) -> np.ndarray:
     """Sample InstinctLab-style two-octave Perlin noise, centered around zero."""
-    noise = np.zeros(shape, dtype=np.float64)
-    amplitude = 1.0
-    amplitude_sum = 0.0
     cell_size = 2.0 * downsampled_scale / horizontal_scale
-
-    for _ in range(2):
-        noise += amplitude * _sample_perlin_noise(shape, cell_size)
-        amplitude_sum += amplitude
-        amplitude *= 0.25
-        cell_size /= 2.0
-
+    fine_weight = 0.25
+    noise = _sample_perlin_noise(shape, cell_size)
+    noise += fine_weight * _sample_perlin_noise(shape, cell_size / 2.0)
     noise -= noise.mean()
-    return np.clip(noise / (0.5 * amplitude_sum), -1.0, 1.0)
+    return np.clip(noise / (0.5 * (1.0 + fine_weight)), -1.0, 1.0)
 
 
-def _roughness_grid_shape(cfg: Any) -> tuple[int, int]:
-    return int(cfg.size[0] / cfg.horizontal_scale), int(cfg.size[1] / cfg.horizontal_scale)
+def _add_pits_and_bumps(height_field: np.ndarray, cfg: Any, strength: float, height_step: int) -> None:
+    """Add local metric offsets to a Perlin surface expressed in vertical grid units."""
+    density = getattr(cfg, "pit_bump_density", 0.0)
+    if density == 0.0:
+        return
+    if density < 0.0:
+        raise ValueError(f"pit_bump_density must be non-negative. Got: {density}.")
+    radius_min, radius_max = _validate_positive_range("pit_bump_radius_range", cfg.pit_bump_radius_range)
+    offset_min, offset_max = cfg.pit_bump_noise_range
+    if not offset_min <= offset_max:
+        raise ValueError(f"pit_bump_noise_range must be ordered. Got: {cfg.pit_bump_noise_range}.")
+    if offset_min == offset_max == 0.0:
+        return
+
+    rows, cols = height_field.shape
+    area = (rows - 1) * (cols - 1) * cfg.horizontal_scale**2
+    count = np.random.poisson(density * area)
+    if count == 0:
+        return
+    centers = np.random.uniform((0, 0), (rows - 1, cols - 1), size=(count, 2))
+    radii = np.random.uniform(radius_min, radius_max, size=count) / cfg.horizontal_scale
+    peaks = np.random.uniform(offset_min, offset_max, size=count)
+
+    offsets = np.zeros_like(height_field)
+    for (x, y), radius, peak in zip(centers, radii, peaks):
+        x0 = max(0, int(np.ceil(x - radius)))
+        x1 = min(rows, int(np.floor(x + radius)) + 1)
+        y0 = max(0, int(np.ceil(y - radius)))
+        y1 = min(cols, int(np.floor(y + radius)) + 1)
+        ix, iy = np.ogrid[x0:x1, y0:y1]
+        distance_sq = ((ix - x) ** 2 + (iy - y) ** 2) / radius**2
+        weight = np.maximum(1.0 - distance_sq, 0.0) ** 2
+        offsets[x0:x1, y0:y1] += weight * peak
+
+    # Limit overlaps relative to the local surface, then snap the displacement to the height step.
+    np.clip(offsets, min(0.0, offset_min), max(0.0, offset_max), out=offsets)
+    height_field += np.rint(offsets * strength / (cfg.vertical_scale * height_step)) * height_step
 
 
 def _resolve_downsampled_scale(cfg: Any) -> float:
@@ -94,12 +123,13 @@ def should_apply_roughness(cfg: Any) -> bool:
 def generate_roughness_height_field(
     cfg: Any, difficulty: float = 0.0, shape: tuple[int, int] | None = None
 ) -> np.ndarray:
-    """Sample the shared Perlin roughness as an integer height field.
+    """Sample Perlin roughness with optional local pits and bumps as an integer height field.
 
     Values are in ``vertical_scale`` units so height-field terrains can add them
     directly. Mesh terrains convert back to meters with ``* cfg.vertical_scale``.
     """
-    width_pixels, length_pixels = shape if shape is not None else _roughness_grid_shape(cfg)
+    if shape is None:
+        shape = (int(cfg.size[0] / cfg.horizontal_scale), int(cfg.size[1] / cfg.horizontal_scale))
     strength = _resolve_roughness_strength(cfg, difficulty)
     height_min = int(cfg.noise_range[0] / cfg.vertical_scale)
     height_max = int(cfg.noise_range[1] / cfg.vertical_scale)
@@ -111,10 +141,10 @@ def generate_roughness_height_field(
             f"Noise step must be greater than or equal to the vertical scale: {cfg.noise_step} < {cfg.vertical_scale}."
         )
     if strength == 0.0:
-        return np.zeros((width_pixels, length_pixels), dtype=np.int16)
+        return np.zeros(shape, dtype=np.int16)
 
     downsampled_scale = _resolve_downsampled_scale(cfg) * np.exp2(np.random.random())
-    noise = _sample_fractal_perlin_noise((width_pixels, length_pixels), cfg.horizontal_scale, downsampled_scale)
+    noise = _sample_fractal_perlin_noise(shape, cfg.horizontal_scale, downsampled_scale)
     noise = np.where(
         noise < 0.0,
         noise * abs(min(height_min, 0)),
@@ -125,8 +155,11 @@ def generate_roughness_height_field(
     scaled_min = int(np.rint(min(height_min * strength, height_max * strength) / height_step)) * height_step
     scaled_max = int(np.rint(max(height_min * strength, height_max * strength) / height_step)) * height_step
     if scaled_min > scaled_max:
-        return np.zeros((width_pixels, length_pixels), dtype=np.int16)
-    return np.clip(noise, scaled_min, scaled_max).astype(np.int16)
+        return np.zeros(shape, dtype=np.int16)
+    noise = np.clip(noise, scaled_min, scaled_max)
+    if getattr(cfg, "enable_pits_and_bumps", False):
+        _add_pits_and_bumps(noise, cfg, strength, height_step)
+    return noise.astype(np.int16)
 
 
 def sample_height_field(
@@ -155,7 +188,7 @@ def sample_height_field(
 def apply_perlin_noise(
     cfg: Any, hf_raw: np.ndarray, difficulty: float = 0.0, mask: np.ndarray | None = None
 ) -> np.ndarray:
-    """Add shared Perlin roughness onto a height-field array.
+    """Add the shared roughness field onto a height-field array.
 
     If ``mask`` is given, only those cells are updated. The noise field is still
     sampled on the full grid so neighboring walkable patches stay spatially coherent.
@@ -166,15 +199,6 @@ def apply_perlin_noise(
     else:
         hf_raw[mask] += noise[mask]
     return hf_raw
-
-
-def _maybe_apply_roughness(
-    cfg: Any, hf_raw: np.ndarray, difficulty: float, mask: np.ndarray | None = None
-) -> np.ndarray:
-    """Apply roughness according to the configured probability."""
-    if not should_apply_roughness(cfg):
-        return hf_raw
-    return apply_perlin_noise(cfg, hf_raw, difficulty, mask=mask)
 
 
 def should_apply_poles(cfg: Any) -> bool:
@@ -333,18 +357,12 @@ def apply_poles_to_height_field(
     return hf_raw
 
 
-def _maybe_apply_poles(
-    cfg: Any, hf_raw: np.ndarray, mask: np.ndarray | None = None
-) -> np.ndarray:
-    """Apply poles according to the configured probability."""
-    if not should_apply_poles(cfg):
-        return hf_raw
-    return apply_poles_to_height_field(cfg, hf_raw, mask=mask)
-
-
-def _finalize_height_field(
+def finalize_height_field(
     cfg: Any, hf_raw: np.ndarray, difficulty: float, mask: np.ndarray | None = None
 ) -> np.ndarray:
     """Apply shared surface details: roughness then optional poles."""
-    hf_raw = _maybe_apply_roughness(cfg, hf_raw, difficulty, mask=mask)
-    return _maybe_apply_poles(cfg, hf_raw, mask=mask)
+    if should_apply_roughness(cfg):
+        hf_raw = apply_perlin_noise(cfg, hf_raw, difficulty, mask=mask)
+    if should_apply_poles(cfg):
+        hf_raw = apply_poles_to_height_field(cfg, hf_raw, mask=mask)
+    return hf_raw

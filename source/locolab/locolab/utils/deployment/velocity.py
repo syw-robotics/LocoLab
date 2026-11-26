@@ -1,4 +1,4 @@
-"""Export proprioceptive G1, Go2, and B2 velocity policies for unitree-deploy."""
+"""Export proprioceptive velocity policies for unitree-deploy."""
 
 from pathlib import Path
 import copy

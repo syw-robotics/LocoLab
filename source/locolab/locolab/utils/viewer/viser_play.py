@@ -14,6 +14,8 @@ from __future__ import annotations
 import logging
 import threading
 import time
+from inspect import signature
+from pathlib import Path
 
 import numpy as np
 
@@ -21,8 +23,9 @@ from locolab.utils.debug_viz.push.push_debug_vis import PushDebugVis
 
 from ._viser import viser
 from .browser import CAMERA_MOVE_SPEED_JS
-from .debug_vis import DebugScene, debug_sources, draw_debug, sensor_debug_kind
+from .debug_vis import DebugFrame, DebugScene, debug_sources, draw_debug, sensor_debug_kind
 from .mjviser_robot import MjviserRobot
+from .replay import PoseReplay, ReplayFrame
 from .terrain import HEIGHT_COLOR_SCALE_M, SOLID_COLOR, paint_terrain
 
 
@@ -49,6 +52,10 @@ def _quiet_probe_handshakes() -> None:
 
 # 50Hz by default.
 UPDATE_INTERVAL_S = 1.0 / 50.0
+REMOTE_UPDATE_INTERVAL_S = 1.0 / 20.0
+REMOTE_DEBUG_INTERVAL_S = 1.0 / 5.0
+REMOTE_MAX_SENSOR_POINTS = 1000
+DEPTH_UPDATE_INTERVAL_S = 1.0 / 20.0
 # Playback rates for the Simulation speed buttons. 1x matches wall-clock step time.
 SPEEDS = (1 / 8, 1 / 4, 1 / 2, 1.0, 2.0, 4.0, 8.0)
 
@@ -66,6 +73,8 @@ class ViserPlayViewer:
         host: Interface to bind. ``0.0.0.0`` prints ``http://localhost``, which the browser can open.
         port: TCP port. Forward it with ``ssh -L <port>:localhost:<port>``.
         robot_name: Scene entity name of the articulation.
+        low_bandwidth: Reduce browser update rates and sensor point density for remote play.
+        cache_assets: Send cacheable HTTP references for static GLBs.
     """
 
     paces = True
@@ -76,6 +85,10 @@ class ViserPlayViewer:
         host: str = "0.0.0.0",
         port: int = 8080,
         robot_name: str = "robot",
+        *,
+        low_bandwidth: bool = False,
+        cache_assets: bool = False,
+        recordings_dir: Path | None = None,
     ) -> None:
         self._env = env
         unwrapped = env.unwrapped
@@ -94,11 +107,14 @@ class ViserPlayViewer:
         self._release_on_client = True
         self._reset_requested = threading.Event()
         self._last_update = 0.0
+        self._update_interval = REMOTE_UPDATE_INTERVAL_S if low_bandwidth else UPDATE_INTERVAL_S
+        self._debug_interval = REMOTE_DEBUG_INTERVAL_S if low_bandwidth else UPDATE_INTERVAL_S
+        self._last_debug_update = 0.0
+        self._depth_interval = REMOTE_DEBUG_INTERVAL_S if low_bandwidth else DEPTH_UPDATE_INTERVAL_S
         self._step_dt = float(getattr(unwrapped, "step_dt", 0.02) or 0.02)
         self._speed_index = SPEEDS.index(1.0)
         self._speed = SPEEDS[self._speed_index]
         self._pace_time: float | None = None
-        self._last_orbit_update: float | None = None
 
         self._terrain_mesh = None
         self._terrain_handle = None
@@ -116,7 +132,9 @@ class ViserPlayViewer:
             for label, obj in self._debug_terms
         }
         self._sensor_debug = {
-            label: {"point_cloud": True, "origin": False, **({"frustum": False} if kind == "camera" else {})}
+            label: {
+                "point_cloud": not low_bandwidth, "origin": False, **({"frustum": False} if kind == "camera" else {})
+            }
             for label, obj in self._debug_terms if (kind := sensor_debug_kind(obj)) is not None
         }
         self._status_html = ""
@@ -126,12 +144,28 @@ class ViserPlayViewer:
         self._prepare_ground(scene)
 
         _quiet_probe_handshakes()
-        self._server = viser.ViserServer(host=host, port=port, label="LocoLab")
-        self._debug_scene = DebugScene(self._server)
+        self._asset_cache = None
+        server_options = {}
+        if cache_assets:
+            from .asset_cache import SceneAssetCache
+
+            if "http_asset_response" not in signature(viser.ViserServer).parameters:
+                raise RuntimeError("Run scripts/tools/patch_viser.py in the play environment to enable asset caching.")
+            self._asset_cache = SceneAssetCache()
+            server_options["http_asset_response"] = self._asset_cache.respond
+        self._server = viser.ViserServer(host=host, port=port, label="LocoLab", **server_options)
+        self._debug_scene = (
+            DebugScene(self._server, max_sensor_points=REMOTE_MAX_SENSOR_POINTS)
+            if low_bandwidth else DebugScene(self._server)
+        )
         try:
-            self._robot_view.create_scene(self._server)
+            self._robot_view.create_scene(self._server, asset_cache=self._asset_cache)
+            if low_bandwidth and self._num_envs > 1:
+                self._robot_view.scene.show_only_selected = True
             self._add_ground()
-            self._build_gui()
+            self._visible_debug: DebugFrame | None = None
+            self._hidden_replay_layers: frozenset[str] = frozenset()
+            self._build_gui(recordings_dir)
 
             @self._server.on_client_connect
             def _(client) -> None:
@@ -143,7 +177,7 @@ class ViserPlayViewer:
 
     @property
     def paused(self) -> bool:
-        return self._paused.is_set()
+        return self._paused.is_set() or self._replay.active
 
     def apply_reset(self, env, reset_policy) -> bool:
         """Reset the sim and the policy when the GUI asked for it.
@@ -154,6 +188,8 @@ class ViserPlayViewer:
         if not self._reset_requested.is_set():
             return False
         self._reset_requested.clear()
+        if self._replay.active:
+            return False
         import torch
 
         env.reset()
@@ -169,7 +205,7 @@ class ViserPlayViewer:
         self.update(observations)
         if self.paused:
             self._pace_time = None
-            time.sleep(0.05)
+            time.sleep(self._update_interval if self._replay.active else 0.05)
             return True
 
         now = time.perf_counter()
@@ -189,34 +225,76 @@ class ViserPlayViewer:
         if self._release_on_client and self._server.get_clients():
             self._release_if_waiting()
         now = time.monotonic()
-        if now - self._last_update < UPDATE_INTERVAL_S:
+        if now - self._last_update < self._update_interval:
             return
+        elapsed = now - self._last_update if self._last_update else 0.0
         self._last_update = now
+
+        was_replaying = self._replay.active
+        self._replay.update_controls(now)
+        replaying = self._replay.active
+        if replaying != was_replaying:
+            self._set_paused(True)
+            self._pause_button.disabled = replaying
+            self._reset_button.disabled = replaying
+            self._last_debug_update = self._last_depth_update = 0.0
+            self._visible_debug = None
+            self._hidden_replay_layers = frozenset()
+            with self._terrain_lock:
+                self._terrain_handle.visible = not replaying or "terrain" in self._replay.layers
+            if replaying and not self._replay.has_debug:
+                self._debug_scene.clear()
+            if replaying and self._depth_image is not None:
+                self._depth_image.visible = False
 
         scene = self._robot_view.scene
         env_idx = scene.env_idx
         show_all = not scene.show_only_selected
         selector = slice(None) if show_all else slice(env_idx, env_idx + 1)
         with self._server.atomic():
-            self._robot_view.update(selector, env_idx)
-            self._debug_scene.set_ghost_hulls(self._robot_view.visual_hulls)
-            self._debug_scene.distance_lod = self._robot_view.distance_lod
-            draw_debug(self._debug_scene, self._debug_terms, self._debug_enabled, selector, self._sensor_debug)
+            if replaying:
+                frame = self._replay.frame(now, env_idx, refresh=self._replay.has_debug and self._visible_debug is None)
+                if frame is not None:
+                    self._show_replay_frame(frame, env_idx)
+            else:
+                recording = self._replay.recording
+                tick = self._env.unwrapped.common_step_counter if recording else None
+                capture = tick is not None and self._replay.needs_frame(tick)
+                poses = self._robot_view.update(selector, env_idx, capture=capture)
+                if now - self._last_debug_update >= self._debug_interval or (recording and not self._replay.frames):
+                    self._last_debug_update = now
+                    self._debug_scene.set_ghost_hulls(self._robot_view.visual_hulls)
+                    self._debug_scene.distance_lod = self._robot_view.distance_lod
+                    self._visible_debug = DebugFrame(self._debug_scene) if recording and self._replay.has_debug else None
+                    draw_debug(self._debug_scene, self._debug_terms, self._debug_enabled, selector, self._sensor_debug,
+                               recording=self._visible_debug, layers=self._replay.layers)
+                if tick is not None and poses is not None:
+                    self._replay.append(tick, poses, self._visible_debug)
             if self._auto_orbit.value:
-                self._update_camera_orbit(now)
+                self._update_camera_orbit(elapsed)
 
-        if self._depth_checkbox is not None and self._depth_checkbox.value:
+        if self._replay.export_request is not None:
+            self._replay.export(self._server, self._robot_view.model, self._show_export_frame)
+            self._last_update = time.monotonic()
+            self._visible_debug = None
+
+        if not replaying and self._depth_checkbox is not None and self._depth_checkbox.value:
             self._update_depth_image(observations, env_idx, now)
 
         shown = f"all {self._num_envs}" if show_all else f"{env_idx} / {self._num_envs - 1}"
         tracking = f"env {env_idx}" if scene.camera_tracking_enabled else "off"
-        speed_text = f"{self._speed:.3g}x" if self._speed >= 1.0 else f"1/{round(1.0 / self._speed)}x"
-        if self._release_on_client:
+        speed = 1.0 if replaying else self._speed
+        speed_text = f"{speed:.3g}x" if speed >= 1.0 else f"1/{round(1.0 / speed)}x"
+        if replaying:
+            state = "Replay"
+        elif self._release_on_client:
             state = "Waiting for browser"
         elif self.paused:
             state = "Paused"
         else:
             state = "Running"
+        if self._replay.recording:
+            state += f" · {self._replay.duration:.1f} s recorded"
         status = (
             "<div style='font-size:0.85em;line-height:1.3;padding:0 1em 0.5em 1em;'>"
             f"<strong>Status:</strong> {state}<br/>"
@@ -228,6 +306,18 @@ class ViserPlayViewer:
         if status != self._status_html:
             self._status_html = status
             self._status.content = status
+
+    def _show_replay_frame(self, frame: ReplayFrame, env_idx: int) -> None:
+        self._robot_view.scene.update_from_arrays(frame.positions, frame.rotations, env_idx=env_idx)
+        if frame.debug is not None and frame.debug is not self._visible_debug:
+            hidden = self._hidden_replay_layers
+            frame.debug.render(hidden)
+            self._visible_debug = frame.debug if hidden is self._hidden_replay_layers else None
+
+    def _show_export_frame(self, frame: ReplayFrame, elapsed: float) -> None:
+        self._show_replay_frame(frame, self._robot_view.scene.env_idx)
+        if self._auto_orbit.value:
+            self._update_camera_orbit(elapsed)
 
     def close(self) -> None:
         with self._terrain_lock:
@@ -260,7 +350,7 @@ class ViserPlayViewer:
 
     def _add_ground(self) -> None:
         if self._terrain_ready is None:
-            self._server.scene.add_grid(
+            self._terrain_handle = self._server.scene.add_grid(
                 "/fixed_bodies/ground",
                 infinite_grid=True,
                 fade_distance=50.0,
@@ -270,40 +360,34 @@ class ViserPlayViewer:
             return
         # mjlab fixed geometry receives a light shadow and does not cast one.
         # The mesh is replaced only when the Terrain panel changes, never from update().
-        self._terrain_handle = self._server.scene.add_mesh_trimesh(
-            "/fixed_bodies/terrain",
-            self._terrain_ready,
-            cast_shadow=False,
-            receive_shadow=0.2,
-        )
+        self._terrain_handle = self._upload_terrain_mesh(self._terrain_ready)
         self._terrain_ready = None
 
-    def _build_gui(self) -> None:
+    def _upload_terrain_mesh(self, mesh):
+        name = "/fixed_bodies/terrain"
+        if self._asset_cache is not None:
+            reference = self._asset_cache.mesh_reference(name, mesh)
+            return self._server.scene.add_glb(name, reference, cast_shadow=False, receive_shadow=0.2)
+        return self._server.scene.add_mesh_trimesh(name, mesh, cast_shadow=False, receive_shadow=0.2)
+
+    def _build_gui(self, recordings_dir: Path | None) -> None:
         self._status = self._server.gui.add_html("")
         tabs = self._server.gui.add_tab_group()
         with tabs.add_tab("Controls", icon=viser.Icon.SETTINGS):
             with self._server.gui.add_folder("Simulation"):
-                pause_label = "Play" if self.paused else "Pause"
-                pause_icon = viser.Icon.PLAYER_PLAY if self.paused else viser.Icon.PLAYER_PAUSE
-                self._pause_button = self._server.gui.add_button(pause_label, icon=pause_icon)
+                self._pause_button = self._server.gui.add_button("Play", icon=viser.Icon.PLAYER_PLAY)
 
                 @self._pause_button.on_click
                 def _(_) -> None:
-                    if self._paused.is_set():
-                        self._release_on_client = False
-                        self._paused.clear()
-                        self._pause_button.label = "Pause"
-                        self._pause_button.icon = viser.Icon.PLAYER_PAUSE
-                    else:
-                        self._paused.set()
-                        self._pause_button.label = "Play"
-                        self._pause_button.icon = viser.Icon.PLAYER_PLAY
+                    if not self._pause_button.disabled:
+                        self._set_paused(not self.paused)
 
-                reset_button = self._server.gui.add_button("Reset", icon=viser.Icon.RESTORE)
+                self._reset_button = self._server.gui.add_button("Reset", icon=viser.Icon.RESTORE)
 
-                @reset_button.on_click
+                @self._reset_button.on_click
                 def _(_) -> None:
-                    self._reset_requested.set()
+                    if not self._reset_button.disabled:
+                        self._reset_requested.set()
 
                 speed_buttons = self._server.gui.add_button_group("Speed", options=("Slower", "1x", "Faster"))
 
@@ -316,7 +400,11 @@ class ViserPlayViewer:
                     else:
                         self._set_speed_index(SPEEDS.index(1.0))
 
-            with self._server.gui.add_folder("Navigation"):
+            with self._server.gui.add_folder("Replay", expand_by_default=False):
+                pose_values = self._num_envs * self._robot_view.model.nbody * (3 + 9)
+                self._replay = PoseReplay(self._server.gui, self._step_dt, pose_values, self._num_envs, recordings_dir)
+
+            with self._server.gui.add_folder("Navigation", expand_by_default=False):
                 self._camera_move_speed = self._server.gui.add_slider(
                     "Move speed (m/s)",
                     min=0.1,
@@ -360,14 +448,10 @@ class ViserPlayViewer:
 
             @self._auto_orbit.on_update
             def _(_event) -> None:
-                self._last_orbit_update = None
                 self._orbit_speed.disabled = not self._auto_orbit.value
 
-    def _update_camera_orbit(self, now: float) -> None:
+    def _update_camera_orbit(self, elapsed: float) -> None:
         """Rotate cached camera offsets; no additional simulation data transfer."""
-        previous = self._last_orbit_update
-        self._last_orbit_update = now
-        elapsed = 0.0 if previous is None else now - previous
         angle = np.deg2rad(float(self._orbit_speed.value)) * elapsed
         cosine, sine = np.cos(angle), np.sin(angle)
         scene = self._robot_view.scene
@@ -398,11 +482,10 @@ class ViserPlayViewer:
             def _(event) -> None:
                 self._last_depth_update = 0.0
                 if self._depth_image is not None:
-                    self._depth_image.visible = bool(event.target.value)
+                    self._depth_image.visible = bool(event.target.value) and not self._replay.active
 
     def _update_depth_image(self, observations, env_idx: int, now: float) -> None:
-        # Preview at most 20 Hz; transfer only one selected observation frame.
-        if now - self._last_depth_update < 0.05 or observations is None:
+        if now - self._last_depth_update < self._depth_interval or observations is None:
             return
         depth = observations.get("depth_image")
         if depth is None:
@@ -436,6 +519,8 @@ class ViserPlayViewer:
                     self._debug_enabled[key] = bool(event.target.value)
                     if isinstance(term, PushDebugVis):
                         term.set_debug_vis(bool(event.target.value))
+                    self._set_replay_layer(key, bool(event.target.value))
+                    self._last_debug_update = 0.0
 
                 if hasattr(obj, "get_motion_ghost"):
                     count = self._server.gui.add_number(
@@ -451,6 +536,14 @@ class ViserPlayViewer:
                     def _(event, key=label) -> None:
                         self._debug_scene.ghost_max_envs[key] = int(event.target.value)
 
+    def _set_replay_layer(self, name: str, enabled: bool) -> None:
+        if self._replay.active:
+            if enabled:
+                self._hidden_replay_layers -= {name}
+            else:
+                self._hidden_replay_layers |= {name}
+            self._visible_debug = None
+
     def _build_sensor_debug_gui(self) -> None:
         if not self._sensor_debug:
             return
@@ -464,6 +557,8 @@ class ViserPlayViewer:
                         @checkbox.on_update
                         def _(event, sensor=name, layer=key) -> None:
                             self._sensor_debug[sensor][layer] = bool(event.target.value)
+                            path = "points" if layer == "point_cloud" else layer
+                            self._set_replay_layer(f"{sensor}/{path}", bool(event.target.value))
 
     def _build_robot_vis_gui(self) -> None:
         with self._server.gui.add_folder("Robot"):
@@ -541,15 +636,17 @@ class ViserPlayViewer:
 
     def _release_if_waiting(self) -> None:
         """Start playback on the first browser. Later clients leave the pause button alone."""
-        if not self._release_on_client:
-            return
+        if self._release_on_client:
+            self._set_paused(False)
+
+    def _set_paused(self, paused: bool) -> None:
         self._release_on_client = False
-        self._paused.clear()
-        button = getattr(self, "_pause_button", None)
-        if button is None:
-            return
-        button.label = "Pause"
-        button.icon = viser.Icon.PLAYER_PAUSE
+        if paused:
+            self._paused.set()
+        else:
+            self._paused.clear()
+        self._pause_button.label = "Play" if paused else "Pause"
+        self._pause_button.icon = viser.Icon.PLAYER_PLAY if paused else viser.Icon.PLAYER_PAUSE
 
     def _set_speed_index(self, index: int) -> None:
         self._speed_index = min(max(index, 0), len(SPEEDS) - 1)
@@ -593,10 +690,6 @@ class ViserPlayViewer:
                 return
             if self._terrain_handle is not None:
                 self._terrain_handle.remove()
-            self._terrain_handle = self._server.scene.add_mesh_trimesh(
-                "/fixed_bodies/terrain",
-                displayed,
-                cast_shadow=False,
-                receive_shadow=0.2,
-            )
+            self._terrain_handle = self._upload_terrain_mesh(displayed)
+            self._terrain_handle.visible = not self._replay.active or "terrain" in self._replay.layers
             self._terrain_signature = signature

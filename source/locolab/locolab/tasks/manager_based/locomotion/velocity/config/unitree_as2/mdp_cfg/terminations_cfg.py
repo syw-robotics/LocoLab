@@ -1,0 +1,23 @@
+# Copyright (c) 2022-2026, The Isaac Lab Project Developers.
+# All rights reserved.
+# Original code is licensed under BSD-3-Clause.
+#
+# Copyright (c) 2025-2026, The Loco Lab Project Developers.
+# All rights reserved.
+# Modifications are licensed under BSD-3-Clause.
+
+from isaaclab.managers import TerminationTermCfg as DoneTerm
+from isaaclab.utils import configclass
+
+import locolab.tasks.manager_based.locomotion.velocity.mdp as mdp
+
+
+@configclass
+class FlatTerminationsCfg:
+    """Termination terms for the flat terrain."""
+
+    # terminate when max episode length is reached
+    time_out = DoneTerm(func=mdp.time_out, time_out=True)
+
+    # bad_orientation is a substitute to illegal_contact, in case of not training fall-recovery behavior
+    bad_orientation = DoneTerm(func=mdp.bad_orientation, params={"limit_angle": 1.0})

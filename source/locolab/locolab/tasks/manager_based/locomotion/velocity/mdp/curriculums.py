@@ -93,6 +93,7 @@ def lin_vel_cmd_levels(
     max_lin_vel_x_ranges: tuple[float, float] = (-1.5, 1.5),
     max_lin_vel_y_ranges: tuple[float, float] = (-1.5, 1.5),
     velocity_step: float = 0.1,
+    lateral_velocity_step: float | None = None,
 ) -> torch.Tensor:
     """Curriculum based on the linear velocity command levels.
 
@@ -112,13 +113,16 @@ def lin_vel_cmd_levels(
     if env.common_step_counter % env.max_episode_length == 0:
         if reward > reward_term.weight * percentage_threshold:
             delta_command = torch.tensor([-velocity_step, velocity_step], device=env.device)
+            delta_lateral = delta_command if lateral_velocity_step is None else torch.tensor(
+                [-lateral_velocity_step, lateral_velocity_step], device=env.device
+            )
             ranges.lin_vel_x = torch.clamp(
                 torch.tensor(ranges.lin_vel_x, device=env.device) + delta_command,
                 max_ranges_x[0],
                 max_ranges_x[1],
             ).tolist()
             ranges.lin_vel_y = torch.clamp(
-                torch.tensor(ranges.lin_vel_y, device=env.device) + delta_command,
+                torch.tensor(ranges.lin_vel_y, device=env.device) + delta_lateral,
                 max_ranges_y[0],
                 max_ranges_y[1],
             ).tolist()
@@ -193,3 +197,14 @@ def push_robot_velocity_levels(
                 ).tolist()
 
     return torch.tensor(velocity_range["x"][1], device=env.device)
+
+
+def assistive_force_levels(
+    env: ManagerBasedRLEnv,
+    env_ids: Sequence[int] | slice,
+    starting_force: float,
+    decay_steps: int,
+) -> float:
+    """Linearly fade torso support over shared environment control steps."""
+    step = env.common_step_counter
+    return starting_force * max(decay_steps - step, 0) / decay_steps if decay_steps > 0 else 0.0

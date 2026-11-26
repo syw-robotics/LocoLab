@@ -62,8 +62,8 @@ class MotionCommandCfg(CommandTermCfg):
     joint_position_range: tuple[float, float] = (-0.1, 0.1)
     """Uniform joint-position noise applied when a reference state is sampled."""
 
-    metrics_update_interval: int = 200
-    """Number of control steps between diagnostic metric updates, like velocity."""
+    compute_command_metrics_every_step: bool = False
+    """Refresh tracking errors every control step for episode logging."""
 
     adaptive_kernel_size: int = 1
     adaptive_lambda: float = 0.8

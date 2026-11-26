@@ -15,7 +15,7 @@ import locolab.tasks.manager_based.locomotion.velocity.mdp as mdp
 from locolab.tasks.manager_based.locomotion.velocity.mdp import symmetry
 from locolab.utils.symmetry import SymmetricObservationTermCfg as SymmObsTerm
 
-from . import FOOT_LINK_NAMES, JOINT_NAMES, PRESERVE_ORDER
+from . import FOOT_LINK_NAMES, GAIT_PERIOD, JOINT_NAMES, PRESERVE_ORDER
 
 
 #
@@ -139,11 +139,11 @@ class PrivObsCfg(ObsGroup):
         params={"sensor_cfg": SceneEntityCfg("feet_contact_forces", body_names=FOOT_LINK_NAMES)},
         symmetry_transform=symmetry.body_scalar,
     )
-    #  gait_phase = SymmObsTerm(
-    #      func=mdp.gait_phase,
-    #      params={"period": 0.8},
-    #      symmetry_transform=symmetry.biped_gait_phase,
-    #  )
+    gai_phase = SymmObsTerm(
+        func=mdp.gait_phase,
+        params={"period": GAIT_PERIOD},
+        symmetry_transform=symmetry.biped_gait_phase,
+    )
 
     def __post_init__(self):
         self.enable_corruption = False

@@ -29,6 +29,7 @@ HIP_YAW_JOINT_NAME = ".*_hip_yaw_.*"
 WAIST_JOINT_NAMES = ["waist_.*"]
 TORSO_LINK_NAME = "torso_link"
 PELVIS_LINK_NAME = "pelvis"
+GAIT_PERIOD = 0.9
 COORDINATION_JOINT_NAMES = [
     "left_hip_pitch_joint",
     "right_shoulder_pitch_joint",

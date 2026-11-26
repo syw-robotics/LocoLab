@@ -22,12 +22,13 @@ class CommandsCfg:
         resampling_time_range=(1.0e9, 1.0e9),
         debug_vis=False,
         motion_file=DEFAULT_MOTION_FILE,
-        anchor_body_name="pelvis",
+        #  anchor_body_name="pelvis",
+        anchor_body_name="torso_link",  # align with mjlab: pelvis imu for obs, torso_link for tracking anchor
         body_names=BODY_NAMES,
         joint_names=JOINT_NAMES,
         # Select reference fields and their concatenation order within each frame.
         # Available: joint_pos, joint_vel, base_height, base_lin_vel, base_ang_vel, projected_gravity.
-        command_terms=("joint_pos", "joint_vel", "base_height", "base_lin_vel", "base_ang_vel", "projected_gravity"),
+        command_terms=("joint_pos", "joint_vel"),  # this also aligns with mjlab
         command_frame_offsets=(0,),  # e.g. (-8, -4, -2, 0, 1, 2, 3, 4), history to future in control steps.
         pose_range={
             "x": (-0.05, 0.05),

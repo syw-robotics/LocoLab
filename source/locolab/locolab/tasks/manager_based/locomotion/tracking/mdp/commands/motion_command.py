@@ -37,6 +37,15 @@ if TYPE_CHECKING:
     from .motion_command_cfg import MotionCommandCfg
 
 
+# Match the column order of the Warp metrics kernel.
+_TRACKING_METRICS = (
+    "error_anchor_pos", "error_anchor_rot", "error_anchor_lin_vel", "error_anchor_ang_vel",
+    "error_body_pos", "error_body_rot", "error_body_lin_vel", "error_body_ang_vel",
+    "error_joint_pos", "error_joint_vel",
+)
+_SAMPLING_METRICS = ("sampling_entropy", "sampling_top1_prob", "sampling_top1_bin")
+
+
 class MotionCommand(CommandTerm):
     """Track sampled motion clips using configurable reference fields and frame offsets."""
 
@@ -45,8 +54,6 @@ class MotionCommand(CommandTerm):
     def __init__(self, cfg: MotionCommandCfg, env: ManagerBasedRLEnv):
         super().__init__(cfg, env)
 
-        if not isinstance(cfg.metrics_update_interval, int) or cfg.metrics_update_interval < 1:
-            raise ValueError("metrics_update_interval must be a positive integer.")
         if not isinstance(cfg.ghost_max_envs, int) or cfg.ghost_max_envs < 1:
             raise ValueError("ghost_max_envs must be a positive integer.")
         self.command_dim = command_dimension(cfg.command_terms, len(cfg.joint_names), cfg.command_frame_offsets)
@@ -54,8 +61,6 @@ class MotionCommand(CommandTerm):
             None if tuple(cfg.command_frame_offsets) == (0,)
             else torch.tensor(cfg.command_frame_offsets, dtype=torch.long, device=self.device)
         )
-        self._metrics_update_counter = 0
-
         # Resolve robot indices once; all state views below follow the configured order.
         self.robot: Articulation = env.scene[cfg.asset_name]
         joint_ids, joint_names = self.robot.find_joints(list(cfg.joint_names), preserve_order=True)
@@ -77,8 +82,8 @@ class MotionCommand(CommandTerm):
 
         # Build shared reference tensors, including body trajectories absent from qpos.
         self.motion = MotionLoader(cfg.motion_file, cfg.joint_names, env.step_dt, self.device)
-        self._command_sources = command_sources(self.motion, cfg.command_terms)
-        self._compute_body_kinematics()
+        self.command_sources = command_sources(self.motion, cfg.command_terms)
+        self._precompute_body_poses()
 
         # Each environment has its own frame cursor and robot-aligned reference poses.
         self.time_steps = torch.zeros(self.num_envs, dtype=torch.long, device=self.device)
@@ -100,19 +105,11 @@ class MotionCommand(CommandTerm):
         )
         self.kernel = kernel / kernel.sum()
 
-        self.metrics["error_anchor_pos"] = torch.zeros(self.num_envs, device=self.device)
-        self.metrics["error_anchor_rot"] = torch.zeros(self.num_envs, device=self.device)
-        self.metrics["error_anchor_lin_vel"] = torch.zeros(self.num_envs, device=self.device)
-        self.metrics["error_anchor_ang_vel"] = torch.zeros(self.num_envs, device=self.device)
-        self.metrics["error_body_pos"] = torch.zeros(self.num_envs, device=self.device)
-        self.metrics["error_body_rot"] = torch.zeros(self.num_envs, device=self.device)
-        self.metrics["error_body_lin_vel"] = torch.zeros(self.num_envs, device=self.device)
-        self.metrics["error_body_ang_vel"] = torch.zeros(self.num_envs, device=self.device)
-        self.metrics["error_joint_pos"] = torch.zeros(self.num_envs, device=self.device)
-        self.metrics["error_joint_vel"] = torch.zeros(self.num_envs, device=self.device)
-        self.metrics["sampling_entropy"] = torch.zeros(self.num_envs, device=self.device)
-        self.metrics["sampling_top1_prob"] = torch.zeros(self.num_envs, device=self.device)
-        self.metrics["sampling_top1_bin"] = torch.zeros(self.num_envs, device=self.device)
+        if cfg.compute_command_metrics_every_step:
+            self.metrics = {
+                name: torch.zeros(self.num_envs, device=self.device)
+                for name in (*_TRACKING_METRICS, *_SAMPLING_METRICS)
+            }
 
         print(
             f"[INFO] Motion tracking: {len(self.motion.motion_files)} clips from {self.motion.motion_file} "
@@ -128,11 +125,11 @@ class MotionCommand(CommandTerm):
     def command(self) -> torch.Tensor:
         """Reference windows in frame-offset order, with terms ordered within each frame."""
         if self._command_offsets is None:
-            return torch.cat([source[self.time_steps] for source in self._command_sources], dim=-1)
+            return torch.cat([source[self.time_steps] for source in self.command_sources], dim=-1)
         start = self.motion.clip_starts[self.motion.frame_clip[self.time_steps]]
         end = self.motion.frame_end[self.time_steps] - 1
         frames = (self.time_steps[:, None] + self._command_offsets).clamp(start[:, None], end[:, None])
-        return torch.cat([source[frames] for source in self._command_sources], dim=-1).flatten(1)
+        return torch.cat([source[frames] for source in self.command_sources], dim=-1).flatten(1)
 
     @property
     def joint_pos(self) -> torch.Tensor:
@@ -217,27 +214,34 @@ class MotionCommand(CommandTerm):
 
     # CommandTerm lifecycle hooks: diagnostics, reset sampling, and per-step advancement.
     def _update_metrics(self):
-        """Refresh diagnostic errors at the configured interval."""
-        self._metrics_update_counter = (self._metrics_update_counter + 1) % self.cfg.metrics_update_interval
-        if self._metrics_update_counter != 0:
-            return
+        """Update the metrics for the task related metrics."""
+        if self.cfg.compute_command_metrics_every_step:
+            self.metrics.update(zip(_TRACKING_METRICS, self._tracking_errors()))
 
-        self.metrics["error_anchor_pos"] = torch.norm(self.anchor_pos_w - self.robot_anchor_pos_w, dim=-1)
-        self.metrics["error_anchor_rot"] = math_utils.quat_error_magnitude(self.anchor_quat_w, self.robot_anchor_quat_w)
-        self.metrics["error_anchor_lin_vel"] = torch.norm(self.anchor_lin_vel_w - self.robot_anchor_lin_vel_w, dim=-1)
-        self.metrics["error_anchor_ang_vel"] = torch.norm(self.anchor_ang_vel_w - self.robot_anchor_ang_vel_w, dim=-1)
-        self.metrics["error_body_pos"] = torch.norm(self.body_pos_relative_w - self.robot_body_pos_w, dim=-1).mean(dim=-1)
-        self.metrics["error_body_rot"] = math_utils.quat_error_magnitude(
-            self.body_quat_relative_w, self.robot_body_quat_w
-        ).mean(dim=-1)
-        self.metrics["error_body_lin_vel"] = torch.norm(self.body_lin_vel_w - self.robot_body_lin_vel_w, dim=-1).mean(
-            dim=-1
+    def _tracking_errors(self) -> tuple[torch.Tensor, ...]:
+        """Tracking error functions accompanying motion tracking metrics."""
+        return (
+            torch.norm(self.anchor_pos_w - self.robot_anchor_pos_w, dim=-1),
+            math_utils.quat_error_magnitude(self.anchor_quat_w, self.robot_anchor_quat_w),
+            torch.norm(self.anchor_lin_vel_w - self.robot_anchor_lin_vel_w, dim=-1),
+            torch.norm(self.anchor_ang_vel_w - self.robot_anchor_ang_vel_w, dim=-1),
+            torch.norm(self.body_pos_relative_w - self.robot_body_pos_w, dim=-1).mean(dim=-1),
+            math_utils.quat_error_magnitude(self.body_quat_relative_w, self.robot_body_quat_w).mean(dim=-1),
+            torch.norm(self.body_lin_vel_w - self.robot_body_lin_vel_w, dim=-1).mean(dim=-1),
+            torch.norm(self.body_ang_vel_w - self.robot_body_ang_vel_w, dim=-1).mean(dim=-1),
+            torch.norm(self.joint_pos - self.robot_joint_pos, dim=-1),
+            torch.norm(self.joint_vel - self.robot_joint_vel, dim=-1),
         )
-        self.metrics["error_body_ang_vel"] = torch.norm(self.body_ang_vel_w - self.robot_body_ang_vel_w, dim=-1).mean(
-            dim=-1
-        )
-        self.metrics["error_joint_pos"] = torch.norm(self.joint_pos - self.robot_joint_pos, dim=-1)
-        self.metrics["error_joint_vel"] = torch.norm(self.joint_vel - self.robot_joint_vel, dim=-1)
+
+    def compute_command_metrics(self):
+        """Return instantaneous tracking performance diagnostics."""
+        def compute() -> dict[str, torch.Tensor | float]:
+            metrics: dict[str, torch.Tensor | float] = {
+                name: error.mean() for name, error in zip(_TRACKING_METRICS, self._tracking_errors())
+            }
+            metrics.update(zip(_SAMPLING_METRICS, self._sampling_statistics()))
+            return metrics
+        return compute
 
     def reset(self, env_ids=None):
         # Count failure once at episode reset, before any new reference is sampled.
@@ -302,33 +306,45 @@ class MotionCommand(CommandTerm):
         self.body_quat_relative_w[:] = orientation
 
     # Reset sampling: bias towards difficult clip segments or draw frames uniformly.
+    def _adaptive_probabilities(self):
+        # Keep every bin reachable; spread failure weights towards earlier nearby bins.
+        probabilities = self.bin_failed_count + self.cfg.adaptive_uniform_ratio / float(self.bin_count)
+        probabilities = (probabilities[self.bin_neighbors] * self.kernel).sum(-1)
+        return probabilities / probabilities.sum()
+
     def _adaptive_sampling(self, env_ids: torch.Tensor) -> None:
         """Sample a failure-weighted bin and a random frame within its clip."""
-        # Keep every bin reachable; spread failure weights towards earlier nearby bins.
-        sampling_probabilities = self.bin_failed_count + self.cfg.adaptive_uniform_ratio / float(self.bin_count)
-        sampling_probabilities = (sampling_probabilities[self.bin_neighbors] * self.kernel).sum(-1)
-        sampling_probabilities = sampling_probabilities / sampling_probabilities.sum()
-
-        sampled_bins = torch.multinomial(sampling_probabilities, len(env_ids), replacement=True)
+        probabilities = self._adaptive_probabilities()
+        sampled_bins = torch.multinomial(probabilities, len(env_ids), replacement=True)
         self.time_steps[env_ids] = self.bin_starts[sampled_bins] + (
             torch.rand(len(env_ids), device=self.device) * (self.bin_ends[sampled_bins] - self.bin_starts[sampled_bins])
         ).long()
 
-        if self._metrics_update_counter == 0:
-            entropy = -(sampling_probabilities * (sampling_probabilities + 1.0e-12).log()).sum()
-            entropy_norm = entropy / math.log(self.bin_count) if self.bin_count > 1 else torch.ones((), device=self.device)
-            top_prob, top_bin = sampling_probabilities.max(dim=0)
-            self.metrics["sampling_entropy"][:] = entropy_norm
-            self.metrics["sampling_top1_prob"][:] = top_prob
-            self.metrics["sampling_top1_bin"][:] = top_bin.float() / self.bin_count
+        if self.cfg.compute_command_metrics_every_step:
+            self._update_sampling_metrics(probabilities)
 
     def _uniform_sampling(self, env_ids: torch.Tensor) -> None:
         self.time_steps[env_ids] = torch.randint(
             0, self.motion.time_step_total, (len(env_ids),), device=self.device
         )
-        self.metrics["sampling_entropy"][:] = 1.0
-        self.metrics["sampling_top1_prob"][:] = 1.0 / self.bin_count
-        self.metrics["sampling_top1_bin"][:] = 0.5
+        if self.cfg.compute_command_metrics_every_step:
+            self._update_sampling_metrics()
+
+    def _sampling_statistics(self, probabilities=None):
+        if self.cfg.sampling_mode == "uniform":
+            return 1.0, 1.0 / self.bin_count, 0.5
+        if self.cfg.sampling_mode == "start":
+            return 0.0, 0.0, 0.0
+        if probabilities is None:
+            probabilities = self._adaptive_probabilities()
+        entropy = -(probabilities * (probabilities + 1.0e-12).log()).sum()
+        entropy_norm = entropy / math.log(self.bin_count) if self.bin_count > 1 else 1.0
+        top_prob, top_bin = probabilities.max(dim=0)
+        return entropy_norm, top_prob, top_bin.float() / self.bin_count
+
+    def _update_sampling_metrics(self, probabilities=None):
+        for name, value in zip(_SAMPLING_METRICS, self._sampling_statistics(probabilities)):
+            self.metrics[name][:] = value
 
     def _write_reference_state(self, env_ids: torch.Tensor, perturb: bool) -> None:
         """Write the selected reference frames, optionally adding configured reset noise."""
@@ -385,7 +401,7 @@ class MotionCommand(CommandTerm):
             skip_forward=False,
         )
 
-    def _compute_body_kinematics(self) -> None:
+    def _precompute_body_poses(self) -> None:
         """Precompute body trajectories once, using simulator forward kinematics.
 
         Temporarily use parallel environments to evaluate different clip frames;
@@ -424,11 +440,9 @@ class MotionCommand(CommandTerm):
 
         self.motion.set_body_poses(body_pos, body_quat)
 
-    # Debug rendering uses visual meshes only; it never writes simulator state.
-    def _set_debug_vis_impl(self, debug_vis: bool):
-        self._ghost_debug_vis = debug_vis
-        if hasattr(self, "_ghost") and hasattr(self._ghost, "markers"):
-            self._ghost.markers.set_visibility(debug_vis)
+
+    # -------------------- Debug rendering -------------------- #
+
 
     def get_motion_ghost(self):
         """Lazily share mesh and CPU motion caches across native and browser views."""
@@ -437,6 +451,11 @@ class MotionCommand(CommandTerm):
 
             self._ghost = MotionGhost(self)
         return self._ghost
+
+    def _set_debug_vis_impl(self, debug_vis: bool):
+        self._ghost_debug_vis = debug_vis
+        if hasattr(self, "_ghost") and hasattr(self._ghost, "markers"):
+            self._ghost.markers.set_visibility(debug_vis)
 
     def _debug_vis_callback(self, event):
         if not self._ghost_debug_vis or not self.robot.is_initialized:
@@ -456,7 +475,10 @@ class MotionCommand(CommandTerm):
             ghost.create_markers(self)
         ghost.update_markers(self)
 
-    # Small input helpers shared by reset and state-writing paths.
+
+    # -------------------- Internal helpers -------------------- #
+
+
     def _sample_range(self, keys: tuple[str, ...], ranges: dict[str, tuple[float, float]], count: int) -> torch.Tensor:
         """Sample independent noise components; unspecified keys receive zero noise."""
         bounds = torch.tensor([ranges.get(key, (0.0, 0.0)) for key in keys], device=self.device)

@@ -14,6 +14,7 @@ obstacle edge cylinders and foot volume points.
 from __future__ import annotations
 
 import inspect
+from functools import partial
 
 import numpy as np
 import trimesh
@@ -75,7 +76,7 @@ def debug_sources(env) -> list[tuple[str, object]]:
             for name in names:
                 cfg = manager.get_term_cfg(name)
                 if (
-                    getattr(cfg.func, "__name__", "") == "push_by_setting_velocity"
+                    getattr(cfg.func, "__name__", "") in ("push_by_setting_velocity", "push_body_by_velocity_impulse")
                     and "debug_vis" in inspect.signature(cfg.func).parameters
                 ):
                     asset_cfg = cfg.params.get("asset_cfg")
@@ -91,8 +92,9 @@ def debug_sources(env) -> list[tuple[str, object]]:
 class DebugScene:
     """Batched arrow and point meshes under ``/debug``."""
 
-    def __init__(self, server) -> None:
+    def __init__(self, server, *, max_sensor_points: int = _MAX_RAY_POINTS) -> None:
         self._server = server
+        self.max_sensor_points = max_sensor_points
         self._batches: dict[str, _Batch] = {}
         self._frames: dict[str, object] = {}
         self._lines: dict[str, object] = {}
@@ -215,11 +217,13 @@ class DebugScene:
 
     def show_motion(self, label: str, command, selector) -> None:
         """Instance the reference robot's meshes at its current clip poses."""
-        if label not in self._ghosts:
-            self._ghosts[label] = (command.get_motion_ghost(), [])
-        ghost, handles = self._ghosts[label]
-        meshes = ghost.bodies.hull_meshes if self._ghost_hulls else ghost.bodies.meshes
+        ghost = command.get_motion_ghost()
         positions, wxyz = ghost.poses(command, selector, max_envs=self.ghost_max_envs.get(label))
+        self.show_ghost_poses(label, ghost, positions, wxyz)
+
+    def show_ghost_poses(self, label, ghost, positions, wxyz) -> None:
+        _, handles = self._ghosts.setdefault(label, (ghost, []))
+        meshes = ghost.bodies.hull_meshes if self._ghost_hulls else ghost.bodies.meshes
         count = len(positions)
         if handles and len(handles[0].batched_positions) != count:
             for handle in handles:
@@ -284,11 +288,79 @@ class DebugScene:
             handle.remove()
 
 
+class DebugFrame:
+    """Draw live and retain the same geometry for replay."""
+
+    def __init__(self, scene: DebugScene) -> None:
+        self.scene = scene
+        self.max_sensor_points = scene.max_sensor_points
+        self.nbytes = 0
+        self._hulls = scene._ghost_hulls
+        self._draws: dict[str, partial] = {}
+
+    def _store(self, value):
+        if isinstance(value, np.ndarray):
+            value = value.astype(np.float32, copy=True)
+            self.nbytes += value.nbytes
+        return value
+
+    def _add(self, name, draw, *args, **kwargs) -> None:
+        args = tuple(self._store(arg) for arg in args)
+        kwargs = {key: self._store(value) for key, value in kwargs.items()}
+        draw(*args, **kwargs)
+        self._draws[name] = partial(draw, *args, **kwargs)
+
+    def show(self, name, *args, **kwargs):
+        self._add(name, self.scene.show, name, *args, **kwargs)
+
+    def show_frames(self, name, *args, **kwargs):
+        self._add(name, self.scene.show_frames, name, *args, **kwargs)
+
+    def show_lines(self, name, points, color):
+        self._add(name, self.scene.show_lines, name, points, color)
+
+    def show_obstacle(self, label, obstacle):
+        self._add(f"{label}/edges", self.scene.show_obstacle, label, obstacle)
+
+    def show_motion(self, label, command, selector):
+        ghost = command.get_motion_ghost()
+        poses = ghost.poses(command, selector, max_envs=self.scene.ghost_max_envs.get(label))
+        self._add(label, self.scene.show_ghost_poses, label, ghost, *poses)
+
+    def clear(self, label: str) -> None:
+        self.scene.clear(label)
+        for name in tuple(self._draws):
+            if name == label or name.startswith(label + "/"):
+                del self._draws[name]
+
+    def hide(self, label: str) -> None:
+        self.scene.hide(label)
+
+    def render(self, hidden=()) -> None:
+        scene = self.scene
+        scene.set_ghost_hulls(self._hulls)
+        stale = set(scene._batches) | scene._frames.keys() | scene._lines.keys() | scene._ghosts.keys()
+        for name, draw in self._draws.items():
+            if any(name == label or name.startswith(label + "/") for label in hidden):
+                continue
+            try:
+                draw()
+            except Exception as exc:
+                _debug_failure(scene, name, exc)
+            stale.discard(name)
+        for name in stale:
+            scene.hide(name)
+
+
 def draw_debug(
-    scene: DebugScene, terms: list[tuple[str, object]], enabled: dict[str, bool], selector, sensor_options=None,
+    live: DebugScene | DebugFrame, terms: list[tuple[str, object]], enabled: dict[str, bool],
+    selector, sensor_options=None, *, recording: DebugFrame | None = None, layers=(),
 ) -> None:
     """Refresh every enabled term. ``selector`` matches the robots currently shown."""
     for label, obj in terms:
+        scene = live
+        if recording is not None and ("commands" if label.startswith("command/") else "debug") in layers:
+            scene = recording
         options = (sensor_options or {}).get(label)
         if not enabled.get(label, False):
             scene.hide(label)
@@ -313,10 +385,14 @@ def draw_debug(
             else:
                 _draw_rays(scene, label, obj, selector)
         except Exception as exc:
-            if label not in _warned:
-                _warned.add(label)
-                print(f"[WARN] debug_viz {label}: {exc}")
-            scene.clear(label)
+            _debug_failure(scene, label, exc)
+
+
+def _debug_failure(scene, label, exc):
+    if label not in _warned:
+        _warned.add(label)
+        print(f"[WARN] debug_viz {label}: {exc}")
+    scene.clear(label)
 
 
 def _drawable(obj) -> bool:
@@ -405,17 +481,19 @@ def _draw_depth_points(scene, label, obj, selector):
         return
     height, width = data.image_shape
     depth = as_numpy(data.output[key], selector).reshape(-1, height * width)
-    step = max(1, int(np.ceil(depth.size / _MAX_RAY_POINTS)))
-    pixels = np.arange(0, height * width, step)
+    step = max(1, int(np.ceil(depth.size / scene.max_sensor_points)))
+    camera_ids, pixels = np.divmod(np.arange(0, depth.size, step), height * width)
     uv = np.column_stack((pixels % width, pixels // width, np.ones(len(pixels))))
-    rays = np.einsum("nij,kj->nki", np.linalg.inv(as_numpy(data.intrinsic_matrices, selector)), uv)
+    inverse_intrinsics = np.linalg.inv(as_numpy(data.intrinsic_matrices, selector))
+    rays = np.einsum("nij,nj->ni", inverse_intrinsics[camera_ids], uv)
     if key == "distance_to_camera":
-        rays /= np.linalg.norm(rays, axis=-1, keepdims=True)
-    ranges = depth[:, pixels]
+        rays /= np.linalg.norm(rays, axis=1, keepdims=True)
+    ranges = depth[camera_ids, pixels]
     pos, quat = _sensor_pose(obj, selector)
     valid = np.isfinite(ranges) & (ranges > 0)
-    points = pos[:, None] + rotate_wxyz(quat[:, None], rays * np.where(valid, ranges, 0.0)[..., None])
-    points = points[valid].astype(np.float32)
+    valid_cameras = camera_ids[valid]
+    points = pos[valid_cameras] + rotate_wxyz(quat[valid_cameras], rays[valid] * ranges[valid, None])
+    points = points.astype(np.float32)
     vis = getattr(obj.cfg, "visualizer_cfg", None)
     radius, color = _sphere_style_from_marker_cfg(vis, "hit", _BLUE_RAY_HIT_RADIUS, _BLUE_RAY_HIT_COLOR)
     scene.show(f"{label}/points/hit", "point", points, np.tile([1., 0., 0., 0.], (len(points), 1)),
@@ -495,7 +573,7 @@ def _draw_goal_pose(scene, label, obj, selector) -> None:
 def _draw_push(scene, label, obj, selector) -> None:
     opacity = as_numpy(obj.opacity(selector), slice(None))
     active = opacity > 0.0
-    origin = as_numpy(obj.robot.data.root_link_pos_w, selector)[active]
+    origin = as_numpy(obj.position_w, selector)[active]
     velocity = as_numpy(obj.velocity_w, selector)[active]
     quat = np.tile([1.0, 0.0, 0.0, 0.0], (len(velocity), 1))
     scale = obj.cfg.visualizer_cfg.markers["arrow"].scale
@@ -548,8 +626,8 @@ def _draw_rays(scene: DebugScene, label: str, obj, selector) -> None:
     indices = as_numpy(indices, selector).reshape(-1) if indices is not None else np.zeros(len(hits), dtype=np.int32)
     finite = np.isfinite(hits).all(axis=1)
     points, indices = hits[finite], indices[finite]
-    if len(points) > _MAX_RAY_POINTS:
-        stride = int(np.ceil(len(points) / _MAX_RAY_POINTS))
+    if len(points) > scene.max_sensor_points:
+        stride = int(np.ceil(len(points) / scene.max_sensor_points))
         points, indices = points[::stride], indices[::stride]
     if len(points) == 0:
         scene.clear(f"{label}/points")

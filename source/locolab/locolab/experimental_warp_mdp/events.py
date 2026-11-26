@@ -10,6 +10,23 @@ from isaaclab_experimental.envs.mdp.events import push_by_setting_velocity as _p
 from isaaclab_experimental.managers import ManagerTermBase, SceneEntityCfg
 from isaaclab_experimental.utils.warp import WarpCapturable
 
+from locolab.tasks.manager_based.locomotion.velocity.mdp.events import (
+    apply_assistive_force as _AssistiveForce,
+    push_body_by_velocity_impulse as _push_body_by_velocity_impulse,
+)
+
+
+class apply_assistive_force(_AssistiveForce, ManagerTermBase):
+    _warp_capturable = False
+
+    def reset(self, env_mask=None):
+        super().reset()
+
+
+@WarpCapturable(False, reason="Body impulses use indexed instantaneous wrenches")
+def push_body_by_velocity_impulse(env, env_mask, velocity_range, asset_cfg, debug_vis=False, debug_vis_cfg=None):
+    _push_body_by_velocity_impulse(env, _mask_to_env_ids(env_mask), velocity_range, asset_cfg, debug_vis, debug_vis_cfg)
+
 
 @WarpCapturable(False, reason="Push visualization records transient state outside CUDA graphs")
 def push_by_setting_velocity(

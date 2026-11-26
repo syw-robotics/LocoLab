@@ -48,60 +48,109 @@ def _enabled_collision_links(spawn, link_names: list[str]) -> set[str]:
     return enabled
 
 
-class _RobotScene(ViserMujocoScene):
-    def restore_dae_visuals(self, path: Path) -> None:
-        """Restore DAE materials lost in assetx's geometry-only STL conversion."""
+class _RobotMeshApi:
+    """Finish robot meshes before Viser serializes their creation messages."""
+
+    def __init__(self, api, model: mujoco.MjModel, path: Path, asset_cache) -> None:
         from assetx.conversion.usd.visual_meshes import find_visual_mesh_sources, load_visual_mesh_sources
 
+        self._api = api
+        self._asset_cache = asset_cache
+        self._model = model
+        self._body_ids = {model.body(i).name or f"body_{i}": i for i in range(model.nbody)}
+        self._dae_scenes = {}
         sidecar = find_visual_mesh_sources(path)
-        if sidecar is None:
-            return
-        sources = load_visual_mesh_sources(sidecar)
-        model = self.mj_model
-        geom_sources = {}
-        for gid in range(model.ngeom):
-            if model.geom_group[gid] != 0 or model.geom_type[gid] != mujoco.mjtGeom.mjGEOM_MESH:
-                continue
-            name = model.geom(gid).name or model.mesh(int(model.geom_dataid[gid])).name
-            if name in sources:
-                geom_sources[gid] = sources[name]
-        if not geom_sources:
-            return
-
-        handles = [(int(g.body_ids[0]), g.handle) for g in self._mesh_groups if g.group_id == 0]
-        handles += [(body, handle) for (body, group, _), handle in self._fixed_geom_handles.items() if group == 0]
-        loaded = {}
-        for body, handle in handles:
-            geom_ids = np.flatnonzero(
-                (model.geom_bodyid == body) & (model.geom_group == 0) & (model.geom_rgba[:, 3] != 0)
-            ).tolist()
-            groups = group_geoms_by_visual_compat(model, geom_ids)
-            suffix = re.search(r"/sub(\d+)$", handle.name)
-            group = groups[int(suffix[1]) if suffix else 0]
-            if not any(gid in geom_sources for gid in group):
-                continue
-            parts = []
-            for gid in group:
-                source = geom_sources.get(gid)
-                if source is None:
-                    parts.append(merge_geoms(model, [gid]))
+        sources = load_visual_mesh_sources(sidecar) if sidecar is not None else {}
+        self._geom_sources = {}
+        if sources:
+            for gid in range(model.ngeom):
+                if model.geom_group[gid] != 0 or model.geom_type[gid] != mujoco.mjtGeom.mjGEOM_MESH:
                     continue
-                if source not in loaded:
-                    loaded[source] = trimesh.load(source, force="scene", process=False)
-                part = loaded[source].copy()
-                mesh_id = int(model.geom_dataid[gid])
-                part.apply_scale(model.mesh_scale[mesh_id])
-                # MuJoCo recenters/rotates mesh vertices and folds that transform
-                # into the geom pose. Undo it before using the original DAE.
-                mesh_frame = np.eye(4)
-                mesh_frame[:3, :3] = SO3(model.mesh_quat[mesh_id]).as_matrix()
-                mesh_frame[:3, 3] = model.mesh_pos[mesh_id]
-                geom_frame = np.eye(4)
-                geom_frame[:3, :3] = SO3(model.geom_quat[gid]).as_matrix()
-                geom_frame[:3, 3] = model.geom_pos[gid]
-                part.apply_transform(geom_frame @ np.linalg.inv(mesh_frame))
-                parts.append(part)
-            handle.glb_data = trimesh.scene.scene.append_scenes(parts).export(file_type="glb")
+                name = model.geom(gid).name or model.mesh(int(model.geom_dataid[gid])).name
+                if name in sources:
+                    self._geom_sources[gid] = sources[name]
+
+    def __getattr__(self, name):
+        return getattr(self._api, name)
+
+    def add_mesh_trimesh(self, name, mesh, **kwargs):
+        mesh = self._finish_mesh(name, mesh)
+        if self._asset_cache is not None:
+            return self._api.add_glb(name, self._asset_cache.mesh_reference(name, mesh), **kwargs)
+        return self._api.add_mesh_trimesh(name, mesh, **kwargs)
+
+    def add_batched_meshes_trimesh(self, name, mesh, **kwargs):
+        mesh = self._finish_mesh(name, mesh)
+        if self._asset_cache is not None:
+            return self._api.add_batched_glb(name, self._asset_cache.mesh_reference(name, mesh), **kwargs)
+        return self._api.add_batched_meshes_trimesh(name, mesh, **kwargs)
+
+    def _finish_mesh(self, name, mesh):
+        # mjviser 0.0.14 names each geometry subgroup by its representative body.
+        match = re.fullmatch(r"/(bodies|fixed_bodies)/(.+)/group([01])(?:/sub(\d+))?", name)
+        if match is None:
+            return mesh
+        namespace, body_name, group_id, sub_idx = match.groups()
+        if group_id == "1":
+            # A BLEND material preserves collision transparency in the browser.
+            collision = trimesh.load(io.BytesIO(mesh.export(file_type="glb")), file_type="glb", force="scene")
+            for part in collision.geometry.values():
+                material = trimesh.visual.material.PBRMaterial(
+                    baseColorFactor=part.visual.vertex_colors[0], alphaMode="BLEND", doubleSided=True
+                )
+                part.visual = trimesh.visual.TextureVisuals(material=material)
+            return collision
+        if not self._geom_sources:
+            return mesh
+
+        # Restore DAE materials lost in assetx's geometry-only STL conversion.
+        model = self._model
+        geom_mask = (model.geom_bodyid == self._body_ids[body_name]) & (model.geom_group == 0)
+        geom_mask &= model.geom_rgba[:, 3] != 0
+        if namespace == "fixed_bodies":
+            geom_mask &= model.geom_type != mujoco.mjtGeom.mjGEOM_PLANE
+        groups = group_geoms_by_visual_compat(model, np.flatnonzero(geom_mask).tolist())
+        group = groups[int(sub_idx or 0)]
+        if not any(gid in self._geom_sources for gid in group):
+            return mesh
+        parts = []
+        for gid in group:
+            source = self._geom_sources.get(gid)
+            if source is None:
+                parts.append(merge_geoms(model, [gid]))
+                continue
+            if source not in self._dae_scenes:
+                self._dae_scenes[source] = trimesh.load(source, force="scene", process=False)
+            part = self._dae_scenes[source].copy()
+            mesh_id = int(model.geom_dataid[gid])
+            part.apply_scale(model.mesh_scale[mesh_id])
+            # MuJoCo folds the mesh's centering/rotation into the geom pose.
+            mesh_frame = np.eye(4)
+            mesh_frame[:3, :3] = SO3(model.mesh_quat[mesh_id]).as_matrix()
+            mesh_frame[:3, 3] = model.mesh_pos[mesh_id]
+            geom_frame = np.eye(4)
+            geom_frame[:3, :3] = SO3(model.geom_quat[gid]).as_matrix()
+            geom_frame[:3, 3] = model.geom_pos[gid]
+            part.apply_transform(geom_frame @ np.linalg.inv(mesh_frame))
+            parts.append(part)
+        return trimesh.scene.scene.append_scenes(parts)
+
+
+class _RobotMeshServer:
+    """Use the mesh adapter only while mjviser builds the robot scene."""
+
+    def __init__(self, server, model, path, asset_cache) -> None:
+        self._server = server
+        self.scene = _RobotMeshApi(server.scene, model, path, asset_cache)
+
+    def __getattr__(self, name):
+        return getattr(self._server, name)
+
+
+class _RobotScene(ViserMujocoScene):
+    def __init__(self, server, model, num_envs: int, *, mjcf_path: Path, asset_cache) -> None:
+        super().__init__(_RobotMeshServer(server, model, mjcf_path, asset_cache), model, num_envs=num_envs)
+        self.server = server
 
     def _compute_hull_body_meshes(self) -> None:
         # mjviser's default overlay also includes collision meshes and omits
@@ -173,28 +222,16 @@ class MjviserRobot:
             rgba = (40, 200, 90, 120) if active else (170, 176, 184, 70)  # Green / gray.
             model.geom_rgba[geom] = np.array(rgba) / 255.0
 
-    def create_scene(self, server: viser.ViserServer) -> None:
+    def create_scene(self, server: viser.ViserServer, *, asset_cache=None) -> None:
         """Upload geometry and preserve LocoLab's collision-layer appearance."""
-        self.scene = _RobotScene(server, self.model, num_envs=len(self._positions))
-        self.scene.restore_dae_visuals(self._mjcf_path)
+        self.scene = _RobotScene(
+            server, self.model, len(self._positions), mjcf_path=self._mjcf_path, asset_cache=asset_cache
+        )
         # Retain mjviser's per-mesh LOD rules so the toggle can restore them.
         self._visual_lods = [
             (group.handle, group.handle.lod) for group in self.scene._mesh_groups if group.group_id == 0
         ]
         self.set_distance_lod(self.distance_lod)
-
-        # mjviser exports flat colors as vertex colors without a BLEND material.
-        # Private handle access stays in this adapter (mjviser version pinned).
-        handles = [group.handle for group in self.scene._mesh_groups if group.group_id == 1]
-        handles += [handle for (_, group, _), handle in self.scene._fixed_geom_handles.items() if group == 1]
-        for handle in handles:
-            meshes = trimesh.load(io.BytesIO(handle.glb_data), file_type="glb", force="scene")
-            for mesh in meshes.geometry.values():
-                material = trimesh.visual.material.PBRMaterial(
-                    baseColorFactor=mesh.visual.vertex_colors[0], alphaMode="BLEND", doubleSided=True
-                )
-                mesh.visual = trimesh.visual.TextureVisuals(material=material)
-            handle.glb_data = meshes.export(file_type="glb")
 
         # Terrain and debug overlays live under /fixed_bodies too, so mjviser's
         # camera-tracking offset moves the entire world consistently.
@@ -270,12 +307,16 @@ class MjviserRobot:
         position = packed[..., :3] + (rotation @ offset_position[..., None])[..., 0]
         return position, rotation @ self._body_offsets[:, :3, :3]
 
-    def update(self, selector, env_idx: int) -> None:
-        """Transfer selected body poses once and let mjviser update its instances."""
-        position, rotation = self.body_poses(selector)
-        self._positions[selector, 1:] = position
-        self._rotations[selector, 1:] = rotation
-        self.scene.show_only_selected = position.shape[0] != len(self._positions)
+    def update(self, selector, env_idx: int, *, capture: bool = False) -> tuple[np.ndarray, np.ndarray] | None:
+        """Transfer poses once, including hidden environments when capturing a frame."""
+        read_selector = slice(None) if capture else selector
+        position, rotation = self.body_poses(read_selector)
+        self._positions[read_selector, 1:] = position
+        self._rotations[read_selector, 1:] = rotation
+        if not capture:
+            self.scene.show_only_selected = position.shape[0] != len(self._positions)
 
         # mjviser caches these arrays and serializes poses on the websocket thread.
-        self.scene.update_from_arrays(self._positions.copy(), self._rotations.copy(), env_idx=env_idx)
+        poses = self._positions.copy(), self._rotations.copy()
+        self.scene.update_from_arrays(*poses, env_idx=env_idx)
+        return poses if capture else None

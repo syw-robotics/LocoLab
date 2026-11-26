@@ -1,14 +1,13 @@
 """Warp motion progression and sampling; retain the proven simulator reset writers."""
 
-import math
-
 import numpy as np
 import torch
 import warp as wp
 
+from isaaclab.utils import index_fill_
 from isaaclab.utils.warp.launch_cache import _WarpLaunchCache
 from isaaclab.utils.warp.math import yaw_quat
-from locolab.tasks.manager_based.locomotion.tracking.mdp.commands.motion_command import MotionCommand
+from locolab.tasks.manager_based.locomotion.tracking.mdp.commands.motion_command import MotionCommand, _TRACKING_METRICS
 
 from .tracking import _rotation_error
 
@@ -125,7 +124,7 @@ def _distribution(counts: wp.array(dtype=float), any_failed: wp.array(dtype=int)
                   uniform: float, cdf: wp.array(dtype=float)):
     total = float(0.0)
     for b in range(failed.shape[0]):
-        if any_failed[0] > 0:
+        if any_failed and any_failed[0] > 0:
             current[b] = counts[b]
         value = float(0.0)
         for k in range(weights.shape[0]):
@@ -199,28 +198,39 @@ class WarpMotionCommand(MotionCommand):
         self._body_ids_wp = wp.array(self._body_ids, dtype=int, device=self.device)
         self._reference_lin_wp = wp.from_torch(self.motion.body_lin_vel_w, dtype=wp.vec3)
         self._reference_ang_wp = wp.from_torch(self.motion.body_ang_vel_w, dtype=wp.vec3)
-        self._metrics_wp = wp.zeros((self.num_envs, len(self.metrics)), device=self.device)
-        metric_values = wp.to_torch(self._metrics_wp)
-        self.metrics = {name: metric_values[:, j] for j, name in enumerate(self.metrics)}
-        self._metric_means_wp = wp.zeros(len(self.metrics), device=self.device)
-        self._metric_means = wp.to_torch(self._metric_means_wp)
-        self._counter_wp = wp.from_torch(self.command_counter)
+        if cfg.compute_command_metrics_every_step:
+            self._metrics_wp = wp.zeros((self.num_envs, len(self.metrics)), device=self.device)
+            self.metrics = dict(zip(self.metrics, wp.to_torch(self._metrics_wp).unbind(dim=1)))
+            self._metric_means_wp = wp.zeros(len(self.metrics), device=self.device)
+            self._metric_means = wp.to_torch(self._metric_means_wp)
+            self._counter_wp = wp.from_torch(self.command_counter)
 
     def _update_metrics(self):
-        self._metrics_update_counter = (self._metrics_update_counter + 1) % self.cfg.metrics_update_interval
-        if self._metrics_update_counter != 0:
-            return
+        if self.cfg.compute_command_metrics_every_step:
+            self._launch_metrics(self._metrics_wp)
+
+    def _tracking_errors(self) -> tuple[torch.Tensor, ...]:
+        errors = wp.empty((self.num_envs, len(_TRACKING_METRICS)), device=self.device)
+        self._launch_metrics(errors)
+        return wp.to_torch(errors).unbind(dim=1)
+
+    def _launch_metrics(self, out):
         data = self.robot.data
         wp.launch(_metrics, dim=self.num_envs, inputs=[
             self._frames_wp, self._origins_wp, self._positions_wp, self._orientations_wp,
             self._reference_lin_wp, self._reference_ang_wp, *self._joint_reference,
             self._relative_pos_wp, self._relative_ori_wp, data.body_link_pose_w.warp, data.body_link_vel_w.warp,
             data.joint_pos.warp, data.joint_vel.warp, self._body_ids_wp, self._joint_ids_wp,
-            self.robot_anchor_body_index, self.motion_anchor_body_index, self._metrics_wp,
+            self.robot_anchor_body_index, self.motion_anchor_body_index, out,
         ], device=self.device)
 
     def reset(self, env_ids=None):
         ids = self._as_env_ids(slice(None) if env_ids is None else env_ids)
+        if not self.cfg.compute_command_metrics_every_step:
+            index_fill_(self.command_counter, ids, 0)
+            self._resample(ids)
+            return {}
+
         self._metric_means_wp.zero_()
         wp.launch(_reset_metrics, dim=(ids.numel(), len(self.metrics)), inputs=[
             wp.from_torch(ids), self._metrics_wp, self._metric_means_wp, self._counter_wp,
@@ -278,15 +288,19 @@ class WarpMotionCommand(MotionCommand):
                   self._weights_wp, self.cfg.adaptive_uniform_ratio, self._cdf], device=self.device)
         wp.launch(_sample, dim=env_ids.numel(), inputs=[ids, self._env.rng_state_wp, self._cdf, self._frames_wp,
                   self.motion.time_step_total, True], device=self.device)
-        if self._metrics_update_counter == 0:
-            # Infrequent diagnostics retain the existing public metrics interface.
-            probabilities = wp.to_torch(self._cdf).clone()
-            probabilities[1:] -= wp.to_torch(self._cdf)[:-1]
-            entropy = -(probabilities * (probabilities + 1e-12).log()).sum()
-            self.metrics["sampling_entropy"][:] = entropy / math.log(self.bin_count) if self.bin_count > 1 else 1.0
-            top, index = probabilities.max(0)
-            self.metrics["sampling_top1_prob"][:] = top
-            self.metrics["sampling_top1_bin"][:] = index.float() / self.bin_count
+        if self.cfg.compute_command_metrics_every_step:
+            self._update_sampling_metrics(self._adaptive_probabilities(self._cdf))
+
+    def _adaptive_probabilities(self, cdf=None):
+        if cdf is None:
+            cdf = wp.empty_like(self._cdf)
+            # A snapshot only reads the failure history, without recording new failures.
+            wp.launch(_distribution, dim=1, inputs=[self._counts, None, self._current_wp, self._failed_wp,
+                      self._weights_wp, self.cfg.adaptive_uniform_ratio, cdf], device=self.device)
+        cumulative = wp.to_torch(cdf)
+        probabilities = cumulative.clone()
+        probabilities[1:] -= cumulative[:-1]
+        return probabilities
 
     def _write_reference_state(self, env_ids, perturb):
         # Also covers evaluation's explicit frame seeks before writing state.
@@ -314,9 +328,8 @@ class WarpMotionCommand(MotionCommand):
     def _uniform_sampling(self, env_ids):
         wp.launch(_sample, dim=env_ids.numel(), inputs=[wp.from_torch(env_ids), self._env.rng_state_wp, self._cdf,
                   self._frames_wp, self.motion.time_step_total, False], device=self.device)
-        self.metrics["sampling_entropy"][:] = 1.0
-        self.metrics["sampling_top1_prob"][:] = 1.0 / self.bin_count
-        self.metrics["sampling_top1_bin"][:] = 0.5
+        if self.cfg.compute_command_metrics_every_step:
+            self._update_sampling_metrics()
 
 
 @wp.kernel(enable_backward=False)

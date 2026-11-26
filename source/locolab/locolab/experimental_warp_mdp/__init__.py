@@ -7,6 +7,8 @@ from isaaclab_tasks_experimental.core.velocity.mdp import *  # noqa: F401, F403
 
 from .actions import DelayedAction, EncoderBiasJointPositionAction
 from .events import (
+    apply_assistive_force,
+    push_body_by_velocity_impulse,
     push_by_setting_velocity,
     randomize_actuator_gains,
     randomize_encoder_bias,
@@ -14,6 +16,7 @@ from .events import (
 )
 from .observations import (
     feet_contact_flag,
+    gait_phase,
     generated_commands,
     height_scan,
     joint_acc,
@@ -27,12 +30,14 @@ from .rewards import (
     feet_air_time,
     feet_clearance_flat,
     feet_flight,
+    feet_gait,
     feet_landing_vel_z_l2,
     feet_single_support,
     feet_short_swing,
     feet_slide,
     feet_standing_contact,
     feet_stumble,
+    feet_swing_height_l2,
     feet_too_near_bipedal,
     flat_orientation_l2,
     joint_power_l1,
@@ -42,6 +47,7 @@ from .rewards import (
     track_lin_vel_xy_exp,
     track_lin_vel_xy_yaw_frame_exp,
     undesired_contacts,
+    variable_posture,
 )
 from .terminations import bad_orientation, illegal_contact
 
@@ -56,6 +62,10 @@ def prepare_cfg(cfg):
     from isaaclab.sensors import RayCasterCfg
 
     from locolab.tasks.manager_based.locomotion.velocity import mdp as velocity_mdp
+    from locolab.tasks.manager_based.locomotion.velocity.config.unitree_as2.flat_env_cfg import (
+        AS2FlatEnvCfg,
+        AS2FlatEnvCfg_PLAY,
+    )
     from locolab.tasks.manager_based.locomotion.velocity.config.unitree_b2.flat_env_cfg import (
         B2FlatEnvCfg,
         B2FlatEnvCfg_PLAY,
@@ -81,12 +91,12 @@ def prepare_cfg(cfg):
 
     velocity_types = (
         Go2FlatEnvCfg, Go2FlatEnvCfg_PLAY, Go2RoughEnvCfg, Go2RoughEnvCfg_PLAY,
-        B2FlatEnvCfg, B2FlatEnvCfg_PLAY, G1FlatEnvCfg, G1FlatEnvCfg_PLAY,
+        AS2FlatEnvCfg, AS2FlatEnvCfg_PLAY, B2FlatEnvCfg, B2FlatEnvCfg_PLAY, G1FlatEnvCfg, G1FlatEnvCfg_PLAY,
     )
     tracking_types = (G1TrackingEnvCfg, G1TrackingEnvCfg_PLAY)
     if type(cfg) not in (*velocity_types, *tracking_types):
         raise ValueError(
-            "--mdp_backend warp currently supports Velocity-{Flat,Rough}-Go2, Velocity-Flat-{B2,G1},"
+            "--mdp_backend warp currently supports Velocity-{Flat,Rough}-Go2, Velocity-Flat-{AS2,B2,G1},"
             " Tracking-Flat-G1 and their Play configs."
         )
     if getattr(cfg, "_locolab_warp", False):

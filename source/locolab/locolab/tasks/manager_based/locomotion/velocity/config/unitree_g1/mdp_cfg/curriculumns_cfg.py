@@ -16,11 +16,17 @@ import locolab.tasks.manager_based.locomotion.velocity.mdp as mdp
 class FlatCurriculumsCfg:
     """Curriculum terms for flat terrain."""
 
+    assistive_force = CurrTerm(
+        mdp.assistive_force_levels,
+        params={
+            "starting_force": 300.0,
+            "decay_steps": 12_000,
+        },
+    )
     lin_vel_cmd_levels = CurrTerm(
         mdp.lin_vel_cmd_levels,
         params={
-            #  "max_lin_vel_x_ranges": (-0.5, 1.5),
-            "max_lin_vel_x_ranges": (-0.5, 1.0),
+            "max_lin_vel_x_ranges": (-0.5, 1.5),
             "max_lin_vel_y_ranges": (-0.5, 0.5),
             "percentage_threshold": 0.75,
             "velocity_step": 0.1,
@@ -38,7 +44,7 @@ class FlatCurriculumsCfg:
         mdp.push_robot_velocity_levels,
         params={
             "max_push_velocity_ranges": {"x": (-1.0, 1.0), "y": (-1.0, 1.0)},
-            "percentage_threshold": 0.75,
+            "percentage_threshold": 0.80,
             "velocity_step": 0.1,
         },
     )

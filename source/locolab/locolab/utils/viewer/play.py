@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import argparse
+from pathlib import Path
 
 
 class _IdlePlayViewer:
@@ -35,6 +36,16 @@ def add_play_viewer_args(parser: argparse.ArgumentParser) -> None:
     )
     parser.add_argument("--viser-port", type=int, default=8080, help="Viser port. Used only with --viser.")
     parser.add_argument(
+        "--viser-low-bandwidth",
+        action="store_true",
+        help="With --viser, limit scene updates and point counts for remote play.",
+    )
+    parser.add_argument(
+        "--viser-cache-assets",
+        action="store_true",
+        help="With --viser, cache scene GLBs in the browser until the viewer server restarts.",
+    )
+    parser.add_argument(
         "--viser-host",
         type=str,
         default="0.0.0.0",
@@ -54,10 +65,17 @@ def prepare_play_viewer(args, env_cfg) -> None:
     retain_terrain_mesh_for_viewer(env_cfg)
 
 
-def open_play_viewer(env, args):
+def open_play_viewer(env, args, *, checkpoint=None):
     """Open the viewer, or return an idle object with the same methods."""
     if not getattr(args, "viser", False):
         return _IdlePlayViewer()
     from .viser_play import ViserPlayViewer
 
-    return ViserPlayViewer(env, host=args.viser_host, port=args.viser_port)
+    return ViserPlayViewer(
+        env,
+        host=args.viser_host,
+        recordings_dir=Path(checkpoint).parent / "recordings" if checkpoint is not None else None,
+        port=args.viser_port,
+        low_bandwidth=getattr(args, "viser_low_bandwidth", False),
+        cache_assets=getattr(args, "viser_cache_assets", False),
+    )

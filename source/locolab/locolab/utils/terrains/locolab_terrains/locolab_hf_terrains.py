@@ -7,7 +7,7 @@ import numpy as np
 from isaaclab.terrains.height_field.utils import height_field_to_mesh, to_discrete_units
 
 from . import locolab_hf_terrains_cfg
-from .utils import _finalize_height_field
+from .utils import finalize_height_field
 
 
 def _height_field_origin(height_field: np.ndarray, cfg, height: int | None = None) -> np.ndarray:
@@ -45,11 +45,11 @@ def _pack_height_field(
 def flat_rough_terrain(
     difficulty: float, cfg: locolab_hf_terrains_cfg.HfFlatRoughTerrainCfg
 ) -> tuple[np.ndarray, np.ndarray]:
-    """Generate flat terrain with LocoLab fractal Perlin roughness."""
+    """Generate flat terrain with Perlin roughness and optional local pits and bumps."""
     width_pixels = int(cfg.size[0] / cfg.horizontal_scale)
     length_pixels = int(cfg.size[1] / cfg.horizontal_scale)
     hf_raw = np.zeros((width_pixels, length_pixels), dtype=np.int16)
-    return _pack_height_field(_finalize_height_field(cfg, hf_raw, difficulty), cfg)
+    return _pack_height_field(finalize_height_field(cfg, hf_raw, difficulty), cfg)
 
 
 @height_field_to_mesh
@@ -113,7 +113,7 @@ def pyramid_sloped_rough_terrain(
     z_pf = hf_raw[x_pf, y_pf]
     hf_raw = np.clip(hf_raw, min(0, z_pf), max(0, z_pf))
 
-    hf_raw = _finalize_height_field(cfg, hf_raw, difficulty)
+    hf_raw = finalize_height_field(cfg, hf_raw, difficulty)
 
     # round off the heights to the nearest vertical step
     return _pack_height_field(np.rint(hf_raw).astype(np.int16), cfg, _center_height(hf_raw))
@@ -184,7 +184,7 @@ def discrete_obstacles_terrain(
     y2 = (length_pixels + center_platform_width) // 2
     hf_raw[x1:x2, y1:y2] = 0
 
-    hf_raw = _finalize_height_field(cfg, hf_raw, difficulty)
+    hf_raw = finalize_height_field(cfg, hf_raw, difficulty)
 
     return _pack_height_field(np.rint(hf_raw).astype(np.int16), cfg, _center_height(hf_raw))
 
@@ -248,7 +248,7 @@ def gap_terrain(
     hf_raw[x11:x22, y22:] = 0
     hf_raw[x22:, :] = 0
 
-    hf_raw = _finalize_height_field(cfg, hf_raw, difficulty)
+    hf_raw = finalize_height_field(cfg, hf_raw, difficulty)
 
     # round off the heights to the nearest vertical step
     return _pack_height_field(np.rint(hf_raw).astype(np.int16), cfg, _center_height(hf_raw))
@@ -330,7 +330,7 @@ def double_gap_terrain(
 
     hf_raw[x1:x2, y1:y2] = platform_height_pixels
 
-    hf_raw = _finalize_height_field(cfg, hf_raw, difficulty)
+    hf_raw = finalize_height_field(cfg, hf_raw, difficulty)
 
     # round off the heights to the nearest vertical step
     return _pack_height_field(np.rint(hf_raw).astype(np.int16), cfg, _center_height(hf_raw))
@@ -455,7 +455,7 @@ def straight_gap_terrain(
             lo, hi = (cursor, island_start) if sign < 0 else (island_start, cursor)
             _paint(lo, hi, y_offset_m, y_width_m, int(height_m / cfg.vertical_scale))
 
-    hf_raw = _finalize_height_field(cfg, hf_raw, difficulty, mask=walkable)
+    hf_raw = finalize_height_field(cfg, hf_raw, difficulty, mask=walkable)
     return _pack_height_field(np.rint(hf_raw).astype(np.int16), cfg, _center_height(hf_raw))
 
 
@@ -507,7 +507,7 @@ def hurdle_terrain(
     hf_raw[x1:x2, y11:y1] = hurdle_height_pixels
     hf_raw[x1:x2, y2:y22] = hurdle_height_pixels
 
-    hf_raw = _finalize_height_field(cfg, hf_raw, difficulty)
+    hf_raw = finalize_height_field(cfg, hf_raw, difficulty)
 
     # round off the heights to the nearest vertical step
     return _pack_height_field(np.rint(hf_raw).astype(np.int16), cfg, _center_height(hf_raw))
@@ -570,5 +570,5 @@ def pyramid_stairs_terrain(
         current_step_height += step_height
         hf_raw[start_x:stop_x, start_y:stop_y] = current_step_height
 
-    hf_raw = _finalize_height_field(cfg, hf_raw, difficulty)
+    hf_raw = finalize_height_field(cfg, hf_raw, difficulty)
     return _pack_height_field(np.rint(hf_raw).astype(np.int16), cfg, _center_height(hf_raw))

@@ -25,7 +25,6 @@ from locolab.utils.terrains import TerrainImporterCfg
 from locolab.tasks.manager_based.locomotion.velocity.config.unitree_g1.mdp_cfg import (  # isort: skip
     ActionsCfg,
     CommandsCfg,
-    EventCfg,
     FlatRewardsCfg,
     PrivObsCfg,
     PropObsCfg,
@@ -34,9 +33,8 @@ from locolab.tasks.manager_based.locomotion.velocity.config.unitree_g1.mdp_cfg i
     FOOT_CONTACT_LINK_NAMES,
     SELF_COLLISION_LINK_NAMES,
 )
-#  from locolab.assets.robots.unitree.G1.g1 import UNITREE_G1_29DOF_TORSO_BASE_CFG    # isort: skip
-# from locolab.assets.robots.unitree.G1.g1 import UNITREE_G1_29DOF_PELVIS_BASE_CFG  # isort: skip
-from locolab.assets.robots.unitree.G1.g1 import g1_sphere_feet_cfg  # isort: skip
+from locolab.tasks.manager_based.locomotion.velocity.config.unitree_g1.mdp_cfg.events_cfg import FlatEventCfg
+from locolab.assets.robots.unitree.G1.g1 import UNITREE_G1_29DOF_PELVIS_BASE_CFG  # isort: skip
 
 
 ##
@@ -74,11 +72,12 @@ class G1FlatSceneCfg(InteractiveSceneCfg):
     )
 
     # =====  robots  =====
-    #  robot: ArticulationCfg = g1_sphere_feet_cfg("root_link=torso").replace(
-    robot: ArticulationCfg = g1_sphere_feet_cfg(root_link="pelvis").replace(
-    #  robot: ArticulationCfg = UNITREE_G1_29DOF_PELVIS_BASE_CFG.replace(
+    robot: ArticulationCfg = UNITREE_G1_29DOF_PELVIS_BASE_CFG.replace(
         prim_path="{ENV_REGEX_NS}/Robot",
     )
+    #  robot: ArticulationCfg = g1_sphere_feet_cfg(root_link="pelvis").replace(
+    #      prim_path="{ENV_REGEX_NS}/Robot",
+    #  )
 
     # =====  sensors  =====
     feet_contact_forces: ContactSensorCfg = ContactSensorCfg(
@@ -114,7 +113,7 @@ class G1FlatEnvCfg(ManagerBasedRLEnvCfg):
     # MDP settings
     rewards: FlatRewardsCfg = FlatRewardsCfg()
     terminations: FlatTerminationsCfg = FlatTerminationsCfg()
-    events: EventCfg = EventCfg()
+    events: FlatEventCfg = FlatEventCfg()
     curriculum: FlatCurriculumsCfg = FlatCurriculumsCfg()
 
     def __post_init__(self):
@@ -128,8 +127,11 @@ class G1FlatEnvCfg(ManagerBasedRLEnvCfg):
         self.sim.physics_material = self.scene.terrain.physics_material
         # physics settings
         set_locomotion_physics(
-            self.sim, rigid_patch_count=2**16,
-            num_substeps=1, cone="elliptic", impratio=5.0, njmax=90, nconmax=20, ls_iterations=30,
+            self.sim,
+            mjwarp=dict(num_substeps=1, cone="pyramidal", impratio=5.0, njmax=300, nconmax=None, ccd_iterations=50, speculative_contact_gap_max=None),
+            # G1 self-contacts need more constraint rows and a smaller collision margin.
+            steel=dict(margin=0.001, articulation_constraint_max=256, update_mass_matrix_interval=1),
+            physx=dict(rigid_patch_count=2**16),
         )
         set_self_collisions(self.scene.robot.spawn, True)
 
@@ -162,6 +164,8 @@ def _configure_play_env(cfg: G1FlatEnvCfg) -> None:
 class G1FlatEnvCfg_PLAY(G1FlatEnvCfg):
     def __post_init__(self) -> None:
         super().__post_init__()
+        self.events.assistive_force = None
+        self.curriculum.assistive_force = None
         _configure_play_env(self)
 
 
