@@ -7,7 +7,6 @@
 from __future__ import annotations
 
 import argparse
-from pathlib import Path
 
 
 class _IdlePlayViewer:
@@ -65,7 +64,7 @@ def prepare_play_viewer(args, env_cfg) -> None:
     retain_terrain_mesh_for_viewer(env_cfg)
 
 
-def open_play_viewer(env, args, *, checkpoint=None):
+def open_play_viewer(env, args):
     """Open the viewer, or return an idle object with the same methods."""
     if not getattr(args, "viser", False):
         return _IdlePlayViewer()
@@ -74,8 +73,8 @@ def open_play_viewer(env, args, *, checkpoint=None):
     return ViserPlayViewer(
         env,
         host=args.viser_host,
-        recordings_dir=Path(checkpoint).parent / "recordings" if checkpoint is not None else None,
         port=args.viser_port,
+        task_name=getattr(args, "task", None),
         low_bandwidth=getattr(args, "viser_low_bandwidth", False),
         cache_assets=getattr(args, "viser_cache_assets", False),
     )
