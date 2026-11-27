@@ -267,7 +267,7 @@ def _play(args_cli, env_cfg, agent_cfg, resume_path, load_cfg, screen, *, wrap_e
 
     dt = env.unwrapped.step_dt
     screen.close()
-    viewer = open_play_viewer(env, args_cli, checkpoint=resume_path)
+    viewer = open_play_viewer(env, args_cli)
 
     # reset environment
     obs = env.get_observations()

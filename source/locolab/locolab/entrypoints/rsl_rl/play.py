@@ -204,7 +204,7 @@ def _play(args_cli, env_cfg, agent_cfg, resume_path, screen):
     dt = env.unwrapped.step_dt
 
     screen.close()
-    viewer = open_play_viewer(env, args_cli, checkpoint=resume_path)
+    viewer = open_play_viewer(env, args_cli)
 
     obs = env.get_observations()
     timestep = 0

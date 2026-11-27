@@ -15,17 +15,17 @@ import logging
 import threading
 import time
 from inspect import signature
-from pathlib import Path
+from json import dumps
 
 import numpy as np
 
 from locolab.utils.debug_viz.push.push_debug_vis import PushDebugVis
 
 from ._viser import viser
-from .browser import CAMERA_MOVE_SPEED_JS
-from .debug_vis import DebugFrame, DebugScene, debug_sources, draw_debug, sensor_debug_kind
+from .browser import CAMERA_MOVE_SPEED_JS, VIDEO_RECORDING_JS
+from .debug_vis import DebugScene, debug_sources, draw_debug, sensor_debug_kind
 from .mjviser_robot import MjviserRobot
-from .replay import PoseReplay, ReplayFrame
+from .replay import PoseReplay
 from .terrain import HEIGHT_COLOR_SCALE_M, SOLID_COLOR, paint_terrain
 
 
@@ -86,9 +86,9 @@ class ViserPlayViewer:
         port: int = 8080,
         robot_name: str = "robot",
         *,
+        task_name: str | None = None,
         low_bandwidth: bool = False,
         cache_assets: bool = False,
-        recordings_dir: Path | None = None,
     ) -> None:
         self._env = env
         unwrapped = env.unwrapped
@@ -163,12 +163,16 @@ class ViserPlayViewer:
             if low_bandwidth and self._num_envs > 1:
                 self._robot_view.scene.show_only_selected = True
             self._add_ground()
-            self._visible_debug: DebugFrame | None = None
-            self._hidden_replay_layers: frozenset[str] = frozenset()
-            self._build_gui(recordings_dir)
+            self._build_gui()
 
             @self._server.on_client_connect
             def _(client) -> None:
+                from viser import _messages
+
+                source = VIDEO_RECORDING_JS.replace("__START_ID__", self._replay.video_start._impl.uuid)
+                source = source.replace("__STOP_ID__", self._replay.video_stop._impl.uuid)
+                source = source.replace("__TASK_NAME__", dumps(task_name or robot_name))
+                client._websock_connection.queue_message(_messages.RunJavascriptMessage(source=source))
                 self._apply_camera_move_speed(client)
                 self._release_if_waiting()
         except Exception:
@@ -238,12 +242,6 @@ class ViserPlayViewer:
             self._pause_button.disabled = replaying
             self._reset_button.disabled = replaying
             self._last_debug_update = self._last_depth_update = 0.0
-            self._visible_debug = None
-            self._hidden_replay_layers = frozenset()
-            with self._terrain_lock:
-                self._terrain_handle.visible = not replaying or "terrain" in self._replay.layers
-            if replaying and not self._replay.has_debug:
-                self._debug_scene.clear()
             if replaying and self._depth_image is not None:
                 self._depth_image.visible = False
 
@@ -253,36 +251,28 @@ class ViserPlayViewer:
         selector = slice(None) if show_all else slice(env_idx, env_idx + 1)
         with self._server.atomic():
             if replaying:
-                frame = self._replay.frame(now, env_idx, refresh=self._replay.has_debug and self._visible_debug is None)
+                frame = self._replay.frame(now, env_idx)
                 if frame is not None:
-                    self._show_replay_frame(frame, env_idx)
+                    scene.update_from_arrays(frame.positions, frame.rotations, env_idx=env_idx)
             else:
-                recording = self._replay.recording
-                tick = self._env.unwrapped.common_step_counter if recording else None
+                tick = self._env.unwrapped.common_step_counter if self._replay.recording else None
                 capture = tick is not None and self._replay.needs_frame(tick)
                 poses = self._robot_view.update(selector, env_idx, capture=capture)
-                if now - self._last_debug_update >= self._debug_interval or (recording and not self._replay.frames):
-                    self._last_debug_update = now
-                    self._debug_scene.set_ghost_hulls(self._robot_view.visual_hulls)
-                    self._debug_scene.distance_lod = self._robot_view.distance_lod
-                    self._visible_debug = DebugFrame(self._debug_scene) if recording and self._replay.has_debug else None
-                    draw_debug(self._debug_scene, self._debug_terms, self._debug_enabled, selector, self._sensor_debug,
-                               recording=self._visible_debug, layers=self._replay.layers)
                 if tick is not None and poses is not None:
-                    self._replay.append(tick, poses, self._visible_debug)
+                    self._replay.append(tick, poses)
+            if now - self._last_debug_update >= self._debug_interval:
+                self._last_debug_update = now
+                self._debug_scene.set_ghost_hulls(self._robot_view.visual_hulls)
+                self._debug_scene.distance_lod = self._robot_view.distance_lod
+                draw_debug(self._debug_scene, self._debug_terms, self._debug_enabled, selector, self._sensor_debug)
             if self._auto_orbit.value:
                 self._update_camera_orbit(elapsed)
-
-        if self._replay.export_request is not None:
-            self._replay.export(self._server, self._robot_view.model, self._show_export_frame)
-            self._last_update = time.monotonic()
-            self._visible_debug = None
 
         if not replaying and self._depth_checkbox is not None and self._depth_checkbox.value:
             self._update_depth_image(observations, env_idx, now)
 
-        shown = f"all {self._num_envs}" if show_all else f"{env_idx} / {self._num_envs - 1}"
-        tracking = f"env {env_idx}" if scene.camera_tracking_enabled else "off"
+        shown = f"All environments ({self._num_envs})" if show_all else f"Environment {env_idx}"
+        tracking = f"Tracking env {env_idx}" if scene.camera_tracking_enabled else "Tracking off"
         speed = 1.0 if replaying else self._speed
         speed_text = f"{speed:.3g}x" if speed >= 1.0 else f"1/{round(1.0 / speed)}x"
         if replaying:
@@ -295,29 +285,18 @@ class ViserPlayViewer:
             state = "Running"
         if self._replay.recording:
             state += f" · {self._replay.duration:.1f} s recorded"
+        mode = "replay" if replaying else "live"
         status = (
-            "<div style='font-size:0.85em;line-height:1.3;padding:0 1em 0.5em 1em;'>"
-            f"<strong>Status:</strong> {state}<br/>"
-            f"<strong>Speed:</strong> {speed_text}<br/>"
-            f"<strong>Environment:</strong> {shown}<br/>"
-            f"<strong>Track:</strong> {tracking}"
-            "</div>"
+            f"<div data-locolab-mode='{mode}' "
+            "style='display:grid;grid-template-columns:1fr auto;gap:2px 10px;padding:0 10px 6px;"
+            "font-size:12px;line-height:1.4;font-variant-numeric:tabular-nums'>"
+            f"<span style='font-weight:600'>{state}</span><span style='text-align:right'>{speed_text}</span>"
+            f"<span style='color:var(--mantine-color-dimmed)'>{shown}</span>"
+            f"<span style='color:var(--mantine-color-dimmed);text-align:right'>{tracking}</span></div>"
         )
         if status != self._status_html:
             self._status_html = status
             self._status.content = status
-
-    def _show_replay_frame(self, frame: ReplayFrame, env_idx: int) -> None:
-        self._robot_view.scene.update_from_arrays(frame.positions, frame.rotations, env_idx=env_idx)
-        if frame.debug is not None and frame.debug is not self._visible_debug:
-            hidden = self._hidden_replay_layers
-            frame.debug.render(hidden)
-            self._visible_debug = frame.debug if hidden is self._hidden_replay_layers else None
-
-    def _show_export_frame(self, frame: ReplayFrame, elapsed: float) -> None:
-        self._show_replay_frame(frame, self._robot_view.scene.env_idx)
-        if self._auto_orbit.value:
-            self._update_camera_orbit(elapsed)
 
     def close(self) -> None:
         with self._terrain_lock:
@@ -370,7 +349,7 @@ class ViserPlayViewer:
             return self._server.scene.add_glb(name, reference, cast_shadow=False, receive_shadow=0.2)
         return self._server.scene.add_mesh_trimesh(name, mesh, cast_shadow=False, receive_shadow=0.2)
 
-    def _build_gui(self, recordings_dir: Path | None) -> None:
+    def _build_gui(self) -> None:
         self._status = self._server.gui.add_html("")
         tabs = self._server.gui.add_tab_group()
         with tabs.add_tab("Controls", icon=viser.Icon.SETTINGS):
@@ -402,9 +381,15 @@ class ViserPlayViewer:
 
             with self._server.gui.add_folder("Replay", expand_by_default=False):
                 pose_values = self._num_envs * self._robot_view.model.nbody * (3 + 9)
-                self._replay = PoseReplay(self._server.gui, self._step_dt, pose_values, self._num_envs, recordings_dir)
+                self._replay = PoseReplay(self._server.gui, self._step_dt, pose_values)
 
-            with self._server.gui.add_folder("Navigation", expand_by_default=False):
+            self._robot_view.create_scene_gui()
+            # mjviser creates the Camera folder without returning its handle.
+            camera_folder = next(
+                folder for folder in self._server.gui._container_handle_from_uuid.values()
+                if isinstance(folder, viser.GuiFolderHandle) and folder.label == "Camera"
+            )
+            with camera_folder:
                 self._camera_move_speed = self._server.gui.add_slider(
                     "Move speed (m/s)",
                     min=0.1,
@@ -419,7 +404,6 @@ class ViserPlayViewer:
                     for client in self._server.get_clients().values():
                         self._apply_camera_move_speed(client)
 
-            self._robot_view.create_scene_gui()
             self._build_depth_gui()
             self._build_debug_gui()
 
@@ -472,7 +456,7 @@ class ViserPlayViewer:
         if len(term_dims) != 1 or len(term_dims[0]) not in (2, 3):
             return
         self._depth_shape = term_dims[0][-2:]
-        with self._server.gui.add_folder("Depth observation") as self._depth_folder:
+        with self._server.gui.add_folder("Image observation") as self._depth_folder:
             self._depth_checkbox = self._server.gui.add_checkbox(
                 "Show", initial_value=False,
                 hint="Latest depth_image observation frame for the selected env; black = 0, white = 1.",
@@ -510,7 +494,7 @@ class ViserPlayViewer:
     def _build_debug_gui(self) -> None:
         if not self._debug_terms:
             return
-        with self._server.gui.add_folder("debug_viz"):
+        with self._server.gui.add_folder("debug_viz", expand_by_default=False):
             for label, obj in self._debug_terms:
                 checkbox = self._server.gui.add_checkbox(label, initial_value=self._debug_enabled[label])
 
@@ -519,7 +503,6 @@ class ViserPlayViewer:
                     self._debug_enabled[key] = bool(event.target.value)
                     if isinstance(term, PushDebugVis):
                         term.set_debug_vis(bool(event.target.value))
-                    self._set_replay_layer(key, bool(event.target.value))
                     self._last_debug_update = 0.0
 
                 if hasattr(obj, "get_motion_ghost"):
@@ -536,14 +519,6 @@ class ViserPlayViewer:
                     def _(event, key=label) -> None:
                         self._debug_scene.ghost_max_envs[key] = int(event.target.value)
 
-    def _set_replay_layer(self, name: str, enabled: bool) -> None:
-        if self._replay.active:
-            if enabled:
-                self._hidden_replay_layers -= {name}
-            else:
-                self._hidden_replay_layers |= {name}
-            self._visible_debug = None
-
     def _build_sensor_debug_gui(self) -> None:
         if not self._sensor_debug:
             return
@@ -557,8 +532,6 @@ class ViserPlayViewer:
                         @checkbox.on_update
                         def _(event, sensor=name, layer=key) -> None:
                             self._sensor_debug[sensor][layer] = bool(event.target.value)
-                            path = "points" if layer == "point_cloud" else layer
-                            self._set_replay_layer(f"{sensor}/{path}", bool(event.target.value))
 
     def _build_robot_vis_gui(self) -> None:
         with self._server.gui.add_folder("Robot"):
@@ -691,5 +664,4 @@ class ViserPlayViewer:
             if self._terrain_handle is not None:
                 self._terrain_handle.remove()
             self._terrain_handle = self._upload_terrain_mesh(displayed)
-            self._terrain_handle.visible = not self._replay.active or "terrain" in self._replay.layers
             self._terrain_signature = signature
